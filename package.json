@@ -1,0 +1,40 @@
+{
+  "name": "codex-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone Codex Platform UI backed by codex app-server.",
+  "scripts": {
+    "dev:web": "vite --host 0.0.0.0 --port 5173",
+    "dev:server": "tsx src/server/index.ts",
+    "dev:demo": "DEMO_MODE=true tsx src/server/index.ts",
+    "typecheck": "node --max-old-space-size=192 ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit --pretty false",
+    "build:server": "node --max-old-space-size=192 ./node_modules/typescript/bin/tsc -p tsconfig.server.json --pretty false",
+    "build": "npm run build:server && npm run build:web",
+    "start": "node dist/server/server/index.js",
+    "smoke:demo": "npm run build && DEMO_MODE=true PORT=18787 CODEX_PLATFORM_DATA_DIR=/tmp/codex-platform-smoke node dist/server/server/index.js",
+    "start:hf": "scripts/hf-entrypoint.sh",
+    "smoke:hf": "scripts/hf-space-smoke.sh",
+    "build:web": "node --max-old-space-size=384 ./node_modules/vite/bin/vite.js build",
+    "check": "npm run typecheck"
+  },
+  "dependencies": {
+    "express": "5.2.1",
+    "ws": "8.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "@types/ws": "8.18.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "tsx": "4.22.3",
+    "typescript": "6.0.3",
+    "vite": "8.0.14"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

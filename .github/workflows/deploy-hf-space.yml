@@ -1,0 +1,78 @@
+name: Deploy Hugging Face Space
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-space-codex-platform
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HF_SPACE_ID: ${{ vars.HF_SPACE_ID || 'BlueSkyXN/Codex-Platform-HFS' }}
+      HF_PUBLIC_URL: ${{ vars.HF_PUBLIC_URL || 'https://blueskyxn-codex-platform-hfs.hf.space' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Export pinned Space bundle
+        run: bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Hugging Face client
+        run: python -m pip install --upgrade huggingface_hub
+
+      - name: Upload Space bundle
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi, create_repo, upload_folder
+
+          token = os.environ["HF_TOKEN"]
+          repo_id = os.environ["HF_SPACE_ID"]
+          folder = "/tmp/codex-platform-hfs-space"
+          commit = os.environ["GITHUB_SHA"]
+          create_repo(repo_id=repo_id, repo_type="space", space_sdk="docker", exist_ok=True, token=token)
+          upload_folder(
+              repo_id=repo_id,
+              repo_type="space",
+              folder_path=folder,
+              path_in_repo=".",
+              token=token,
+              commit_message=f"deploy: Codex-Platform {commit[:12]}",
+          )
+          api = HfApi(token=token)
+          try:
+              api.restart_space(repo_id=repo_id, factory_reboot=True)
+          except Exception as exc:
+              print(f"restart_space skipped: {exc}")
+          PY
+
+      - name: Live smoke
+        env:
+          CODEX_PLATFORM_AUTH_TOKEN: ${{ secrets.CODEX_PLATFORM_AUTH_TOKEN }}
+        run: |
+          for attempt in $(seq 1 45); do
+            if scripts/hf-space-smoke.sh "$HF_PUBLIC_URL"; then
+              exit 0
+            fi
+            echo "Space not ready yet: attempt ${attempt}/45"
+            sleep 20
+          done
+          exit 1

@@ -1,0 +1,39 @@
+schema_version = 2
+standard = "hfs-dev"
+pattern = "B"
+runtime_mode = "source-fetch"
+space_root_mode = "flat-remap"
+hfs_dir = "cloud/hfs"
+export_command = "bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space"
+public_port = 7860
+canonical_health_endpoint = "/healthz"
+release_pin_required = true
+required_files = [
+  "README.md",
+  "Dockerfile",
+  "hfs-dev.toml",
+]
+source_excludes = [
+  "apps",
+  "runner-go",
+  "src",
+  "scripts",
+  "docs",
+  "local",
+  "node_modules",
+  "dist",
+  "data",
+  "logs",
+  ".env",
+  ".env.local",
+  ".codex-platform",
+]
+
+[[release_pins]]
+name = "CODEX_PLATFORM_COMMIT"
+type = "git_ref"
+source = "Dockerfile ARG"
+required_for_release = true
+dev_mutable_default_allowed = true
+release_requires_commit_sha = true
+description = "The deploy workflow writes the GitHub commit SHA into the Space Dockerfile before upload."

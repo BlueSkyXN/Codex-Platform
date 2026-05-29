@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Shell syntax
+        run: bash -n scripts/hf-entrypoint.sh scripts/hf-healthcheck.sh scripts/hf-space-smoke.sh cloud/hfs/export_space_bundle.sh
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+      - name: Export HFS bundle
+        run: bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space
+
+      - name: Verify exported bundle
+        run: |
+          test -f /tmp/codex-platform-hfs-space/README.md
+          test -f /tmp/codex-platform-hfs-space/Dockerfile
+          test -f /tmp/codex-platform-hfs-space/hfs-dev.toml
+          test ! -e /tmp/codex-platform-hfs-space/src
+          test ! -e /tmp/codex-platform-hfs-space/local
