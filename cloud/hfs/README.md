@@ -1,8 +1,8 @@
 ---
 title: Codex-Platform
 emoji: 🧭
-colorFrom: slate
-colorTo: emerald
+colorFrom: gray
+colorTo: green
 sdk: docker
 app_port: 7860
 suggested_hardware: cpu-basic
