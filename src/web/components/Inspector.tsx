@@ -6,6 +6,10 @@ import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervis
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
 
+type PendingGitApproval =
+  | { kind: 'stage' | 'unstage'; paths: string[] }
+  | { kind: 'commit'; message: string; paths: string[] };
+
 export function Inspector(props: {
   card?: TimelineCard;
   cards: TimelineCard[];
@@ -580,6 +584,7 @@ function GitTab(props: {
 }) {
   const [commitMessage, setCommitMessage] = useState('');
   const [copiedPush, setCopiedPush] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
   const status = props.status;
   const grouped = groupGitFiles(status?.files ?? []);
   const files = status?.files ?? [];
@@ -594,6 +599,27 @@ function GitTab(props: {
     await navigator.clipboard?.writeText(command);
     setCopiedPush(true);
     window.setTimeout(() => setCopiedPush(false), 1800);
+  }
+
+  function requestGitApproval(next: PendingGitApproval) {
+    setPendingApproval(next);
+  }
+
+  function cancelGitApproval() {
+    setPendingApproval(undefined);
+  }
+
+  function approveGitAction() {
+    if (!pendingApproval) return;
+    if (pendingApproval.kind === 'commit') {
+      props.onCommit?.(pendingApproval.message);
+      setCommitMessage('');
+    } else if (pendingApproval.kind === 'stage') {
+      props.onStage?.(pendingApproval.paths);
+    } else {
+      props.onUnstage?.(pendingApproval.paths);
+    }
+    setPendingApproval(undefined);
   }
 
   return (
@@ -670,9 +696,17 @@ function GitTab(props: {
               </div>
             </div>
           ) : null}
+          {pendingApproval ? (
+            <GitApprovalCard
+              approval={pendingApproval}
+              busy={props.actionBusy}
+              onApprove={approveGitAction}
+              onCancel={cancelGitApproval}
+            />
+          ) : null}
           <div className="git-action-bar">
-            <button className="small ghost" disabled={props.actionBusy || stageablePaths.length === 0 || !props.onStage} onClick={() => props.onStage?.(stageablePaths)}>Stage all</button>
-            <button className="small ghost" disabled={props.actionBusy || stagedPaths.length === 0 || !props.onUnstage} onClick={() => props.onUnstage?.(stagedPaths)}>Unstage all</button>
+            <button className="small ghost" disabled={props.actionBusy || stageablePaths.length === 0 || !props.onStage} onClick={() => requestGitApproval({ kind: 'stage', paths: stageablePaths })}>Stage all</button>
+            <button className="small ghost" disabled={props.actionBusy || stagedPaths.length === 0 || !props.onUnstage} onClick={() => requestGitApproval({ kind: 'unstage', paths: stagedPaths })}>Unstage all</button>
           </div>
           {status.files.length === 0 ? <div className="empty">Working tree clean.</div> : null}
           {Object.entries(grouped).map(([label, files]) => files.length ? (
@@ -686,8 +720,8 @@ function GitTab(props: {
                   <span className={`git-status status-${file.status}`}>{file.index}{file.workingTree}</span>
                   <button className="git-file-main" onClick={() => props.onSelectFile?.(file.path, canUnstageFile(file) && !canStageFile(file))}>{file.path}</button>
                   <span className="git-row-actions">
-                    {canStageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onStage} onClick={() => props.onStage?.([file.path])}>Stage</button> : null}
-                    {canUnstageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onUnstage} onClick={() => props.onUnstage?.([file.path])}>Unstage</button> : null}
+                    {canStageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onStage} onClick={() => requestGitApproval({ kind: 'stage', paths: [file.path] })}>Stage</button> : null}
+                    {canUnstageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onUnstage} onClick={() => requestGitApproval({ kind: 'unstage', paths: [file.path] })}>Unstage</button> : null}
                     <code>{file.status}</code>
                   </span>
                 </div>
@@ -713,8 +747,8 @@ function GitTab(props: {
               <div className="subtle">Commits staged changes in the active project. Use readiness checks above before push or PR.</div>
             </div>
             <textarea value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Commit message" rows={3} />
-            <button className="small primary" disabled={props.actionBusy || !hasStagedChanges || !commitMessage.trim() || !props.onCommit} onClick={() => props.onCommit?.(commitMessage)}>
-              {props.actionBusy ? 'Working...' : 'Commit staged changes'}
+            <button className="small primary" disabled={props.actionBusy || !hasStagedChanges || !commitMessage.trim() || !props.onCommit} onClick={() => requestGitApproval({ kind: 'commit', message: commitMessage.trim(), paths: stagedPaths })}>
+              {props.actionBusy ? 'Working...' : 'Request commit approval'}
             </button>
           </div>
           <GitOperationHistory operations={props.operations} />
@@ -722,6 +756,50 @@ function GitTab(props: {
       ) : null}
     </section>
   );
+}
+
+function GitApprovalCard(props: {
+  approval: PendingGitApproval;
+  busy: boolean;
+  onApprove: () => void;
+  onCancel: () => void;
+}) {
+  const title = props.approval.kind === 'commit'
+    ? 'Commit staged changes'
+    : props.approval.kind === 'stage'
+      ? 'Stage files'
+      : 'Unstage files';
+  const command = props.approval.kind === 'commit'
+    ? `git commit -m ${shellQuote(props.approval.message)}`
+    : props.approval.kind === 'stage'
+      ? `git add -- ${props.approval.paths.map(shellQuote).join(' ')}`
+      : `git restore --staged -- ${props.approval.paths.map(shellQuote).join(' ')}`;
+  const detail = props.approval.kind === 'commit'
+    ? `${props.approval.paths.length} staged file${props.approval.paths.length === 1 ? '' : 's'} will be committed.`
+    : `${props.approval.paths.length} file${props.approval.paths.length === 1 ? '' : 's'} will change staged state.`;
+
+  return (
+    <div className="git-approval-card">
+      <div>
+        <div className="section-title">Git approval required</div>
+        <strong>{title}</strong>
+        <p>{detail}</p>
+      </div>
+      <pre className="approval-command">{command}</pre>
+      <div className="git-approval-paths">
+        {props.approval.paths.slice(0, 6).map((path) => <code key={path}>{path}</code>)}
+        {props.approval.paths.length > 6 ? <span>{props.approval.paths.length - 6} more</span> : null}
+      </div>
+      <div className="approval-actions">
+        <button className="primary" disabled={props.busy} onClick={props.onApprove}>{props.busy ? 'Working...' : 'Approve and run'}</button>
+        <button disabled={props.busy} onClick={props.onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function GitOperationHistory({ operations }: { operations: GitOperationRecord[] }) {
