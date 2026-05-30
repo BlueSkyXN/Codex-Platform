@@ -156,10 +156,11 @@ export function Composer(props: {
         <div className="composer-bottom-row">
           <div className="composer-left-tools">
             <button className="round-tool" title="Add context" disabled>＋</button>
-            <button className="model-chip" onClick={() => setShowRunConfig((value) => !value)} title="Configure this turn">
+            <span className="mode-option active composer-local-pill" title="Run in the current project directory">Local</span>
+            <button className="model-chip composer-model-chip" onClick={() => setShowRunConfig((value) => !value)} title="Configure this turn">
               {model.trim() || props.codexWebConfig?.defaultModel || 'Default model'}
             </button>
-            <button className="model-chip" onClick={() => setShowRunConfig((value) => !value)} title="Reasoning effort">{effortLabel(effort)}⌄</button>
+            <button className="model-chip composer-effort-chip" onClick={() => setShowRunConfig((value) => !value)} title="Reasoning effort">{effortLabel(effort)}⌄</button>
             {selectedSkill ? (
               <button className="selected-skill-pill" onClick={() => setSelectedSkillName('')} title={selectedSkill.path}>
                 ${selectedSkill.name} ×
@@ -175,17 +176,12 @@ export function Composer(props: {
           <div className="composer-right-tools">
             {props.skillsError ? <span className="composer-error">skills unavailable</span> : null}
             {props.agentsError ? <span className="composer-error">agents unavailable</span> : null}
+            <span className="branch-chip composer-policy-chip">{sandboxLabel(sandbox)} · {approvalLabel(approvalPolicy)}</span>
             <button className="round-tool" onClick={props.onReloadSkills} disabled={props.skillsLoading || props.agentsLoading} title="Reload skills and agents">{props.skillsLoading || props.agentsLoading ? '…' : '◇'}</button>
             <button className="round-tool" onClick={() => setShowRunConfig((value) => !value)} title="Run configuration">▣</button>
             <button className="round-tool" disabled title="Voice input not implemented">⌕</button>
             <button className="send-orb" onClick={submit} disabled={props.disabled || !text.trim()} title="Send">↑</button>
           </div>
-        </div>
-
-        <div className="mode-row">
-          <button className="mode-option active" title="Run in the current project directory">Local</button>
-          <span className="mode-spacer" />
-          <span className="branch-chip">{sandboxLabel(sandbox)} · {approvalLabel(approvalPolicy)}</span>
         </div>
       </div>
 

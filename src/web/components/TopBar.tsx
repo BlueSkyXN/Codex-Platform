@@ -5,15 +5,6 @@ function running(status?: string): boolean {
   return s.includes('running') || s.includes('active') || s.includes('progress') || s.includes('approval');
 }
 
-function shortId(id?: string): string {
-  if (!id) return 'No thread';
-  return id.replace(/^thr_/, '').slice(-12);
-}
-
-function threadTitle(thread?: ThreadSummary): string {
-  return thread?.name || thread?.preview || shortId(thread?.id);
-}
-
 export function TopBar(props: {
   project?: Project;
   thread?: ThreadSummary;
@@ -58,8 +49,6 @@ export function TopBar(props: {
 
       <div className="frame-breadcrumb" title={props.project?.cwd}>
         <span className="breadcrumb-project">{props.project?.name ?? 'Choose project'}</span>
-        <span className="breadcrumb-separator">/</span>
-        <span className="breadcrumb-thread">{threadTitle(props.thread)}</span>
       </div>
 
       <div className="frame-runtime" title={props.connectionMessage}>

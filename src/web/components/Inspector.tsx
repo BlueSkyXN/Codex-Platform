@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
 import type { AccountSummary, AgentSummary, ApprovalDecision, ApprovalRequest, FileReadResult, FileTreeNode, GitStatusSummary, InspectorTab, Project, ServerHealth, SkillSummary, ThreadSummary, TimelineCard, CodexWebConfig } from '../../shared/types.js';
 
-const tabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'artifacts', 'skills', 'agents', 'settings', 'raw'];
+const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal'];
 
 export function Inspector(props: {
   card?: TimelineCard;
@@ -42,19 +42,20 @@ export function Inspector(props: {
   const plans = props.cards.filter((card) => card.kind === 'plan' || card.kind === 'reasoning');
   const diffs = props.cards.filter((card) => card.kind === 'fileChange');
   const commands = props.cards.filter((card) => card.kind === 'command');
+  const visibleTabs = primaryTabs.includes(activeTab) ? primaryTabs : [activeTab, ...primaryTabs];
 
   return (
     <aside className={`inspector codex-inspector ${props.open === false ? 'closed' : ''}`}>
       <div className="inspector-head">
         <div>
-          <div className="section-title">Side panel</div>
+          <div className="section-title">Progress</div>
           <strong>{tabTitle(activeTab)}</strong>
         </div>
         <span className="side-panel-count">{diffs.length} files</span>
       </div>
 
       <div className="inspector-tabs codex-inspector-tabs">
-        {tabs.map((item) => (
+        {visibleTabs.map((item) => (
           <button key={item} className={`tab ${activeTab === item ? 'active' : ''}`} onClick={() => setActiveTab(item)}>{tabLabel(item)}</button>
         ))}
       </div>
