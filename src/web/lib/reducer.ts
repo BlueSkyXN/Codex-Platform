@@ -1,4 +1,4 @@
-import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, GitOperationRecord, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
+import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, GitOperationRecord, Project, RawEventRecord, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
 
 export type ClientState = {
   connected: boolean;
@@ -10,6 +10,7 @@ export type ClientState = {
   approvals: ApprovalRequest[];
   approvalHistory: ApprovalRecord[];
   gitOperations: GitOperationRecord[];
+  rawEvents: RawEventRecord[];
   selectedProjectId?: string;
   selectedThreadId?: string;
   focusedCardId?: string;
@@ -25,6 +26,7 @@ export const initialState: ClientState = {
   approvals: [],
   approvalHistory: [],
   gitOperations: [],
+  rawEvents: [],
   errors: []
 };
 
@@ -104,18 +106,18 @@ export function reduce(state: ClientState, event: UiEvent): ClientState {
       return { ...state, connected: event.connected, connectionMessage: event.message };
     case 'raw':
       if (event.method === 'snapshot') return applySnapshot(state, event.params as AppStateSnapshot);
-      if (event.method === 'connectionClosed') return { ...state, connected: false };
+      if (event.method === 'connectionClosed') return withRawEvent({ ...state, connected: false }, event);
       if (event.method === 'selectProject') {
         const params = event.params as { projectId?: string };
         const firstThread = state.threads.find((thread) => !params.projectId || thread.projectId === params.projectId || thread.projectId === 'default');
         const firstCard = firstThread ? state.cards.find((card) => card.threadId === firstThread.id) : undefined;
-        return { ...state, selectedProjectId: params.projectId, selectedThreadId: firstThread?.id, focusedCardId: firstCard?.id };
+        return withRawEvent({ ...state, selectedProjectId: params.projectId, selectedThreadId: firstThread?.id, focusedCardId: firstCard?.id }, event);
       }
       if (event.method === 'focus') {
         const params = event.params as { cardId?: string };
-        return { ...state, focusedCardId: params.cardId };
+        return withRawEvent({ ...state, focusedCardId: params.cardId }, event);
       }
-      return state;
+      return withRawEvent(state, event);
     case 'project.upserted':
       return {
         ...state,
@@ -200,6 +202,23 @@ function upsertApprovalHistory(items: ApprovalRecord[], item: ApprovalRecord): A
 function upsertGitOperation(items: GitOperationRecord[], item: GitOperationRecord): GitOperationRecord[] {
   const next = items.filter((operation) => operation.id !== item.id);
   return [item, ...next].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function withRawEvent(state: ClientState, event: Extract<UiEvent, { type: 'raw' }>): ClientState {
+  return {
+    ...state,
+    rawEvents: [rawEventRecord(event), ...state.rawEvents].slice(0, 80)
+  };
+}
+
+function rawEventRecord(event: Extract<UiEvent, { type: 'raw' }>): RawEventRecord {
+  const createdAt = Date.now();
+  return {
+    id: `raw_${createdAt}_${Math.random().toString(36).slice(2, 8)}`,
+    method: event.method,
+    params: event.params,
+    createdAt
+  };
 }
 
 function resolvedApproval(existing: ApprovalRequest | ApprovalRecord | undefined, requestId: string | number, payload: unknown): ApprovalRecord {

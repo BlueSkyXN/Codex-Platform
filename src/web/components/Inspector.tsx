@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
 import { Icon } from './Icon.js';
-import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitOperationRecord, GitStatusSummary, InspectorTab, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
@@ -19,6 +19,7 @@ export function Inspector(props: {
   gitStatus?: GitStatusSummary;
   gitDiff?: GitDiffResult;
   gitOperations?: GitOperationRecord[];
+  rawEvents?: RawEventRecord[];
   selectedGitPath?: string;
   gitActionBusy?: boolean;
   gitActionMessage?: string;
@@ -103,7 +104,7 @@ export function Inspector(props: {
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} /> : null}
       {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} /> : null}
+      {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} rawEvents={props.rawEvents ?? []} /> : null}
     </aside>
   );
 }
@@ -851,13 +852,63 @@ function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; 
   );
 }
 
-function RawTab(props: { card?: TimelineCard; thread?: ThreadSummary; project?: Project }) {
+function RawTab(props: { card?: TimelineCard; thread?: ThreadSummary; project?: Project; rawEvents: RawEventRecord[] }) {
+  const [selectedRawId, setSelectedRawId] = useState('');
+  const selectedRaw = props.rawEvents.find((event) => event.id === selectedRawId) ?? props.rawEvents[0];
+  const payload = selectedRaw
+    ? { event: selectedRaw, focus: { card: props.card, thread: props.thread, project: props.project } }
+    : { focus: { card: props.card, thread: props.thread, project: props.project } };
+
   return (
-    <section className="panel grow">
-      <div className="section-title">Raw payload</div>
-      <pre className="json-snippet large-json">{JSON.stringify({ card: props.card, thread: props.thread, project: props.project }, null, 2)}</pre>
+    <section className="panel grow raw-panel">
+      <div className="review-pane-header">
+        <div>
+          <div className="section-title">Raw events</div>
+          <div className="panel-title">{selectedRaw ? selectedRaw.method : 'Focused payload'}</div>
+        </div>
+        <span className="side-panel-count">{props.rawEvents.length} events</span>
+      </div>
+      <div className="raw-event-shell">
+        <div className="raw-event-list" aria-label="Raw event history">
+          {props.rawEvents.length === 0 ? <div className="empty-inline">No raw events captured yet.</div> : null}
+          {props.rawEvents.slice(0, 24).map((event) => (
+            <button
+              key={event.id}
+              className={`raw-event-row ${selectedRaw?.id === event.id ? 'active' : ''}`}
+              onClick={() => setSelectedRawId(event.id)}
+            >
+              <span>
+                <strong>{event.method}</strong>
+                <small>{rawEventSummary(event.params)}</small>
+              </span>
+              <code>{formatTime(event.createdAt)}</code>
+            </button>
+          ))}
+        </div>
+        <pre className="json-snippet large-json raw-json">{safeJson(payload)}</pre>
+      </div>
     </section>
   );
+}
+
+function rawEventSummary(value: unknown): string {
+  if (value === undefined || value === null) return 'no payload';
+  if (typeof value !== 'object') return compactText(String(value), 72);
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? '' : 's'}`;
+  const keys = Object.keys(value as Record<string, unknown>);
+  return keys.length ? keys.slice(0, 4).join(', ') : 'object';
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return JSON.stringify({ error: 'Unable to serialize payload.' }, null, 2);
+  }
+}
+
+function compactText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
 function FocusedCard({ card }: { card: TimelineCard }) {

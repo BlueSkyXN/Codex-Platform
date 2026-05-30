@@ -163,6 +163,13 @@ export type GitDiffResult = {
   diff: string;
 };
 
+export type RawEventRecord = {
+  id: string;
+  method: string;
+  params?: unknown;
+  createdAt: number;
+};
+
 export type GitHubActionsRun = {
   id: number;
   name: string;

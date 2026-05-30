@@ -4383,6 +4383,71 @@ button.icon-only {
   color: var(--codex-red, var(--danger));
 }
 
+.raw-panel {
+  min-height: 0;
+}
+
+.raw-event-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(160px, .78fr) minmax(0, 1.22fr);
+  gap: 10px;
+}
+
+.raw-event-list {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.raw-event-row {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--codex-surface);
+  padding: 8px;
+  text-align: left;
+  color: var(--text);
+}
+
+.raw-event-row:hover,
+.raw-event-row.active {
+  background: var(--codex-soft);
+}
+
+.raw-event-row > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.raw-event-row strong,
+.raw-event-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raw-event-row small,
+.raw-event-row code {
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.raw-json {
+  min-width: 0;
+  margin: 0;
+}
+
 .activity-thread em {
   display: block;
   margin-top: 2px;
@@ -4430,5 +4495,9 @@ button.icon-only {
 
   .supervision-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .raw-event-shell {
+    grid-template-columns: 1fr;
   }
 }
