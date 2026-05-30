@@ -753,6 +753,72 @@ body { background: var(--codex-bg); color: var(--codex-text); }
 .git-ship-links a:hover {
   background: var(--codex-hover);
 }
+.git-review-card {
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 52%);
+  padding: 10px;
+  margin: 10px 0;
+}
+.git-review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.git-review-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.git-review-head span {
+  color: var(--codex-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.git-review-queues {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.git-review-queues button {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  border-radius: 8px;
+  background: var(--codex-surface);
+  padding: 7px;
+  text-align: left;
+}
+.git-review-queues button:not(:disabled):hover {
+  background: var(--codex-hover);
+}
+.git-review-queues span {
+  color: var(--codex-muted);
+  font-size: 10px;
+}
+.git-review-queues strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.git-draft-message {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--codex-surface);
+  color: var(--codex-muted);
+  padding: 5px 8px;
+  font-size: 11px;
+}
 .git-action-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .git-approval-card {
   display: grid;
@@ -812,6 +878,7 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   .file-tree-panel, .file-preview-panel { max-height: 42vh; }
   .git-branch-card { grid-template-columns: repeat(2, 1fr); }
   .git-ship-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .git-review-queues { grid-template-columns: minmax(0, 1fr); }
   .git-file-row { grid-template-columns: 38px minmax(0, 1fr); }
   .git-row-actions { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; }
 }

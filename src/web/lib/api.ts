@@ -97,5 +97,5 @@ export const api = {
   },
   gitStage: (projectId: string, paths: string[]) => request<GitActionResult>(`/api/projects/${encodeURIComponent(projectId)}/git/stage`, { method: 'POST', body: JSON.stringify({ paths }) }),
   gitUnstage: (projectId: string, paths: string[]) => request<GitActionResult>(`/api/projects/${encodeURIComponent(projectId)}/git/unstage`, { method: 'POST', body: JSON.stringify({ paths }) }),
-  gitCommit: (projectId: string, message: string) => request<GitActionResult>(`/api/projects/${encodeURIComponent(projectId)}/git/commit`, { method: 'POST', body: JSON.stringify({ message }) })
+  gitCommit: (projectId: string, message: string, paths?: string[]) => request<GitActionResult>(`/api/projects/${encodeURIComponent(projectId)}/git/commit`, { method: 'POST', body: JSON.stringify({ message, paths }) })
 };

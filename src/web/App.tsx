@@ -375,17 +375,17 @@ export function App() {
     }
   }
 
-  async function commitGit(message: string) {
+  async function commitGit(message: string, paths?: string[]) {
     if (!selectedProject?.id) return;
     setGitActionBusy(true);
     setProjectPanelError(undefined);
     setGitActionMessage(undefined);
     try {
-      const result = await api.gitCommit(selectedProject.id, message);
+      const result = await api.gitCommit(selectedProject.id, message, paths);
       setGitStatus(result.status);
       setGitDiff(undefined);
       setSelectedGitPath(undefined);
-      setGitActionMessage('Committed staged changes.');
+      setGitActionMessage(paths?.length ? `Committed ${paths.length} staged file${paths.length === 1 ? '' : 's'}.` : 'Committed staged changes.');
     } catch (error) {
       setProjectPanelError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -630,7 +630,7 @@ export function App() {
             onSelectGitFile={(path, cached) => void selectGitFile(path, cached)}
             onGitStage={(paths) => void runGitAction('stage', paths)}
             onGitUnstage={(paths) => void runGitAction('unstage', paths)}
-            onGitCommit={(message) => void commitGit(message)}
+            onGitCommit={(message, paths) => void commitGit(message, paths)}
             onRefreshProjectPanels={() => void reloadProjectPanels()}
             onStartReview={() => void startReview()}
             onFocusCard={(cardId) => focusCard(cardId, false)}

@@ -349,13 +349,14 @@ app.post('/api/projects/:projectId/git/commit', asyncRoute(async (req, res) => {
   const project = registry.get(String(req.params.projectId));
   if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
   const messageText = String(req.body?.message ?? '');
+  const paths = operationPaths(req.body?.paths);
   try {
     const result = await commitGitChanges(project.cwd, messageText, config.limits.gitCommandTimeoutMs);
-    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'commit', 'completed', { message: messageText, result }) });
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'commit', 'completed', { paths, message: messageText, result }) });
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'commit', 'failed', { message: messageText, error: message }) });
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'commit', 'failed', { paths, message: messageText, error: message }) });
     res.status(400).json({ error: message });
   }
 }));

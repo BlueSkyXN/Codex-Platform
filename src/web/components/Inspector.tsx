@@ -40,7 +40,7 @@ export function Inspector(props: {
   onSelectGitFile?: (path: string, cached?: boolean) => void;
   onGitStage?: (paths: string[]) => void;
   onGitUnstage?: (paths: string[]) => void;
-  onGitCommit?: (message: string) => void;
+  onGitCommit?: (message: string, paths?: string[]) => void;
   onStartReview?: () => void;
   onFocusCard?: (cardId: string) => void;
   open?: boolean;
@@ -399,7 +399,7 @@ function BrowserTab({ cards, project, health, onFocusCard }: { cards: TimelineCa
 
   async function copyFeedbackPrompt() {
     if (!feedbackPrompt) return;
-    await navigator.clipboard?.writeText(feedbackPrompt);
+    await copyText(feedbackPrompt);
     setCopiedFeedback(true);
     window.setTimeout(() => setCopiedFeedback(false), 1800);
   }
@@ -615,6 +615,29 @@ function FileTree(props: { node: FileTreeNode; level: number; selectedPath?: str
   );
 }
 
+async function copyText(value: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // Fall back to the legacy selection path below.
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return document.execCommand('copy');
+  } finally {
+    textarea.remove();
+  }
+}
+
 function GitTab(props: {
   status?: GitStatusSummary;
   diff?: GitDiffResult;
@@ -630,11 +653,12 @@ function GitTab(props: {
   onSelectFile?: (path: string, cached?: boolean) => void;
   onStage?: (paths: string[]) => void;
   onUnstage?: (paths: string[]) => void;
-  onCommit?: (message: string) => void;
+  onCommit?: (message: string, paths?: string[]) => void;
 }) {
   const [commitMessage, setCommitMessage] = useState('');
   const [copiedPush, setCopiedPush] = useState(false);
   const [copiedPr, setCopiedPr] = useState(false);
+  const [copiedReviewBrief, setCopiedReviewBrief] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
   const status = props.status;
   const grouped = groupGitFiles(status?.files ?? []);
@@ -644,19 +668,28 @@ function GitTab(props: {
   const hasStagedChanges = stagedPaths.length > 0;
   const shipInfo = status?.isRepo ? gitShipInfo(status) : undefined;
   const releaseInfo = status?.isRepo ? gitReleaseInfo(status, props.health, props.githubActions) : undefined;
+  const draftMessage = draftCommitMessage(files);
+  const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage) : undefined;
 
   async function copyPushCommand(command?: string) {
     if (!command) return;
-    await navigator.clipboard?.writeText(command);
+    await copyText(command);
     setCopiedPush(true);
     window.setTimeout(() => setCopiedPush(false), 1800);
   }
 
   async function copyPrCommand(command?: string) {
     if (!command) return;
-    await navigator.clipboard?.writeText(command);
+    await copyText(command);
     setCopiedPr(true);
     window.setTimeout(() => setCopiedPr(false), 1800);
+  }
+
+  async function copyReviewBrief() {
+    if (!reviewBrief) return;
+    await copyText(reviewBrief);
+    setCopiedReviewBrief(true);
+    window.setTimeout(() => setCopiedReviewBrief(false), 1800);
   }
 
   function requestGitApproval(next: PendingGitApproval) {
@@ -670,7 +703,7 @@ function GitTab(props: {
   function approveGitAction() {
     if (!pendingApproval) return;
     if (pendingApproval.kind === 'commit') {
-      props.onCommit?.(pendingApproval.message);
+      props.onCommit?.(pendingApproval.message, pendingApproval.paths);
       setCommitMessage('');
     } else if (pendingApproval.kind === 'stage') {
       props.onStage?.(pendingApproval.paths);
@@ -763,6 +796,30 @@ function GitTab(props: {
               </div>
             </div>
           ) : null}
+          <div className="git-review-card">
+            <div className="git-review-head">
+              <div>
+                <strong>Review package</strong>
+                <span>Stage intentionally, draft the commit, then copy a PR handoff when ready.</span>
+              </div>
+              <button className="mini-action" disabled={!reviewBrief} onClick={() => void copyReviewBrief()}>{copiedReviewBrief ? 'Copied' : 'Copy brief'}</button>
+            </div>
+            <div className="git-review-queues">
+              <button disabled={stageablePaths.length === 0 || !props.onSelectFile} onClick={() => props.onSelectFile?.(stageablePaths[0], false)}>
+                <span>Unstaged</span>
+                <strong>{stageablePaths.length}</strong>
+              </button>
+              <button disabled={stagedPaths.length === 0 || !props.onSelectFile} onClick={() => props.onSelectFile?.(stagedPaths[0], true)}>
+                <span>Staged</span>
+                <strong>{stagedPaths.length}</strong>
+              </button>
+              <button disabled={!draftMessage} onClick={() => setCommitMessage(draftMessage)}>
+                <span>Commit draft</span>
+                <strong>{draftMessage ? 'ready' : 'empty'}</strong>
+              </button>
+            </div>
+            {draftMessage ? <code className="git-draft-message">{draftMessage}</code> : null}
+          </div>
           {pendingApproval ? (
             <GitApprovalCard
               approval={pendingApproval}
@@ -921,6 +978,72 @@ function groupGitFiles(files: GitStatusSummary['files']): Record<string, GitStat
     else groups.Other.push(file);
   }
   return groups;
+}
+
+function draftCommitMessage(files: GitStatusSummary['files']): string {
+  const staged = files.filter(canUnstageFile);
+  if (staged.length === 0) return '';
+  const paths = staged.map((file) => file.path);
+  const scope = commitScope(paths);
+  const action = staged.every((file) => file.status === 'added')
+    ? 'add'
+    : staged.every((file) => file.status === 'deleted')
+      ? 'remove'
+      : 'update';
+  if (scope === 'docs') return `docs: ${action} project documentation`;
+  if (scope === 'styles') return `style: ${action} command center styling`;
+  if (scope === 'server') return `feat: ${action} server workflow`;
+  if (scope === 'release') return `chore: ${action} release workflow`;
+  if (scope === 'web') return `feat: ${action} web workflow`;
+  return `chore: ${action} project files`;
+}
+
+function commitScope(paths: string[]): 'docs' | 'styles' | 'server' | 'release' | 'web' | 'mixed' {
+  if (paths.every((path) => path.startsWith('docs/') || path.endsWith('.md'))) return 'docs';
+  if (paths.every((path) => path.endsWith('.css'))) return 'styles';
+  if (paths.every((path) => path.startsWith('src/server/'))) return 'server';
+  if (paths.every((path) => path.startsWith('cloud/hfs/') || path.startsWith('scripts/') || path.startsWith('.github/'))) return 'release';
+  if (paths.every((path) => path.startsWith('src/web/') || path.startsWith('src/shared/'))) return 'web';
+  return 'mixed';
+}
+
+function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth, draftMessage?: string): string {
+  const staged = status.files.filter(canUnstageFile).map((file) => file.path);
+  const unstaged = status.files.filter(canStageFile).map((file) => file.path);
+  const lines = [
+    'PR / review brief',
+    '',
+    `Branch: ${status.branch ?? 'HEAD'}`,
+    `HEAD: ${status.head ?? 'unknown'}`,
+    `Upstream: ${status.upstream ?? 'none'}`,
+    `Ahead / behind: ${status.ahead ?? 0} / ${status.behind ?? 0}`,
+    `Working tree: ${status.files.length} changed (${staged.length} staged, ${unstaged.length} unstaged)`,
+    draftMessage ? `Suggested commit: ${draftMessage}` : undefined,
+    '',
+    'Staged files:',
+    ...listPaths(staged),
+    '',
+    'Unstaged files:',
+    ...listPaths(unstaged),
+    '',
+    'Verification evidence:',
+    `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
+    `- Runtime build: ${health?.build?.sha ?? 'unknown'}`,
+    `- HF target: ${health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local/unknown'}`,
+    '',
+    'Review focus:',
+    '- Inspect staged and unstaged diffs separately.',
+    '- Confirm the commit message matches the staged scope.',
+    '- After push, verify GitHub Actions and HF /healthz build SHA before calling the release complete.'
+  ];
+  return lines.filter((line): line is string => line !== undefined).join('\n');
+}
+
+function listPaths(paths: string[]): string[] {
+  if (paths.length === 0) return ['- none'];
+  const visible = paths.slice(0, 16).map((path) => `- ${path}`);
+  if (paths.length > visible.length) visible.push(`- ${paths.length - visible.length} more`);
+  return visible;
 }
 
 function gitShipInfo(status: GitStatusSummary): {
@@ -1136,7 +1259,7 @@ function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; 
 
   async function copyArtifactPrompt() {
     if (!artifactPrompt) return;
-    await navigator.clipboard?.writeText(artifactPrompt);
+    await copyText(artifactPrompt);
     setCopiedArtifact(true);
     window.setTimeout(() => setCopiedArtifact(false), 1800);
   }
