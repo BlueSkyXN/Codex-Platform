@@ -122,6 +122,7 @@ function ReviewTab(props: {
   const status = props.thread?.status ?? 'ready';
   const branch = props.gitStatus?.isRepo ? props.gitStatus.branch ?? 'HEAD' : 'not a git repo';
   const account = props.account?.email ?? props.account?.mode ?? (props.account?.authenticated ? 'authenticated' : undefined);
+  const shipInfo = props.gitStatus?.isRepo ? gitShipInfo(props.gitStatus) : undefined;
   return (
     <>
       <section className="panel review-summary-panel">
@@ -153,6 +154,12 @@ function ReviewTab(props: {
               <strong>{failedCommands}</strong>
             </div>
           ) : null}
+        </div>
+        <div className="review-control-strip" aria-label="Command center state">
+          <ReviewSignal label="Thread" value={status} />
+          <ReviewSignal label="Risk" value={props.approvals.length ? `${props.approvals.length} pending` : 'clear'} tone={props.approvals.length ? 'warn' : 'ok'} />
+          <ReviewSignal label="Review" value={changedFiles === 0 ? 'clean' : `${changedFiles} changed`} tone={changedFiles ? 'warn' : 'ok'} />
+          <ReviewSignal label="Ship" value={shipInfo?.label ?? 'not ready'} tone={shipInfo?.state === 'blocked' ? 'warn' : shipInfo?.state === 'ready' ? 'ok' : undefined} />
         </div>
         <div className="review-actions-row">
           <button className="small primary" disabled={!props.onStartReview} onClick={props.onStartReview}>Start review</button>
@@ -187,6 +194,15 @@ function ReviewTab(props: {
         </section>
       ) : null}
     </>
+  );
+}
+
+function ReviewSignal(props: { label: string; value: string; tone?: 'ok' | 'warn' }) {
+  return (
+    <div className={`review-signal ${props.tone ?? ''}`}>
+      <span>{props.label}</span>
+      <strong>{props.value}</strong>
+    </div>
   );
 }
 

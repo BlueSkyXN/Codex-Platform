@@ -330,8 +330,15 @@ export function Composer(props: {
 
         <div className="composer-bottom-row">
           <div className="composer-left-tools">
-            <button className="round-tool" title="Add context" aria-label="Add context" onClick={() => setShowContextPicker((value) => !value)} disabled={props.disabled}>
+            <button
+              className={`round-tool context-tool ${showContextPicker || contextAttachments.length ? 'active' : ''}`}
+              title="Add context"
+              aria-label={contextAttachments.length ? `Add context, ${contextAttachments.length} attached` : 'Add context'}
+              onClick={() => setShowContextPicker((value) => !value)}
+              disabled={props.disabled}
+            >
               <Icon name="paperclip" size={16} />
+              {contextAttachments.length ? <span className="tool-count">{contextAttachments.length}</span> : null}
             </button>
             <span className="mode-option active composer-local-pill" title="Run in the current project directory">Local</span>
             <button className="model-chip composer-model-chip" onClick={() => setShowRunConfig((value) => !value)} title="Configure this turn">

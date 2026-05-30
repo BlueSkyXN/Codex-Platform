@@ -555,7 +555,15 @@ export function App() {
         <main className="thread-column">
           <ThreadHeader project={selectedProject} thread={selectedThread} cards={selectedCards} approvals={selectedApprovals} busy={busy} onInterrupt={interrupt} />
           {!inspectorVisible ? <ApprovalRail approvals={selectedApprovals} onDecision={approve} onFocusApproval={focusApproval} /> : null}
-          <Timeline cards={selectedCards} focusedCardId={state.focusedCardId} projectName={selectedProject?.name} onFocus={(cardId) => focusCard(cardId)} />
+          <Timeline
+            cards={selectedCards}
+            focusedCardId={state.focusedCardId}
+            project={selectedProject}
+            gitStatus={gitStatus}
+            approvals={selectedApprovals}
+            connected={state.connected}
+            onFocus={(cardId) => focusCard(cardId)}
+          />
           <Composer
             disabled={!selectedProject || busy}
             onSubmit={startTurn}

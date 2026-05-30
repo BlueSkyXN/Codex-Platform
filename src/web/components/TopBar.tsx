@@ -34,6 +34,7 @@ export function TopBar(props: {
   const inspectorVisible = props.inspectorVisible ?? props.showInspector ?? true;
   const appServer = props.health?.appServer ?? (props.demoMode ? 'demo' : 'starting');
   const ready = props.health?.ready || props.demoMode;
+  const threadLabel = props.thread?.name || props.thread?.preview || (props.thread?.id ? compactThreadId(props.thread.id) : undefined);
   const toggleInspector = () => {
     if (!inspectorVisible && props.onOpenReview) props.onOpenReview();
     else props.onToggleInspector();
@@ -52,6 +53,12 @@ export function TopBar(props: {
 
       <div className="frame-breadcrumb" title={props.project?.cwd}>
         <span className="breadcrumb-project">{props.project?.name ?? 'Choose project'}</span>
+        {threadLabel ? (
+          <>
+            <span className="breadcrumb-separator">/</span>
+            <span className="breadcrumb-thread">{threadLabel}</span>
+          </>
+        ) : null}
       </div>
 
       <div className="frame-runtime" title={props.connectionMessage}>
@@ -76,4 +83,8 @@ export function TopBar(props: {
       </div>
     </header>
   );
+}
+
+function compactThreadId(id: string): string {
+  return id.replace(/^thr_/, '').slice(-10);
 }
