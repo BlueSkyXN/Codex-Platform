@@ -4,7 +4,7 @@ import { CommandCard, FileChangeCard } from './cards.js';
 
 const kindFilters: Array<'all' | TimelineCardKind> = ['all', 'agent', 'command', 'fileChange', 'plan', 'tool', 'reasoning'];
 
-export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string; onFocus: (cardId: string) => void }) {
+export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string; projectName?: string; onFocus: (cardId: string) => void }) {
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<'all' | TimelineCardKind>('all');
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -30,25 +30,26 @@ export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string;
 
   return (
     <div className="timeline-shell codex-timeline-shell">
-      <div className="timeline-toolbar codex-timeline-toolbar">
-        <div className="timeline-toolbar-main">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find in thread" />
-          <span className="timeline-count">{filteredCards.length}/{props.cards.length}</span>
+      {props.cards.length > 0 ? (
+        <div className="timeline-toolbar codex-timeline-toolbar">
+          <div className="timeline-toolbar-main">
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find in thread" />
+            <span className="timeline-count">{filteredCards.length}/{props.cards.length}</span>
+          </div>
+          <div className="filter-row compact-filter-row">
+            {kindFilters.map((item) => (
+              <button key={item} className={`filter-chip ${kind === item ? 'active' : ''}`} onClick={() => setKind(item)}>
+                {item === 'all' ? 'All' : label(item)}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="filter-row compact-filter-row">
-          {kindFilters.map((item) => (
-            <button key={item} className={`filter-chip ${kind === item ? 'active' : ''}`} onClick={() => setKind(item)}>
-              {item === 'all' ? 'All' : label(item)}
-            </button>
-          ))}
-        </div>
-      </div>
+      ) : null}
 
       <div className="timeline codex-timeline">
         {props.cards.length === 0 ? (
           <div className="empty-state codex-empty-state">
-            <div className="empty-title">Start a Codex thread</div>
-            <div className="empty-copy">Choose Local, Worktree, or Cloud-style execution, then ask Codex to inspect, edit, run, and review this project.</div>
+            <div className="empty-title">What should we build in {props.projectName ?? 'this project'}?</div>
           </div>
         ) : null}
         {props.cards.length > 0 && filteredCards.length === 0 ? <div className="empty-state compact">No events match the current filter.</div> : null}

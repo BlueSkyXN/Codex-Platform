@@ -30,18 +30,22 @@ export function ThreadHeader(props: {
   busy: boolean;
   onInterrupt: () => void;
 }) {
+  if (!props.thread || (props.cards.length === 0 && props.approvals.length === 0)) return null;
+
   const fileChanges = countByKind(props.cards, 'fileChange');
   const commands = countByKind(props.cards, 'command');
   const pendingApprovals = props.approvals.filter((a) => !props.thread?.id || !a.threadId || a.threadId === props.thread.id).length;
   const running = isRunning(props.thread?.status);
   const title = props.thread?.name || props.thread?.preview || props.thread?.id || 'No thread selected';
+  const visibleStatus = pendingApprovals > 0 ? 'Approval' : statusLabel(props.thread?.status);
+  const visibleStatusClass = pendingApprovals > 0 ? 'waiting_approval' : props.thread?.status ?? 'idle';
 
   return (
     <div className="thread-header codex-thread-header">
       <div className="thread-header-main">
         <div className="thread-title-line">
           <h1>{title}</h1>
-          <span className={`status-pill dot-status ${props.thread?.status ?? 'idle'}`}>{statusLabel(props.thread?.status)}</span>
+          <span className={`status-pill dot-status ${visibleStatusClass}`}>{visibleStatus}</span>
         </div>
         <div className="thread-context codex-thread-context">
           <span>Local</span>

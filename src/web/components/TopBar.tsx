@@ -69,15 +69,18 @@ export function TopBar(props: {
 
       <div className="top-actions codex-actions">
         <button className="ghost compact-action command-button" onClick={props.onOpenCommandPalette} title="Command menu (⌘K)">⌘K</button>
-        <button className="ghost compact-action activity-button" onClick={props.onOpenActivity} title="Open activity center">Activity{props.pendingApprovals ? <span className="top-badge">{props.pendingApprovals}</span> : null}</button>
+        <button className={`ghost compact-action activity-button ${props.pendingApprovals ? 'attention' : ''}`} onClick={props.onOpenActivity} title="Open activity center" aria-label="Open activity center">
+          <span aria-hidden="true">◷</span>
+          {props.pendingApprovals ? <span className="top-badge">{props.pendingApprovals}</span> : null}
+        </button>
         {isRunning ? <button className="ghost compact-action" onClick={props.onInterrupt} disabled={props.busy}>Interrupt</button> : null}
-        <button className="ghost compact-action" onClick={props.onToggleInspector}>{inspectorVisible ? 'Hide pane' : 'Show pane'}</button>
-        <button className="ghost compact-action" onClick={props.onOpenReview}>Review</button>
+        <button className="ghost compact-action panel-toggle" onClick={props.onToggleInspector} title={inspectorVisible ? 'Hide side panel' : 'Show side panel'} aria-label={inspectorVisible ? 'Hide side panel' : 'Show side panel'}>▤</button>
+        <button className="ghost compact-action review-action" onClick={props.onOpenReview} title="Open review" aria-label="Open review">✓</button>
         <button className="ghost compact-action" disabled title="Requires Git integration">Open</button>
         <button className="ghost compact-action" disabled title="Requires worktree handoff implementation">Hand off</button>
         <button className="ghost compact-action" disabled title="Requires Git integration">Commit</button>
         {props.onLogout ? <button className="ghost compact-action" onClick={props.onLogout}>Lock</button> : null}
-        <button className="primary compact-action" onClick={props.onNewThread} disabled={props.busy || !props.project}>New thread</button>
+        <button className="ghost compact-action new-thread-action" onClick={props.onNewThread} disabled={props.busy || !props.project} title="New thread" aria-label="New thread">＋</button>
       </div>
     </header>
   );

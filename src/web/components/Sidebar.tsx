@@ -52,7 +52,7 @@ export function Sidebar(props: {
   return (
     <aside className="sidebar codex-sidebar">
       <div className="sidebar-head">
-        <div className="codex-logo" aria-hidden="true">✦</div>
+        <div className="codex-logo" aria-hidden="true">C</div>
         <div>
           <div className="sidebar-brand">Codex</div>
           <div className="sidebar-caption">Standalone web UI</div>

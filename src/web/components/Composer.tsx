@@ -69,9 +69,7 @@ export function Composer(props: {
     setShowSuggestions(false);
   }
 
-  const placeholder = props.selectedThread
-    ? 'Ask Codex anything. Type / for commands, $ for skills, # for custom agents.'
-    : 'Create a thread first…';
+  const placeholder = 'Ask Codex anything…';
 
   return (
     <div className="composer-wrap codex-composer-wrap">
@@ -141,7 +139,7 @@ export function Composer(props: {
       <div className="codex-composer">
         <textarea
           value={text}
-          disabled={props.disabled || !props.selectedThread}
+          disabled={props.disabled}
           onChange={(e) => {
             setText(e.target.value);
             setShowSuggestions(hasOpenTrigger(e.target.value));
@@ -203,9 +201,7 @@ export function Composer(props: {
         <span className="branch-chip">{sandboxLabel(sandbox)} · {approvalLabel(approvalPolicy)}</span>
       </div>
 
-      <div className="composer-hint codex-composer-hint">
-        Cmd/Ctrl+Enter sends. Type <code>/</code> commands, <code>$</code> skills, or <code>#</code> custom agents.
-      </div>
+      <div className="composer-hint codex-composer-hint" aria-hidden="true" />
     </div>
   );
 }

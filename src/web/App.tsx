@@ -18,7 +18,7 @@ export function App() {
   const [state, dispatch] = useReducer(reduce, initialState);
   const [busy, setBusy] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(() => !isNarrowViewport());
-  const [inspectorVisible, setInspectorVisible] = useState(() => !isNarrowViewport());
+  const [inspectorVisible, setInspectorVisible] = useState(false);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState<string | undefined>();
@@ -345,10 +345,17 @@ export function App() {
   }
 
   async function startTurn(text: string, options: Partial<StartTurnRequest> = {}) {
-    if (!selectedThread) return;
+    if (!selectedProject) return;
+    let thread = selectedThread;
     setBusy(true);
     try {
-      await api.startTurn(selectedThread.id, { text, cwd: selectedProject?.cwd, ...options });
+      if (!thread) {
+        const created = await api.createThread({ projectId: selectedProject.id });
+        thread = created.thread;
+        dispatch({ type: 'thread.upserted', thread });
+        dispatch({ type: 'raw', method: 'selectProject', params: { projectId: selectedProject.id } });
+      }
+      await api.startTurn(thread.id, { text, cwd: selectedProject.cwd, ...options });
     } catch (error) {
       dispatch({ type: 'error', message: error instanceof Error ? error.message : String(error) });
     } finally {
@@ -447,9 +454,9 @@ export function App() {
         <main className="thread-column">
           <ThreadHeader project={selectedProject} thread={selectedThread} cards={selectedCards} approvals={selectedApprovals} busy={busy} onInterrupt={interrupt} />
           <ApprovalRail approvals={selectedApprovals} onDecision={approve} />
-          <Timeline cards={selectedCards} focusedCardId={state.focusedCardId} onFocus={(cardId) => { dispatch({ type: 'raw', method: 'focus', params: { cardId } }); const card = selectedCards.find((item) => item.id === cardId); const tab = tabForCard(card); if (tab) setInspectorTab(tab); }} />
+          <Timeline cards={selectedCards} focusedCardId={state.focusedCardId} projectName={selectedProject?.name} onFocus={(cardId) => { dispatch({ type: 'raw', method: 'focus', params: { cardId } }); const card = selectedCards.find((item) => item.id === cardId); const tab = tabForCard(card); if (tab) setInspectorTab(tab); }} />
           <Composer
-            disabled={!selectedThread || busy}
+            disabled={!selectedProject || busy}
             onSubmit={startTurn}
             selectedThread={selectedThread}
             skills={skills}
