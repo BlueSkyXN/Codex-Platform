@@ -593,8 +593,8 @@ body { background: var(--codex-bg); color: var(--codex-text); }
 .skill-row-icon, .skill-scope { color: var(--codex-muted); font-size: 12px; }
 .codex-approval-panel .approval-actions.vertical { display: grid; gap: 6px; }
 
-.codex-diff-block { font-size: 12px; border-radius: 8px; }
-.codex-diff-block .diff-line { grid-template-columns: 26px 42px minmax(0, 1fr); position: relative; }
+.codex-diff-block { font-size: 12px; border-radius: 8px; overflow-x: auto; }
+.codex-diff-block .diff-line { grid-template-columns: 26px 42px minmax(0, 1fr); min-width: max-content; position: relative; }
 .diff-comment-hook { color: transparent; user-select: none; display: grid; place-items: center; border-right: 1px solid color-mix(in srgb, var(--border), transparent 40%); }
 .diff-line:hover .diff-comment-hook { color: var(--codex-muted); }
 .codex-diff-block .diff-lineno { padding: 0 8px; }
@@ -860,7 +860,7 @@ kbd {
 .activity-section.quiet { color: var(--muted); }
 .activity-section.quiet strong { color: var(--text); }
 .activity-section-title, .row-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; letter-spacing: 0; }
-.activity-approval, .activity-thread, .activity-event {
+.activity-approval, .activity-thread, .activity-event, .activity-decision {
   width: 100%;
   border: 1px solid var(--border);
   background: var(--codex-surface, var(--panel));
@@ -872,13 +872,15 @@ kbd {
 .activity-approval code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .activity-approval p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .activity-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.activity-thread, .activity-event { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; align-items: center; }
+.activity-thread, .activity-event, .activity-decision { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; align-items: center; }
 .activity-thread.active, .activity-event:hover { background: var(--codex-soft, var(--panel-2)); }
-.activity-thread small, .activity-event small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.activity-thread small, .activity-event small, .activity-decision small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-kind { width: 22px; height: 22px; border-radius: 8px; display: grid; place-items: center; background: var(--codex-soft, var(--panel-2)); color: var(--muted); font-size: 11px; }
 .event-kind.command { color: var(--warn); }
 .event-kind.fileChange { color: var(--ok); }
 .event-kind.approval, .event-kind.error { color: var(--danger); }
+.activity-decision.accepted .event-kind { color: var(--codex-green, var(--ok)); }
+.activity-decision.declined .event-kind { color: var(--codex-red, var(--danger)); }
 .settings-toggle-row {
   display: flex;
   justify-content: space-between;
@@ -1734,6 +1736,7 @@ button.primary:hover,
 .activity-approval,
 .activity-thread,
 .activity-event,
+.activity-decision,
 .agent-card,
 .summary-card,
 .artifact-preview-card {
@@ -4201,6 +4204,74 @@ button.icon-only {
   padding-top: 8px;
   color: var(--codex-muted);
   font-size: 12px;
+}
+
+.approval-history-panel {
+  display: grid;
+  gap: 8px;
+  background: color-mix(in srgb, var(--codex-surface), var(--codex-bg) 8%);
+}
+
+.approval-history-list {
+  display: grid;
+  gap: 6px;
+}
+
+.approval-history-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--codex-soft);
+  padding: 8px;
+}
+
+.approval-history-row > div:first-child,
+.approval-history-row strong,
+.approval-history-row span {
+  min-width: 0;
+}
+
+.approval-history-row strong,
+.approval-history-row span:not(.status) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-history-row > div:first-child > span {
+  margin-top: 2px;
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.approval-history-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.approval-history-meta code {
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.approval-history-row.accepted .status {
+  color: var(--codex-green, var(--ok));
+}
+
+.approval-history-row.declined .status {
+  color: var(--codex-red, var(--danger));
 }
 
 .activity-thread em {

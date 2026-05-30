@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ApprovalRequest, AppStateSnapshot, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
+import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
+
+const maxApprovalHistory = 80;
 
 type StoreOptions = {
   demoMode: boolean;
@@ -51,6 +53,7 @@ export class PersistentStore extends EventEmitter {
   private threads = new Map<string, ThreadSummary>();
   private cards = new Map<string, TimelineCard>();
   private approvals = new Map<string | number, ApprovalRequest>();
+  private approvalHistory = new Map<string | number, ApprovalRecord>();
   private selectedThreadId?: string;
   private readonly demoMode: boolean;
   private readonly snapshotFile: string;
@@ -79,6 +82,7 @@ export class PersistentStore extends EventEmitter {
       threads: [...this.threads.values()].sort((a, b) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0)),
       cards: [...this.cards.values()].sort((a, b) => a.createdAt - b.createdAt),
       approvals: [...this.approvals.values()].sort((a, b) => a.createdAt - b.createdAt),
+      approvalHistory: [...this.approvalHistory.values()].sort((a, b) => (b.resolvedAt ?? b.createdAt) - (a.resolvedAt ?? a.createdAt)),
       selectedThreadId: this.selectedThreadId,
       demoMode: this.demoMode,
       errors: this.errors
@@ -105,6 +109,7 @@ export class PersistentStore extends EventEmitter {
     for (const thread of snapshot.threads ?? []) this.threads.set(thread.id, thread);
     for (const card of snapshot.cards ?? []) this.cards.set(card.id, card);
     for (const approval of snapshot.approvals ?? []) this.approvals.set(approval.requestId, approval);
+    for (const approval of snapshot.approvalHistory ?? []) this.approvalHistory.set(approval.requestId, approval);
     this.selectedThreadId = snapshot.selectedThreadId;
     this.errors = Array.isArray(snapshot.errors) ? snapshot.errors.slice(0, this.maxErrors) : [];
   }
@@ -189,9 +194,14 @@ export class PersistentStore extends EventEmitter {
       case 'approval.requested':
         this.approvals.set(event.approval.requestId, event.approval);
         break;
-      case 'approval.resolved':
-        this.approvals.delete(event.requestId);
+      case 'approval.resolved': {
+        const existing = getByRequestId(this.approvals, event.requestId) ?? getByRequestId(this.approvalHistory, event.requestId);
+        const resolved = resolvedApproval(existing, event.requestId, event.payload);
+        this.approvalHistory.set(resolved.requestId, resolved);
+        deleteByRequestId(this.approvals, event.requestId);
+        this.pruneApprovalHistory();
         break;
+      }
       case 'error':
         this.errors = [event.message, ...this.errors].slice(0, this.maxErrors);
         break;
@@ -202,6 +212,12 @@ export class PersistentStore extends EventEmitter {
     if (this.cards.size <= this.maxCards) return;
     const sorted = [...this.cards.values()].sort((a, b) => a.createdAt - b.createdAt);
     for (const card of sorted.slice(0, this.cards.size - this.maxCards)) this.cards.delete(card.id);
+  }
+
+  private pruneApprovalHistory(): void {
+    if (this.approvalHistory.size <= maxApprovalHistory) return;
+    const sorted = [...this.approvalHistory.values()].sort((a, b) => (b.resolvedAt ?? b.createdAt) - (a.resolvedAt ?? a.createdAt));
+    for (const approval of sorted.slice(maxApprovalHistory)) this.approvalHistory.delete(approval.requestId);
   }
 }
 
@@ -220,4 +236,52 @@ function mergeCard(existing: TimelineCard | undefined, incoming: TimelineCard): 
     createdAt: existing.createdAt ?? incoming.createdAt,
     updatedAt: incoming.updatedAt ?? Date.now()
   };
+}
+
+function resolvedApproval(existing: ApprovalRequest | ApprovalRecord | undefined, requestId: string | number, payload: unknown): ApprovalRecord {
+  const now = Date.now();
+  const previousDecision = existing && 'decision' in existing ? existing.decision : undefined;
+  const base: ApprovalRequest = existing ?? {
+    requestId,
+    method: 'unknown',
+    kind: 'unknown',
+    title: 'Approval resolved',
+    payload,
+    createdAt: now
+  };
+  return {
+    ...base,
+    status: 'resolved',
+    decision: approvalDecision(payload) ?? previousDecision,
+    resolvedAt: now,
+    result: payload
+  };
+}
+
+function approvalDecision(payload: unknown): ApprovalDecision | string | undefined {
+  if (typeof payload === 'string') return payload;
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as { decision?: unknown; result?: unknown };
+  const result = record.result;
+  const value = record.decision ?? (result && typeof result === 'object' ? (result as { decision?: unknown }).decision : result);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function getByRequestId<T>(map: Map<string | number, T>, requestId: string | number): T | undefined {
+  const direct = map.get(requestId);
+  if (direct !== undefined) return direct;
+  for (const [key, value] of map) {
+    if (String(key) === String(requestId)) return value;
+  }
+  return undefined;
+}
+
+function deleteByRequestId<T>(map: Map<string | number, T>, requestId: string | number): void {
+  if (map.delete(requestId)) return;
+  for (const key of map.keys()) {
+    if (String(key) === String(requestId)) {
+      map.delete(key);
+      return;
+    }
+  }
 }

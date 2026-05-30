@@ -1,4 +1,4 @@
-import type { AppStateSnapshot, ApprovalRequest, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
+import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
 
 export type ClientState = {
   connected: boolean;
@@ -8,6 +8,7 @@ export type ClientState = {
   threads: ThreadSummary[];
   cards: TimelineCard[];
   approvals: ApprovalRequest[];
+  approvalHistory: ApprovalRecord[];
   selectedProjectId?: string;
   selectedThreadId?: string;
   focusedCardId?: string;
@@ -21,6 +22,7 @@ export const initialState: ClientState = {
   threads: [],
   cards: [],
   approvals: [],
+  approvalHistory: [],
   errors: []
 };
 
@@ -80,6 +82,7 @@ function applySnapshot(state: ClientState, snapshot: AppStateSnapshot): ClientSt
     threads: snapshot.threads,
     cards: snapshot.cards,
     approvals: snapshot.approvals,
+    approvalHistory: snapshot.approvalHistory ?? state.approvalHistory,
     selectedThreadId: snapshot.selectedThreadId ?? state.selectedThreadId ?? firstThreadForProject?.id,
     selectedProjectId,
     errors: snapshot.errors ?? state.errors
@@ -160,8 +163,15 @@ export function reduce(state: ClientState, event: UiEvent): ClientState {
     }
     case 'approval.requested':
       return { ...state, approvals: upsertApproval(state.approvals, event.approval), focusedCardId: event.approval.itemId ?? state.focusedCardId };
-    case 'approval.resolved':
-      return { ...state, approvals: state.approvals.filter((a) => String(a.requestId) !== String(event.requestId)) };
+    case 'approval.resolved': {
+      const existing = state.approvals.find((approval) => String(approval.requestId) === String(event.requestId)) ?? state.approvalHistory.find((approval) => String(approval.requestId) === String(event.requestId));
+      const resolved = resolvedApproval(existing, event.requestId, event.payload);
+      return {
+        ...state,
+        approvals: state.approvals.filter((a) => String(a.requestId) !== String(event.requestId)),
+        approvalHistory: upsertApprovalHistory(state.approvalHistory, resolved).slice(0, 80)
+      };
+    }
     case 'error':
       return { ...state, errors: [event.message, ...state.errors].slice(0, 6) };
     default:
@@ -175,4 +185,38 @@ function upsertApproval(items: ApprovalRequest[], item: ApprovalRequest): Approv
   const next = [...items];
   next[index] = item;
   return next;
+}
+
+function upsertApprovalHistory(items: ApprovalRecord[], item: ApprovalRecord): ApprovalRecord[] {
+  const next = items.filter((approval) => String(approval.requestId) !== String(item.requestId));
+  return [item, ...next].sort((a, b) => (b.resolvedAt ?? b.createdAt) - (a.resolvedAt ?? a.createdAt));
+}
+
+function resolvedApproval(existing: ApprovalRequest | ApprovalRecord | undefined, requestId: string | number, payload: unknown): ApprovalRecord {
+  const now = Date.now();
+  const previousDecision = existing && 'decision' in existing ? existing.decision : undefined;
+  const base: ApprovalRequest = existing ?? {
+    requestId,
+    method: 'unknown',
+    kind: 'unknown',
+    title: 'Approval resolved',
+    payload,
+    createdAt: now
+  };
+  return {
+    ...base,
+    status: 'resolved',
+    decision: approvalDecision(payload) ?? previousDecision,
+    resolvedAt: now,
+    result: payload
+  };
+}
+
+function approvalDecision(payload: unknown): ApprovalDecision | string | undefined {
+  if (typeof payload === 'string') return payload;
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as { decision?: unknown; result?: unknown };
+  const result = record.result;
+  const value = record.decision ?? (result && typeof result === 'object' ? (result as { decision?: unknown }).decision : result);
+  return typeof value === 'string' ? value : undefined;
 }

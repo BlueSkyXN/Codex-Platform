@@ -1,10 +1,11 @@
-import type { ApprovalDecision, ApprovalRequest, InspectorTab, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, InspectorTab, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 import { Icon, type IconName } from './Icon.js';
 
 export function ActivityCenter(props: {
   open: boolean;
   approvals: ApprovalRequest[];
+  approvalHistory: ApprovalRecord[];
   threads: ThreadSummary[];
   cards: TimelineCard[];
   errors: string[];
@@ -53,6 +54,20 @@ export function ActivityCenter(props: {
         )}
 
         <section className="activity-section">
+          <div className="activity-section-title">Recent decisions</div>
+          {props.approvalHistory.length === 0 ? <div className="empty-mini">No approval decisions recorded yet.</div> : null}
+          {props.approvalHistory.slice(0, 5).map((approval) => (
+            <article key={String(approval.requestId)} className={`activity-decision ${decisionTone(approval.decision)}`}>
+              <span className="event-kind approval"><Icon name={decisionIcon(approval.decision)} size={13} /></span>
+              <span>
+                <strong>{approval.title}</strong>
+                <small>{approval.decision ?? 'resolved'} · {approval.command ?? approval.reason ?? approval.kind}</small>
+              </span>
+            </article>
+          ))}
+        </section>
+
+        <section className="activity-section">
           <div className="activity-section-title">Running / blocked threads</div>
           {activeThreads.length === 0 ? <div className="empty-mini">No active threads.</div> : null}
           {activeThreads.map((thread) => {
@@ -92,6 +107,20 @@ export function ActivityCenter(props: {
       </aside>
     </div>
   );
+}
+
+function decisionTone(decision?: string): string {
+  const value = String(decision ?? '').toLowerCase();
+  if (value.includes('accept') || value.includes('allow')) return 'accepted';
+  if (value.includes('decline') || value.includes('deny') || value.includes('cancel')) return 'declined';
+  return 'resolved';
+}
+
+function decisionIcon(decision?: string): IconName {
+  const value = String(decision ?? '').toLowerCase();
+  if (value.includes('accept') || value.includes('allow')) return 'check';
+  if (value.includes('decline') || value.includes('deny') || value.includes('cancel')) return 'close';
+  return 'clock';
 }
 
 function isActive(status?: string): boolean {

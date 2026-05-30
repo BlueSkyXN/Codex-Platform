@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
 import { Icon } from './Icon.js';
-import type { AccountSummary, ApprovalDecision, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitStatusSummary, InspectorTab, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitStatusSummary, InspectorTab, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
@@ -10,6 +10,7 @@ export function Inspector(props: {
   card?: TimelineCard;
   cards: TimelineCard[];
   approvals: ApprovalRequest[];
+  approvalHistory: ApprovalRecord[];
   project?: Project;
   thread?: ThreadSummary;
   errors: string[];
@@ -72,8 +73,10 @@ export function Inspector(props: {
           onStartReview={props.onStartReview}
           relatedApproval={relatedApproval}
           approvals={props.approvals}
+          approvalHistory={props.approvalHistory}
           errors={props.errors}
           onDecision={props.onDecision}
+          onFocusCard={props.onFocusCard}
         />
       ) : null}
       {activeTab === 'plan' ? <PlanTab plans={plans} /> : null}
@@ -111,10 +114,12 @@ function ReviewTab(props: {
   account?: AccountSummary;
   gitStatus?: GitStatusSummary;
   approvals: ApprovalRequest[];
+  approvalHistory: ApprovalRecord[];
   relatedApproval?: ApprovalRequest;
   errors: string[];
   onDecision: (requestId: string | number, decision: ApprovalDecision) => void;
   onStartReview?: () => void;
+  onFocusCard?: (cardId: string) => void;
 }) {
   const commands = props.cards.filter((card) => card.kind === 'command');
   const diffs = props.cards.filter((card) => card.kind === 'fileChange');
@@ -170,6 +175,7 @@ function ReviewTab(props: {
 
       {props.relatedApproval ? <ApprovalPanel approval={props.relatedApproval} onDecision={props.onDecision} /> : null}
       {!props.relatedApproval && props.approvals.length > 0 ? <ApprovalPanel approval={props.approvals[0]} onDecision={props.onDecision} /> : null}
+      <ApprovalHistoryPanel approvals={props.approvalHistory} onFocusCard={props.onFocusCard} />
 
       <section className={`panel supervision-panel ${supervisionStateClass(supervision.state)}`}>
         <div className="section-title">Agent supervision</div>
@@ -229,6 +235,45 @@ function ReviewSignal(props: { label: string; value: string; tone?: 'ok' | 'warn
 
 function compactId(id: string): string {
   return id.replace(/^(turn|item|call)_/, '').slice(-10);
+}
+
+function ApprovalHistoryPanel(props: { approvals: ApprovalRecord[]; onFocusCard?: (cardId: string) => void }) {
+  const approvals = props.approvals.slice(0, 5);
+  return (
+    <section className="panel approval-history-panel">
+      <div className="section-title">Approval history</div>
+      {approvals.length === 0 ? <div className="empty-inline">No approval decisions recorded for this thread.</div> : null}
+      {approvals.length > 0 ? (
+        <div className="approval-history-list">
+          {approvals.map((approval) => (
+            <article key={String(approval.requestId)} className={`approval-history-row ${decisionTone(approval.decision)}`}>
+              <div>
+                <strong>{approval.title}</strong>
+                <span>{approval.command ?? approval.reason ?? approval.kind}</span>
+              </div>
+              <div className="approval-history-meta">
+                <span className="status">{approval.decision ?? 'resolved'}</span>
+                <code title={approval.turnId}>{approval.turnId ? compactId(approval.turnId) : formatTime(approval.resolvedAt)}</code>
+                {approval.itemId && props.onFocusCard ? <button className="mini-action" onClick={() => props.onFocusCard?.(approval.itemId!)}>Open item</button> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function decisionTone(decision?: string): string {
+  const value = String(decision ?? '').toLowerCase();
+  if (value.includes('accept') || value.includes('allow')) return 'accepted';
+  if (value.includes('decline') || value.includes('deny') || value.includes('cancel')) return 'declined';
+  return 'resolved';
+}
+
+function formatTime(value?: number): string {
+  if (!value) return '-';
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function ApprovalPanel(props: { approval: ApprovalRequest; onDecision: (requestId: string | number, decision: ApprovalDecision) => void }) {

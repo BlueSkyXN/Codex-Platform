@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react';
-import type { AccountSummary, AgentSummary, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { AccountSummary, AgentSummary, ApprovalRecord, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
 import { api, eventStreamUrl, getStoredToken, setStoredToken } from './lib/api.js';
 import { initialState, reduce } from './lib/reducer.js';
 import { normalizeAccount } from './lib/normalize.js';
@@ -143,6 +143,7 @@ export function App() {
   const selectedCards = useMemo(() => state.cards.filter((c) => c.threadId === selectedThread?.id), [state.cards, selectedThread?.id]);
   const focusedCard = useMemo(() => selectedCards.find((c) => c.id === state.focusedCardId) ?? selectedCards[selectedCards.length - 1], [selectedCards, state.focusedCardId]);
   const selectedApprovals = useMemo(() => state.approvals.filter((a) => !a.threadId || a.threadId === selectedThread?.id), [state.approvals, selectedThread?.id]);
+  const selectedApprovalHistory = useMemo(() => filterApprovalHistory(state.approvalHistory, selectedThread?.id), [state.approvalHistory, selectedThread?.id]);
 
   function openManagementTab(tab: ManagementTab) {
     setManagementTab(tab);
@@ -599,6 +600,7 @@ export function App() {
             card={focusedCard}
             cards={selectedCards}
             approvals={selectedApprovals}
+            approvalHistory={selectedApprovalHistory}
             project={selectedProject}
             thread={selectedThread}
             errors={state.errors}
@@ -649,6 +651,7 @@ export function App() {
       <ActivityCenter
         open={activityOpen}
         approvals={state.approvals}
+        approvalHistory={state.approvalHistory}
         threads={state.threads}
         cards={state.cards}
         errors={state.errors}
@@ -703,6 +706,10 @@ function isNarrowViewport(): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function filterApprovalHistory(history: ApprovalRecord[], threadId?: string): ApprovalRecord[] {
+  return history.filter((approval) => !approval.threadId || approval.threadId === threadId).slice(0, 12);
 }
 
 function BootScreen({ title, subtitle }: { title: string; subtitle?: string }) {

@@ -71,6 +71,13 @@ export type ApprovalRequest = {
   createdAt: number;
 };
 
+export type ApprovalRecord = ApprovalRequest & {
+  status: 'pending' | 'resolved';
+  decision?: ApprovalDecision | string;
+  resolvedAt?: number;
+  result?: unknown;
+};
+
 export type SkillSummary = {
   id: string;
   name: string;
@@ -229,6 +236,7 @@ export type AppStateSnapshot = {
   threads: ThreadSummary[];
   cards: TimelineCard[];
   approvals: ApprovalRequest[];
+  approvalHistory?: ApprovalRecord[];
   selectedThreadId?: string;
   demoMode: boolean;
   errors?: string[];
