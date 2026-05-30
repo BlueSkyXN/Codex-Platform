@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
 import { Icon } from './Icon.js';
 import type { AccountSummary, ApprovalDecision, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitStatusSummary, InspectorTab, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
 
@@ -123,6 +124,7 @@ function ReviewTab(props: {
   const branch = props.gitStatus?.isRepo ? props.gitStatus.branch ?? 'HEAD' : 'not a git repo';
   const account = props.account?.email ?? props.account?.mode ?? (props.account?.authenticated ? 'authenticated' : undefined);
   const shipInfo = props.gitStatus?.isRepo ? gitShipInfo(props.gitStatus) : undefined;
+  const supervision = deriveSupervisionSummary({ thread: props.thread, cards: props.cards, approvals: props.approvals });
   return (
     <>
       <section className="panel review-summary-panel">
@@ -169,6 +171,25 @@ function ReviewTab(props: {
       {props.relatedApproval ? <ApprovalPanel approval={props.relatedApproval} onDecision={props.onDecision} /> : null}
       {!props.relatedApproval && props.approvals.length > 0 ? <ApprovalPanel approval={props.approvals[0]} onDecision={props.onDecision} /> : null}
 
+      <section className={`panel supervision-panel ${supervisionStateClass(supervision.state)}`}>
+        <div className="section-title">Agent supervision</div>
+        <div className="supervision-focus">
+          <span className="supervision-focus-icon"><Icon name={supervision.state === 'waiting_approval' ? 'clock' : supervision.state === 'failed' ? 'close' : 'agent'} size={15} /></span>
+          <div>
+            <div className="panel-title">{supervision.current}</div>
+            <p title={supervision.detail}>{supervision.detail}</p>
+          </div>
+          <span className={`status ${supervisionStateClass(supervision.state)}`}>{supervision.label}</span>
+        </div>
+        <div className="supervision-grid">
+          <div><span>Turn</span><strong title={supervision.turnId}>{supervision.turnId ? compactId(supervision.turnId) : '-'}</strong></div>
+          <div><span>Commands</span><strong>{supervision.counts.commands}</strong></div>
+          <div><span>Files</span><strong>{supervision.counts.files}</strong></div>
+          <div><span>Approvals</span><strong>{supervision.counts.approvals}</strong></div>
+        </div>
+        <div className="supervision-next">{supervision.nextAction}</div>
+      </section>
+
       <section className="panel context-panel">
         <div className="section-title">Environment</div>
         <div className="context-list">
@@ -204,6 +225,10 @@ function ReviewSignal(props: { label: string; value: string; tone?: 'ok' | 'warn
       <strong>{props.value}</strong>
     </div>
   );
+}
+
+function compactId(id: string): string {
+  return id.replace(/^(turn|item|call)_/, '').slice(-10);
 }
 
 function ApprovalPanel(props: { approval: ApprovalRequest; onDecision: (requestId: string | number, decision: ApprovalDecision) => void }) {

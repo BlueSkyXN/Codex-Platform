@@ -1,4 +1,5 @@
 import type { ApprovalDecision, ApprovalRequest, InspectorTab, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 import { Icon, type IconName } from './Icon.js';
 
 export function ActivityCenter(props: {
@@ -54,12 +55,21 @@ export function ActivityCenter(props: {
         <section className="activity-section">
           <div className="activity-section-title">Running / blocked threads</div>
           {activeThreads.length === 0 ? <div className="empty-mini">No active threads.</div> : null}
-          {activeThreads.map((thread) => (
-            <button key={thread.id} className={`activity-thread ${thread.id === props.selectedThreadId ? 'active' : ''}`} onClick={() => void props.onSelectThread(thread.id)}>
-              <span className={`thread-dot ${statusClass(thread.status)}`} />
-              <span><strong>{thread.name || thread.preview || compactThreadId(thread.id)}</strong><small>{thread.status ?? 'running'} · {compactThreadId(thread.id)}</small></span>
-            </button>
-          ))}
+          {activeThreads.map((thread) => {
+            const threadCards = props.cards.filter((card) => card.threadId === thread.id);
+            const threadApprovals = props.approvals.filter((approval) => !approval.threadId || approval.threadId === thread.id);
+            const supervision = deriveSupervisionSummary({ thread, cards: threadCards, approvals: threadApprovals });
+            return (
+              <button key={thread.id} className={`activity-thread ${thread.id === props.selectedThreadId ? 'active' : ''}`} onClick={() => void props.onSelectThread(thread.id)}>
+                <span className={`thread-dot ${statusClass(thread.status)} ${supervisionStateClass(supervision.state)}`} />
+                <span>
+                  <strong>{thread.name || thread.preview || compactThreadId(thread.id)}</strong>
+                  <small>{supervision.label} · {compactThreadId(thread.id)}</small>
+                  <em title={supervision.current}>{supervision.current}</em>
+                </span>
+              </button>
+            );
+          })}
         </section>
 
         <section className="activity-section">

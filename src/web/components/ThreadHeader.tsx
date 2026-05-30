@@ -1,4 +1,5 @@
 import type { ApprovalRequest, Project, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 import { Icon } from './Icon.js';
 
 function statusLabel(status?: string): string {
@@ -40,6 +41,7 @@ export function ThreadHeader(props: {
   const title = props.thread?.name || props.thread?.preview || props.thread?.id || 'No thread selected';
   const visibleStatus = pendingApprovals > 0 ? 'Approval' : statusLabel(props.thread?.status);
   const visibleStatusClass = pendingApprovals > 0 ? 'waiting_approval' : props.thread?.status ?? 'idle';
+  const supervision = deriveSupervisionSummary({ thread: props.thread, cards: props.cards, approvals: props.approvals });
 
   return (
     <div className="thread-header codex-thread-header">
@@ -55,6 +57,13 @@ export function ThreadHeader(props: {
           <span className="dot" />
           <code title={props.project?.cwd}>{props.project?.cwd ?? '—'}</code>
         </div>
+        <div className={`agent-supervision-strip ${supervisionStateClass(supervision.state)}`} aria-label="Agent execution supervision">
+          <span className="agent-supervision-icon"><Icon name={supervision.state === 'waiting_approval' ? 'clock' : supervision.state === 'failed' ? 'close' : 'agent'} size={14} /></span>
+          <span className="agent-supervision-state">{supervision.label}</span>
+          <strong title={supervision.current}>{supervision.current}</strong>
+          <span title={supervision.detail}>{supervision.detail}</span>
+          {supervision.turnId ? <code title={supervision.turnId}>{compactTurnId(supervision.turnId)}</code> : null}
+        </div>
       </div>
 
       <div className="thread-metrics codex-thread-actions">
@@ -69,4 +78,8 @@ export function ThreadHeader(props: {
       </div>
     </div>
   );
+}
+
+function compactTurnId(id: string): string {
+  return id.replace(/^turn_/, '').slice(-10);
 }
