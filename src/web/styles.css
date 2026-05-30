@@ -860,7 +860,7 @@ kbd {
 .activity-section.quiet { color: var(--muted); }
 .activity-section.quiet strong { color: var(--text); }
 .activity-section-title, .row-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; letter-spacing: 0; }
-.activity-approval, .activity-thread, .activity-event, .activity-decision {
+.activity-approval, .activity-thread, .activity-event, .activity-decision, .activity-git-operation {
   width: 100%;
   border: 1px solid var(--border);
   background: var(--codex-surface, var(--panel));
@@ -872,15 +872,17 @@ kbd {
 .activity-approval code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .activity-approval p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .activity-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.activity-thread, .activity-event, .activity-decision { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; align-items: center; }
+.activity-thread, .activity-event, .activity-decision, .activity-git-operation { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; align-items: center; }
 .activity-thread.active, .activity-event:hover { background: var(--codex-soft, var(--panel-2)); }
-.activity-thread small, .activity-event small, .activity-decision small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-thread small, .activity-event small, .activity-decision small, .activity-git-operation small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-kind { width: 22px; height: 22px; border-radius: 8px; display: grid; place-items: center; background: var(--codex-soft, var(--panel-2)); color: var(--muted); font-size: 11px; }
 .event-kind.command { color: var(--warn); }
 .event-kind.fileChange { color: var(--ok); }
 .event-kind.approval, .event-kind.error { color: var(--danger); }
 .activity-decision.accepted .event-kind { color: var(--codex-green, var(--ok)); }
 .activity-decision.declined .event-kind { color: var(--codex-red, var(--danger)); }
+.activity-git-operation.completed .event-kind { color: var(--codex-green, var(--ok)); }
+.activity-git-operation.failed .event-kind { color: var(--codex-red, var(--danger)); }
 .settings-toggle-row {
   display: flex;
   justify-content: space-between;
@@ -1737,6 +1739,7 @@ button.primary:hover,
 .activity-thread,
 .activity-event,
 .activity-decision,
+.activity-git-operation,
 .agent-card,
 .summary-card,
 .artifact-preview-card {
@@ -4329,6 +4332,54 @@ button.icon-only {
 }
 
 .approval-history-row.declined .status {
+  color: var(--codex-red, var(--danger));
+}
+
+.git-operation-history {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.git-operation-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--codex-soft);
+  padding: 8px;
+}
+
+.git-operation-row > span:not(.event-kind) {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.git-operation-row strong,
+.git-operation-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-operation-row small,
+.git-operation-row code {
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.git-operation-row.completed .event-kind {
+  color: var(--codex-green, var(--ok));
+}
+
+.git-operation-row.failed .event-kind {
   color: var(--codex-red, var(--danger));
 }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
 import { Icon } from './Icon.js';
-import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitStatusSummary, InspectorTab, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitOperationRecord, GitStatusSummary, InspectorTab, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
@@ -18,6 +18,7 @@ export function Inspector(props: {
   fileContent?: FileReadResult;
   gitStatus?: GitStatusSummary;
   gitDiff?: GitDiffResult;
+  gitOperations?: GitOperationRecord[];
   selectedGitPath?: string;
   gitActionBusy?: boolean;
   gitActionMessage?: string;
@@ -86,6 +87,7 @@ export function Inspector(props: {
         <GitTab
           status={props.gitStatus}
           diff={props.gitDiff}
+          operations={props.gitOperations ?? []}
           selectedPath={props.selectedGitPath}
           loading={Boolean(props.projectPanelLoading)}
           actionBusy={Boolean(props.gitActionBusy)}
@@ -508,6 +510,7 @@ function FileTree(props: { node: FileTreeNode; level: number; selectedPath?: str
 function GitTab(props: {
   status?: GitStatusSummary;
   diff?: GitDiffResult;
+  operations: GitOperationRecord[];
   selectedPath?: string;
   loading: boolean;
   actionBusy: boolean;
@@ -632,16 +635,36 @@ function GitTab(props: {
           <div className="git-commit-box">
             <div>
               <div className="section-title">Commit</div>
-              <div className="subtle">Commits staged changes in the active project. Push and PR are planned for the next phase.</div>
+              <div className="subtle">Commits staged changes in the active project. Use readiness checks above before push or PR.</div>
             </div>
             <textarea value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Commit message" rows={3} />
             <button className="small primary" disabled={props.actionBusy || !hasStagedChanges || !commitMessage.trim() || !props.onCommit} onClick={() => props.onCommit?.(commitMessage)}>
               {props.actionBusy ? 'Working...' : 'Commit staged changes'}
             </button>
           </div>
+          <GitOperationHistory operations={props.operations} />
         </>
       ) : null}
     </section>
+  );
+}
+
+function GitOperationHistory({ operations }: { operations: GitOperationRecord[] }) {
+  return (
+    <div className="git-operation-history">
+      <div className="section-title">Git operation history</div>
+      {operations.length === 0 ? <div className="empty-inline">No Git actions recorded yet.</div> : null}
+      {operations.slice(0, 5).map((operation) => (
+        <article key={operation.id} className={`git-operation-row ${operation.status}`}>
+          <span className="event-kind"><Icon name={operation.status === 'completed' ? 'check' : 'close'} size={13} /></span>
+          <span>
+            <strong>{operation.title}</strong>
+            <small>{operation.detail ?? operation.kind}{operation.branch ? ` · ${operation.branch}` : ''}</small>
+          </span>
+          <code>{formatTime(operation.createdAt)}</code>
+        </article>
+      ))}
+    </div>
   );
 }
 

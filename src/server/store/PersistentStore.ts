@@ -1,9 +1,10 @@
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
+import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, GitOperationRecord, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
 
 const maxApprovalHistory = 80;
+const maxGitOperations = 80;
 
 type StoreOptions = {
   demoMode: boolean;
@@ -54,6 +55,7 @@ export class PersistentStore extends EventEmitter {
   private cards = new Map<string, TimelineCard>();
   private approvals = new Map<string | number, ApprovalRequest>();
   private approvalHistory = new Map<string | number, ApprovalRecord>();
+  private gitOperations = new Map<string, GitOperationRecord>();
   private selectedThreadId?: string;
   private readonly demoMode: boolean;
   private readonly snapshotFile: string;
@@ -83,6 +85,7 @@ export class PersistentStore extends EventEmitter {
       cards: [...this.cards.values()].sort((a, b) => a.createdAt - b.createdAt),
       approvals: [...this.approvals.values()].sort((a, b) => a.createdAt - b.createdAt),
       approvalHistory: [...this.approvalHistory.values()].sort((a, b) => (b.resolvedAt ?? b.createdAt) - (a.resolvedAt ?? a.createdAt)),
+      gitOperations: [...this.gitOperations.values()].sort((a, b) => b.createdAt - a.createdAt),
       selectedThreadId: this.selectedThreadId,
       demoMode: this.demoMode,
       errors: this.errors
@@ -110,6 +113,7 @@ export class PersistentStore extends EventEmitter {
     for (const card of snapshot.cards ?? []) this.cards.set(card.id, card);
     for (const approval of snapshot.approvals ?? []) this.approvals.set(approval.requestId, approval);
     for (const approval of snapshot.approvalHistory ?? []) this.approvalHistory.set(approval.requestId, approval);
+    for (const operation of snapshot.gitOperations ?? []) this.gitOperations.set(operation.id, operation);
     this.selectedThreadId = snapshot.selectedThreadId;
     this.errors = Array.isArray(snapshot.errors) ? snapshot.errors.slice(0, this.maxErrors) : [];
   }
@@ -202,6 +206,10 @@ export class PersistentStore extends EventEmitter {
         this.pruneApprovalHistory();
         break;
       }
+      case 'git.operation.recorded':
+        this.gitOperations.set(event.operation.id, event.operation);
+        this.pruneGitOperations();
+        break;
       case 'error':
         this.errors = [event.message, ...this.errors].slice(0, this.maxErrors);
         break;
@@ -218,6 +226,12 @@ export class PersistentStore extends EventEmitter {
     if (this.approvalHistory.size <= maxApprovalHistory) return;
     const sorted = [...this.approvalHistory.values()].sort((a, b) => (b.resolvedAt ?? b.createdAt) - (a.resolvedAt ?? a.createdAt));
     for (const approval of sorted.slice(maxApprovalHistory)) this.approvalHistory.delete(approval.requestId);
+  }
+
+  private pruneGitOperations(): void {
+    if (this.gitOperations.size <= maxGitOperations) return;
+    const sorted = [...this.gitOperations.values()].sort((a, b) => b.createdAt - a.createdAt);
+    for (const operation of sorted.slice(maxGitOperations)) this.gitOperations.delete(operation.id);
   }
 }
 

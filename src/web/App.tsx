@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react';
-import type { AccountSummary, AgentSummary, ApprovalRecord, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { AccountSummary, AgentSummary, ApprovalRecord, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
 import { api, eventStreamUrl, getStoredToken, setStoredToken } from './lib/api.js';
 import { initialState, reduce } from './lib/reducer.js';
 import { normalizeAccount } from './lib/normalize.js';
@@ -144,6 +144,7 @@ export function App() {
   const focusedCard = useMemo(() => selectedCards.find((c) => c.id === state.focusedCardId) ?? selectedCards[selectedCards.length - 1], [selectedCards, state.focusedCardId]);
   const selectedApprovals = useMemo(() => state.approvals.filter((a) => !a.threadId || a.threadId === selectedThread?.id), [state.approvals, selectedThread?.id]);
   const selectedApprovalHistory = useMemo(() => filterApprovalHistory(state.approvalHistory, selectedThread?.id), [state.approvalHistory, selectedThread?.id]);
+  const selectedGitOperations = useMemo(() => filterGitOperations(state.gitOperations, selectedProject?.id), [state.gitOperations, selectedProject?.id]);
 
   function openManagementTab(tab: ManagementTab) {
     setManagementTab(tab);
@@ -609,6 +610,7 @@ export function App() {
             fileContent={fileContent}
             gitStatus={gitStatus}
             gitDiff={gitDiff}
+            gitOperations={selectedGitOperations}
             selectedGitPath={selectedGitPath}
             gitActionBusy={gitActionBusy}
             gitActionMessage={gitActionMessage}
@@ -652,6 +654,7 @@ export function App() {
         open={activityOpen}
         approvals={state.approvals}
         approvalHistory={state.approvalHistory}
+        gitOperations={state.gitOperations}
         threads={state.threads}
         cards={state.cards}
         errors={state.errors}
@@ -710,6 +713,10 @@ function errorMessage(error: unknown): string {
 
 function filterApprovalHistory(history: ApprovalRecord[], threadId?: string): ApprovalRecord[] {
   return history.filter((approval) => !approval.threadId || approval.threadId === threadId).slice(0, 12);
+}
+
+function filterGitOperations(history: GitOperationRecord[], projectId?: string): GitOperationRecord[] {
+  return history.filter((operation) => !projectId || operation.projectId === projectId).slice(0, 12);
 }
 
 function BootScreen({ title, subtitle }: { title: string; subtitle?: string }) {

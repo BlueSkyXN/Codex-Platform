@@ -1,4 +1,4 @@
-import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
+import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, AppStateSnapshot, GitOperationRecord, Project, ThreadSummary, TimelineCard, UiEvent } from '../../shared/types.js';
 
 export type ClientState = {
   connected: boolean;
@@ -9,6 +9,7 @@ export type ClientState = {
   cards: TimelineCard[];
   approvals: ApprovalRequest[];
   approvalHistory: ApprovalRecord[];
+  gitOperations: GitOperationRecord[];
   selectedProjectId?: string;
   selectedThreadId?: string;
   focusedCardId?: string;
@@ -23,6 +24,7 @@ export const initialState: ClientState = {
   cards: [],
   approvals: [],
   approvalHistory: [],
+  gitOperations: [],
   errors: []
 };
 
@@ -83,6 +85,7 @@ function applySnapshot(state: ClientState, snapshot: AppStateSnapshot): ClientSt
     cards: snapshot.cards,
     approvals: snapshot.approvals,
     approvalHistory: snapshot.approvalHistory ?? state.approvalHistory,
+    gitOperations: snapshot.gitOperations ?? state.gitOperations,
     selectedThreadId: snapshot.selectedThreadId ?? state.selectedThreadId ?? firstThreadForProject?.id,
     selectedProjectId,
     errors: snapshot.errors ?? state.errors
@@ -172,6 +175,8 @@ export function reduce(state: ClientState, event: UiEvent): ClientState {
         approvalHistory: upsertApprovalHistory(state.approvalHistory, resolved).slice(0, 80)
       };
     }
+    case 'git.operation.recorded':
+      return { ...state, gitOperations: upsertGitOperation(state.gitOperations, event.operation).slice(0, 80) };
     case 'error':
       return { ...state, errors: [event.message, ...state.errors].slice(0, 6) };
     default:
@@ -190,6 +195,11 @@ function upsertApproval(items: ApprovalRequest[], item: ApprovalRequest): Approv
 function upsertApprovalHistory(items: ApprovalRecord[], item: ApprovalRecord): ApprovalRecord[] {
   const next = items.filter((approval) => String(approval.requestId) !== String(item.requestId));
   return [item, ...next].sort((a, b) => (b.resolvedAt ?? b.createdAt) - (a.resolvedAt ?? a.createdAt));
+}
+
+function upsertGitOperation(items: GitOperationRecord[], item: GitOperationRecord): GitOperationRecord[] {
+  const next = items.filter((operation) => operation.id !== item.id);
+  return [item, ...next].sort((a, b) => b.createdAt - a.createdAt);
 }
 
 function resolvedApproval(existing: ApprovalRequest | ApprovalRecord | undefined, requestId: string | number, payload: unknown): ApprovalRecord {

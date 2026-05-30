@@ -10,7 +10,7 @@ import { readGitHubActionsSummary } from './api/githubActions.js';
 import { PersistentStore } from './store/PersistentStore.js';
 import { createRateLimiter } from './security/rateLimit.js';
 import { isAuthorizedToken, loginRoute, logoutRoute, requireAuth, tokenFromUpgrade } from './security/auth.js';
-import type { ApprovalDecision, CreateThreadRequest, ServerHealth, StartTurnRequest, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { ApprovalDecision, CreateThreadRequest, GitActionResult, GitOperationKind, GitOperationRecord, ServerHealth, StartTurnRequest, UiEvent, CodexWebConfig } from '../shared/types.js';
 import type { CodexBridge } from './codex/Bridge.js';
 import { DemoCodexBridge } from './codex/DemoCodexBridge.js';
 import { RealCodexBridge } from './codex/RealCodexBridge.js';
@@ -318,11 +318,14 @@ app.get('/api/projects/:projectId/git/diff', asyncRoute(async (req, res) => {
 app.post('/api/projects/:projectId/git/stage', asyncRoute(async (req, res) => {
   const project = registry.get(String(req.params.projectId));
   if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  const paths = operationPaths(req.body?.paths);
   try {
     const result = await stageGitPaths(project.cwd, req.body?.paths, config.limits.gitCommandTimeoutMs);
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'stage', 'completed', { paths, result }) });
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'stage', 'failed', { paths, error: message }) });
     res.status(400).json({ error: message });
   }
 }));
@@ -330,11 +333,14 @@ app.post('/api/projects/:projectId/git/stage', asyncRoute(async (req, res) => {
 app.post('/api/projects/:projectId/git/unstage', asyncRoute(async (req, res) => {
   const project = registry.get(String(req.params.projectId));
   if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  const paths = operationPaths(req.body?.paths);
   try {
     const result = await unstageGitPaths(project.cwd, req.body?.paths, config.limits.gitCommandTimeoutMs);
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'unstage', 'completed', { paths, result }) });
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'unstage', 'failed', { paths, error: message }) });
     res.status(400).json({ error: message });
   }
 }));
@@ -342,11 +348,14 @@ app.post('/api/projects/:projectId/git/unstage', asyncRoute(async (req, res) => 
 app.post('/api/projects/:projectId/git/commit', asyncRoute(async (req, res) => {
   const project = registry.get(String(req.params.projectId));
   if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  const messageText = String(req.body?.message ?? '');
   try {
-    const result = await commitGitChanges(project.cwd, String(req.body?.message ?? ''), config.limits.gitCommandTimeoutMs);
+    const result = await commitGitChanges(project.cwd, messageText, config.limits.gitCommandTimeoutMs);
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'commit', 'completed', { message: messageText, result }) });
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    store.dispatch({ type: 'git.operation.recorded', operation: gitOperation(project.id, 'commit', 'failed', { message: messageText, error: message }) });
     res.status(400).json({ error: message });
   }
 }));
@@ -358,6 +367,49 @@ app.get('/api/agents', asyncRoute(async (req, res) => {
   if (!project) return res.status(404).json({ error: `Unknown project: ${projectId}` });
   res.json({ data: listCustomAgents(project.cwd) });
 }));
+
+function operationPaths(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.map((entry) => String(entry)).filter(Boolean).slice(0, 50);
+}
+
+function gitOperation(
+  projectId: string,
+  kind: GitOperationKind,
+  status: GitOperationRecord['status'],
+  detail: { paths?: string[]; message?: string; result?: GitActionResult; error?: string }
+): GitOperationRecord {
+  const createdAt = Date.now();
+  const count = detail.paths?.length ?? 0;
+  const message = detail.message?.trim();
+  return {
+    id: `git_${kind}_${createdAt}_${Math.random().toString(36).slice(2, 8)}`,
+    projectId,
+    kind,
+    status,
+    title: gitOperationTitle(kind, status),
+    detail: gitOperationDetail(kind, status, count, message, detail.error),
+    paths: detail.paths,
+    message,
+    stdout: detail.result?.stdout,
+    stderr: detail.result?.stderr,
+    error: detail.error,
+    head: detail.result?.status.head,
+    branch: detail.result?.status.branch,
+    createdAt
+  };
+}
+
+function gitOperationTitle(kind: GitOperationKind, status: GitOperationRecord['status']): string {
+  const label = kind === 'stage' ? 'Stage files' : kind === 'unstage' ? 'Unstage files' : 'Commit staged changes';
+  return status === 'completed' ? label : `${label} failed`;
+}
+
+function gitOperationDetail(kind: GitOperationKind, status: GitOperationRecord['status'], count: number, message?: string, error?: string): string {
+  if (status === 'failed') return error ?? 'Git operation failed.';
+  if (kind === 'commit') return message ? `Committed: ${message.split(/\r?\n/)[0]}` : 'Committed staged changes.';
+  return `${kind === 'stage' ? 'Staged' : 'Unstaged'} ${count} file${count === 1 ? '' : 's'}.`;
+}
 
 const distWebRoot = path.resolve(process.cwd(), 'dist/web');
 if (fs.existsSync(distWebRoot)) {

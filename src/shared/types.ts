@@ -138,6 +138,25 @@ export type GitActionResult = {
   status: GitStatusSummary;
 };
 
+export type GitOperationKind = 'stage' | 'unstage' | 'commit';
+
+export type GitOperationRecord = {
+  id: string;
+  projectId: string;
+  kind: GitOperationKind;
+  status: 'completed' | 'failed';
+  title: string;
+  detail?: string;
+  paths?: string[];
+  message?: string;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+  head?: string;
+  branch?: string;
+  createdAt: number;
+};
+
 export type GitDiffResult = {
   path?: string;
   cached?: boolean;
@@ -228,6 +247,7 @@ export type UiEvent =
   | { type: 'card.delta'; threadId: string; cardId: string; field: 'text' | 'stdout' | 'stderr' | 'diff'; delta: string }
   | { type: 'approval.requested'; approval: ApprovalRequest }
   | { type: 'approval.resolved'; requestId: string | number; payload?: unknown }
+  | { type: 'git.operation.recorded'; operation: GitOperationRecord }
   | { type: 'raw'; method: string; params?: unknown }
   | { type: 'error'; message: string; payload?: unknown };
 
@@ -237,6 +257,7 @@ export type AppStateSnapshot = {
   cards: TimelineCard[];
   approvals: ApprovalRequest[];
   approvalHistory?: ApprovalRecord[];
+  gitOperations?: GitOperationRecord[];
   selectedThreadId?: string;
   demoMode: boolean;
   errors?: string[];

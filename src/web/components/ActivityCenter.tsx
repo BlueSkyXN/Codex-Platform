@@ -1,4 +1,4 @@
-import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, InspectorTab, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { ApprovalDecision, ApprovalRecord, ApprovalRequest, GitOperationRecord, InspectorTab, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 import { Icon, type IconName } from './Icon.js';
 
@@ -6,6 +6,7 @@ export function ActivityCenter(props: {
   open: boolean;
   approvals: ApprovalRequest[];
   approvalHistory: ApprovalRecord[];
+  gitOperations: GitOperationRecord[];
   threads: ThreadSummary[];
   cards: TimelineCard[];
   errors: string[];
@@ -62,6 +63,20 @@ export function ActivityCenter(props: {
               <span>
                 <strong>{approval.title}</strong>
                 <small>{approval.decision ?? 'resolved'} · {approval.command ?? approval.reason ?? approval.kind}</small>
+              </span>
+            </article>
+          ))}
+        </section>
+
+        <section className="activity-section">
+          <div className="activity-section-title">Git operations</div>
+          {props.gitOperations.length === 0 ? <div className="empty-mini">No Git actions recorded yet.</div> : null}
+          {props.gitOperations.slice(0, 5).map((operation) => (
+            <article key={operation.id} className={`activity-git-operation ${operation.status}`}>
+              <span className="event-kind git"><Icon name={operation.status === 'completed' ? 'check' : 'close'} size={13} /></span>
+              <span>
+                <strong>{operation.title}</strong>
+                <small>{operation.detail ?? operation.kind}</small>
               </span>
             </article>
           ))}
