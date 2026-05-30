@@ -3879,6 +3879,16 @@ button.icon-only {
   text-decoration: none;
 }
 
+.browser-head-actions,
+.feedback-actions,
+.artifact-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
 .browser-evidence-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3989,6 +3999,49 @@ button.icon-only {
   flex: 1;
 }
 
+.browser-feedback-card,
+.artifact-feedback-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 10px;
+}
+
+.browser-feedback-card > div,
+.artifact-feedback-card > div {
+  display: grid;
+  gap: 2px;
+}
+
+.browser-feedback-card strong,
+.artifact-feedback-card strong {
+  font-size: 12px;
+}
+
+.browser-feedback-card span,
+.artifact-feedback-card span,
+.feedback-actions span {
+  color: var(--codex-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.browser-feedback-card textarea,
+.artifact-feedback-card textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--codex-surface);
+  color: var(--codex-text);
+  padding: 8px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .browser-url-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -4072,6 +4125,14 @@ button.icon-only {
   margin-bottom: 8px;
 }
 
+.artifact-detail-head > div:first-child {
+  min-width: 0;
+}
+
+.artifact-detail-actions {
+  flex-wrap: wrap;
+}
+
 .artifact-detail .diff-block,
 .artifact-detail .codex-terminal-output {
   max-height: 42vh;
@@ -4080,7 +4141,9 @@ button.icon-only {
 @media (prefers-color-scheme: dark) {
   .browser-context-card div,
   .browser-evidence-card,
+  .browser-feedback-card,
   .terminal-metrics div,
+  .artifact-feedback-card,
   .artifact-detail {
     background: var(--codex-soft);
   }
@@ -4118,6 +4181,13 @@ button.icon-only {
 
   .browser-preview-frame {
     min-height: 300px;
+  }
+
+  .browser-head-actions,
+  .feedback-actions,
+  .artifact-detail-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 

@@ -109,7 +109,7 @@ export function Inspector(props: {
         />
       ) : null}
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} /> : null}
+      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} rawEvents={props.rawEvents ?? []} /> : null}
     </aside>
@@ -388,11 +388,21 @@ function TerminalTab({ commands, focusedCard, onFocusCard }: { commands: Timelin
   );
 }
 
-function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project?: Project; health?: ServerHealth }) {
+function BrowserTab({ cards, project, health, onFocusCard }: { cards: TimelineCard[]; project?: Project; health?: ServerHealth; onFocusCard?: (cardId: string) => void }) {
   const [selectedUrl, setSelectedUrl] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [copiedFeedback, setCopiedFeedback] = useState(false);
   const targets = browserTargets(cards, health);
   const activeTarget = targets.find((target) => target.url === selectedUrl) ?? targets[0];
   const evidence = browserEvidence(activeTarget, health);
+  const feedbackPrompt = browserFeedbackPrompt({ target: activeTarget, project, health, feedback });
+
+  async function copyFeedbackPrompt() {
+    if (!feedbackPrompt) return;
+    await navigator.clipboard?.writeText(feedbackPrompt);
+    setCopiedFeedback(true);
+    window.setTimeout(() => setCopiedFeedback(false), 1800);
+  }
 
   return (
     <section className="panel grow browser-panel">
@@ -401,7 +411,10 @@ function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project
           <div className="section-title">Browser</div>
           <div className="panel-title">Preview surface</div>
         </div>
-        {activeTarget ? <a className="small browser-open-link" href={activeTarget.url} target="_blank" rel="noreferrer">Open</a> : null}
+        <div className="browser-head-actions">
+          {activeTarget?.cardId && onFocusCard ? <button className="small ghost" onClick={() => onFocusCard(activeTarget.cardId!)}>Source</button> : null}
+          {activeTarget ? <a className="small browser-open-link" href={activeTarget.url} target="_blank" rel="noreferrer">Open</a> : null}
+        </div>
       </div>
 
       <div className="browser-context-card">
@@ -445,7 +458,7 @@ function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project
                 <strong>{target.title}</strong>
                 <small>{target.subtitle}</small>
               </span>
-              <code>{target.kind}</code>
+              <code>{target.cardId ? `${target.kind} · card` : target.kind}</code>
             </button>
           ))}
         </div>
@@ -454,6 +467,23 @@ function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project
           No browser preview URL has been captured yet. Start a dev server from a thread; localhost or HTTPS URLs printed by commands will appear here.
         </div>
       )}
+
+      <div className="browser-feedback-card">
+        <div>
+          <strong>Feedback loop</strong>
+          <span>Record what you see, then turn it into the next Codex prompt.</span>
+        </div>
+        <textarea
+          value={feedback}
+          onChange={(event) => setFeedback(event.target.value)}
+          placeholder="Example: the mobile toolbar overlaps the preview; tighten spacing and verify at 390px."
+          rows={3}
+        />
+        <div className="feedback-actions">
+          <button className="small primary" disabled={!activeTarget} onClick={() => void copyFeedbackPrompt()}>{copiedFeedback ? 'Copied prompt' : 'Copy follow-up prompt'}</button>
+          <span>{activeTarget ? 'Includes target URL, runtime evidence, and observation notes.' : 'Select or capture a browser target first.'}</span>
+        </div>
+      </div>
 
       {activeTarget ? (
         <div className="browser-preview-card">
@@ -496,6 +526,26 @@ function browserEvidence(activeTarget: BrowserTarget | undefined, health?: Serve
       state: health?.huggingFace?.enabled ? 'ok' : 'idle'
     }
   ];
+}
+
+function browserFeedbackPrompt(input: { target?: BrowserTarget; project?: Project; health?: ServerHealth; feedback: string }): string | undefined {
+  if (!input.target) return undefined;
+  const lines = [
+    'Review this browser preview and improve the implementation.',
+    '',
+    `Project: ${input.project?.name ?? 'current project'}`,
+    `Target: ${input.target.url}`,
+    `Target kind: ${targetKindLabel(input.target.kind)}`,
+    `Source: ${input.target.source}`,
+    input.target.capturedAt ? `Captured: ${formatTime(input.target.capturedAt)}` : undefined,
+    input.health?.build?.sha ? `Runtime build: ${input.health.build.sha}` : undefined,
+    '',
+    'Observed feedback:',
+    input.feedback.trim() || '- Describe the visible issue, missing state, or expected behavior here.',
+    '',
+    'Please inspect the relevant code, implement the smallest complete fix, and verify the result in the browser preview across desktop and mobile widths.'
+  ];
+  return lines.filter(Boolean).join('\n');
 }
 
 function targetKindLabel(kind: BrowserTarget['kind']): string {
@@ -1079,7 +1129,18 @@ function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; 
     .slice(-12)
     .reverse();
   const [selectedId, setSelectedId] = useState('');
+  const [artifactFeedback, setArtifactFeedback] = useState('');
+  const [copiedArtifact, setCopiedArtifact] = useState(false);
   const selected = artifacts.find((artifact) => artifact.id === selectedId) ?? artifacts[0];
+  const artifactPrompt = selected ? artifactFeedbackPrompt(selected, project, artifactFeedback) : undefined;
+
+  async function copyArtifactPrompt() {
+    if (!artifactPrompt) return;
+    await navigator.clipboard?.writeText(artifactPrompt);
+    setCopiedArtifact(true);
+    window.setTimeout(() => setCopiedArtifact(false), 1800);
+  }
+
   return (
     <section className="panel grow artifacts-panel">
       <div className="review-pane-header">
@@ -1119,9 +1180,24 @@ function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; 
                   <div className="section-title">{artifactKind(selected)}</div>
                   <div className="panel-title">{selected.filePath ?? selected.title}</div>
                 </div>
-                <button className="small ghost" onClick={() => onFocusCard?.(selected.id)}>Focus</button>
+                <div className="artifact-detail-actions">
+                  <button className="small ghost" onClick={() => onFocusCard?.(selected.id)}>Focus</button>
+                  <button className="small primary" onClick={() => void copyArtifactPrompt()}>{copiedArtifact ? 'Copied' : 'Copy prompt'}</button>
+                </div>
               </div>
               <FocusedCard card={selected} />
+              <div className="artifact-feedback-card">
+                <div>
+                  <strong>Follow-up feedback</strong>
+                  <span>Turn this output into the next review or fix task.</span>
+                </div>
+                <textarea
+                  value={artifactFeedback}
+                  onChange={(event) => setArtifactFeedback(event.target.value)}
+                  placeholder="Example: preserve this diff but refine the empty state copy and verify the artifact still appears here."
+                  rows={3}
+                />
+              </div>
             </div>
           ) : null}
         </div>
@@ -1268,6 +1344,8 @@ type BrowserTarget = {
   subtitle: string;
   url: string;
   source: string;
+  cardId?: string;
+  capturedAt?: number;
   kind: 'local' | 'remote' | 'space';
 };
 
@@ -1311,6 +1389,8 @@ function browserTargets(cards: TimelineCard[], health?: ServerHealth): BrowserTa
         subtitle: card.command ?? card.title,
         url,
         source: `command ${card.id}`,
+        cardId: card.id,
+        capturedAt: card.createdAt,
         kind: isLocalUrl(url) ? 'local' : 'remote'
       });
     }
@@ -1346,4 +1426,30 @@ function artifactSubtitle(card: TimelineCard): string {
   if (card.kind === 'fileChange') return diffStats(card.diff).label;
   if (card.kind === 'command') return card.exitCode === null || card.exitCode === undefined ? card.status ?? 'command output' : `exit ${card.exitCode}`;
   return card.status ?? card.kind;
+}
+
+function artifactFeedbackPrompt(card: TimelineCard, project: Project | undefined, feedback: string): string {
+  const lines = [
+    'Use this thread artifact as context for the next Codex task.',
+    '',
+    `Project: ${project?.name ?? 'current project'}`,
+    `Artifact: ${card.filePath ?? card.title}`,
+    `Kind: ${artifactKind(card)}`,
+    `Status: ${card.status ?? 'unknown'}`,
+    `Created: ${formatTime(card.createdAt)}`,
+    '',
+    'Follow-up feedback:',
+    feedback.trim() || '- Describe what should be changed, preserved, verified, or explained.',
+    '',
+    'Artifact excerpt:',
+    artifactExcerpt(card),
+    '',
+    'Please inspect the source files before editing, keep the change scoped, and verify the affected UI or workflow.'
+  ];
+  return lines.join('\n');
+}
+
+function artifactExcerpt(card: TimelineCard): string {
+  const value = card.diff || card.stdout || card.stderr || card.text || safeJson(card.payload ?? card);
+  return compactText(value, 1800);
 }
