@@ -434,12 +434,22 @@ function GitTab(props: {
   onCommit?: (message: string) => void;
 }) {
   const [commitMessage, setCommitMessage] = useState('');
+  const [copiedPush, setCopiedPush] = useState(false);
   const status = props.status;
   const grouped = groupGitFiles(status?.files ?? []);
   const files = status?.files ?? [];
   const stageablePaths = files.filter(canStageFile).map((file) => file.path);
   const stagedPaths = files.filter(canUnstageFile).map((file) => file.path);
   const hasStagedChanges = stagedPaths.length > 0;
+  const shipInfo = status?.isRepo ? gitShipInfo(status) : undefined;
+
+  async function copyPushCommand(command?: string) {
+    if (!command) return;
+    await navigator.clipboard?.writeText(command);
+    setCopiedPush(true);
+    window.setTimeout(() => setCopiedPush(false), 1800);
+  }
+
   return (
     <section className="panel grow git-panel">
       <div className="review-pane-header">
@@ -467,6 +477,33 @@ function GitTab(props: {
             <div className="git-remote-row">
               <span>Origin</span>
               <code title={status.remoteUrl}>{status.remoteUrl}</code>
+            </div>
+          ) : null}
+          {shipInfo ? (
+            <div className="git-ship-card">
+              <div className="git-ship-head">
+                <div>
+                  <strong>Push / PR readiness</strong>
+                  <span>{shipInfo.detail}</span>
+                </div>
+                <span className={`ship-state ${shipInfo.state}`}>{shipInfo.label}</span>
+              </div>
+              <div className="git-ship-checks">
+                <ShipCheck label="Working tree" value={status.files.length === 0 ? 'clean' : `${status.files.length} changed`} state={status.files.length === 0 ? 'ok' : 'warn'} />
+                <ShipCheck label="Ahead" value={String(status.ahead ?? 0)} state={(status.ahead ?? 0) > 0 ? 'ok' : 'idle'} />
+                <ShipCheck label="Behind" value={String(status.behind ?? 0)} state={(status.behind ?? 0) > 0 ? 'warn' : 'ok'} />
+                <ShipCheck label="Remote" value={shipInfo.remoteLabel} state={status.remoteUrl ? 'ok' : 'warn'} />
+              </div>
+              {shipInfo.pushCommand ? (
+                <div className="git-push-command">
+                  <code>{shipInfo.pushCommand}</code>
+                  <button className="mini-action" onClick={() => void copyPushCommand(shipInfo.pushCommand)}>{copiedPush ? 'Copied' : 'Copy'}</button>
+                </div>
+              ) : null}
+              <div className="git-ship-links">
+                {shipInfo.compareUrl ? <a href={shipInfo.compareUrl} target="_blank" rel="noreferrer">Open compare</a> : null}
+                {shipInfo.repoUrl ? <a href={shipInfo.repoUrl} target="_blank" rel="noreferrer">Open repo</a> : null}
+              </div>
             </div>
           ) : null}
           <div className="git-action-bar">
@@ -522,6 +559,15 @@ function GitTab(props: {
   );
 }
 
+function ShipCheck(props: { label: string; value: string; state: 'ok' | 'warn' | 'idle' }) {
+  return (
+    <div className="ship-check">
+      <span>{props.label}</span>
+      <strong className={props.state}>{props.value}</strong>
+    </div>
+  );
+}
+
 function canStageFile(file: GitStatusSummary['files'][number]): boolean {
   return file.status === 'untracked' || file.workingTree.trim() !== '';
 }
@@ -546,6 +592,87 @@ function groupGitFiles(files: GitStatusSummary['files']): Record<string, GitStat
     else groups.Other.push(file);
   }
   return groups;
+}
+
+function gitShipInfo(status: GitStatusSummary): {
+  state: 'ready' | 'review' | 'blocked';
+  label: string;
+  detail: string;
+  remoteLabel: string;
+  pushCommand?: string;
+  compareUrl?: string;
+  repoUrl?: string;
+} {
+  const branch = status.branch && status.branch !== 'HEAD' ? status.branch : undefined;
+  const remoteName = status.upstream?.split('/')[0] || 'origin';
+  const repoUrl = githubRemoteUrl(status.remoteUrl);
+  const remoteLabel = status.remoteUrl ? remoteName : 'missing';
+  const pushCommand = branch ? `git push ${remoteName} ${branch}` : undefined;
+  const compareUrl = repoUrl && branch ? `${repoUrl}/compare/${encodeURIComponent(branch)}?expand=1` : undefined;
+  const changed = status.files.length;
+  const ahead = status.ahead ?? 0;
+  const behind = status.behind ?? 0;
+
+  if (!branch || !status.remoteUrl) {
+    return {
+      state: 'blocked',
+      label: 'setup needed',
+      detail: 'Missing branch or remote.',
+      remoteLabel,
+      repoUrl
+    };
+  }
+  if (behind > 0) {
+    return {
+      state: 'blocked',
+      label: 'sync first',
+      detail: `Behind upstream by ${behind}.`,
+      remoteLabel,
+      pushCommand,
+      compareUrl,
+      repoUrl
+    };
+  }
+  if (changed > 0) {
+    return {
+      state: 'review',
+      label: 'review first',
+      detail: `${changed} working tree change${changed === 1 ? '' : 's'} before push.`,
+      remoteLabel,
+      pushCommand,
+      compareUrl,
+      repoUrl
+    };
+  }
+  if (ahead > 0) {
+    return {
+      state: 'ready',
+      label: 'ready to push',
+      detail: `${ahead} local commit${ahead === 1 ? '' : 's'} ahead of upstream.`,
+      remoteLabel,
+      pushCommand,
+      compareUrl,
+      repoUrl
+    };
+  }
+  return {
+    state: 'ready',
+    label: 'synced',
+    detail: 'Local branch matches upstream.',
+    remoteLabel,
+    pushCommand,
+    compareUrl,
+    repoUrl
+  };
+}
+
+function githubRemoteUrl(remote?: string): string | undefined {
+  if (!remote) return undefined;
+  const httpsMatch = remote.match(/^https:\/\/github\.com\/([^/]+\/[^/.]+)(?:\.git)?$/i);
+  if (httpsMatch) return `https://github.com/${httpsMatch[1]}`;
+  const sshMatch = remote.match(/^git@github\.com:([^/]+\/[^/.]+)(?:\.git)?$/i);
+  if (sshMatch) return `https://github.com/${sshMatch[1]}`;
+  return undefined;
 }
 
 function formatBytes(size: number): string {
