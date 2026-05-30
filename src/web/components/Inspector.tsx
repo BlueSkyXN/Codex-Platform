@@ -584,6 +584,7 @@ function GitTab(props: {
 }) {
   const [commitMessage, setCommitMessage] = useState('');
   const [copiedPush, setCopiedPush] = useState(false);
+  const [copiedPr, setCopiedPr] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
   const status = props.status;
   const grouped = groupGitFiles(status?.files ?? []);
@@ -599,6 +600,13 @@ function GitTab(props: {
     await navigator.clipboard?.writeText(command);
     setCopiedPush(true);
     window.setTimeout(() => setCopiedPush(false), 1800);
+  }
+
+  async function copyPrCommand(command?: string) {
+    if (!command) return;
+    await navigator.clipboard?.writeText(command);
+    setCopiedPr(true);
+    window.setTimeout(() => setCopiedPr(false), 1800);
   }
 
   function requestGitApproval(next: PendingGitApproval) {
@@ -665,6 +673,7 @@ function GitTab(props: {
                 <ShipCheck label="Ahead" value={String(status.ahead ?? 0)} state={(status.ahead ?? 0) > 0 ? 'ok' : 'idle'} />
                 <ShipCheck label="Behind" value={String(status.behind ?? 0)} state={(status.behind ?? 0) > 0 ? 'warn' : 'ok'} />
                 <ShipCheck label="Remote" value={shipInfo.remoteLabel} state={status.remoteUrl ? 'ok' : 'warn'} />
+                <ShipCheck label="PR path" value={shipInfo.prMode === 'branch' ? `base ${shipInfo.prBaseBranch}` : shipInfo.prMode === 'direct' ? 'direct deploy' : 'unavailable'} state={shipInfo.prMode === 'unavailable' ? 'idle' : 'ok'} />
               </div>
               {shipInfo.pushCommand ? (
                 <div className="git-push-command">
@@ -672,8 +681,16 @@ function GitTab(props: {
                   <button className="mini-action" onClick={() => void copyPushCommand(shipInfo.pushCommand)}>{copiedPush ? 'Copied' : 'Copy'}</button>
                 </div>
               ) : null}
+              {shipInfo.prCommand ? (
+                <div className="git-push-command">
+                  <code>{shipInfo.prCommand}</code>
+                  <button className="mini-action" onClick={() => void copyPrCommand(shipInfo.prCommand)}>{copiedPr ? 'Copied' : 'Copy PR'}</button>
+                </div>
+              ) : null}
+              <div className="git-pr-note">{shipInfo.prNote}</div>
               <div className="git-ship-links">
-                {shipInfo.compareUrl ? <a href={shipInfo.compareUrl} target="_blank" rel="noreferrer">Open compare</a> : null}
+                {shipInfo.compareUrl && !shipInfo.prUrl ? <a href={shipInfo.compareUrl} target="_blank" rel="noreferrer">{shipInfo.prMode === 'direct' ? 'Open commits' : 'Open compare'}</a> : null}
+                {shipInfo.prUrl ? <a href={shipInfo.prUrl} target="_blank" rel="noreferrer">Open PR draft</a> : null}
                 {shipInfo.repoUrl ? <a href={shipInfo.repoUrl} target="_blank" rel="noreferrer">Open repo</a> : null}
               </div>
             </div>
@@ -863,6 +880,11 @@ function gitShipInfo(status: GitStatusSummary): {
   remoteLabel: string;
   pushCommand?: string;
   compareUrl?: string;
+  prCommand?: string;
+  prUrl?: string;
+  prBaseBranch?: string;
+  prMode: 'branch' | 'direct' | 'unavailable';
+  prNote: string;
   repoUrl?: string;
 } {
   const branch = status.branch && status.branch !== 'HEAD' ? status.branch : undefined;
@@ -870,7 +892,20 @@ function gitShipInfo(status: GitStatusSummary): {
   const repoUrl = githubRemoteUrl(status.remoteUrl);
   const remoteLabel = status.remoteUrl ? remoteName : 'missing';
   const pushCommand = branch ? `git push ${remoteName} ${branch}` : undefined;
-  const compareUrl = repoUrl && branch ? `${repoUrl}/compare/${encodeURIComponent(branch)}?expand=1` : undefined;
+  const baseBranch = branch === 'master' ? 'master' : 'main';
+  const prMode = repoUrl && branch ? isDefaultBranch(branch) ? 'direct' : 'branch' : 'unavailable';
+  const compareUrl = repoUrl && branch
+    ? prMode === 'branch'
+      ? `${repoUrl}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(branch)}?expand=1`
+      : `${repoUrl}/commits/${encodeURIComponent(branch)}`
+    : undefined;
+  const prUrl = repoUrl && branch && prMode === 'branch' ? `${repoUrl}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(branch)}?expand=1` : undefined;
+  const prCommand = branch && prMode === 'branch' ? `gh pr create --base ${shellQuote(baseBranch)} --head ${shellQuote(branch)} --fill --draft` : undefined;
+  const prNote = prMode === 'branch'
+    ? `Branch flow: push ${branch}, then open a draft PR into ${baseBranch}.`
+    : prMode === 'direct'
+      ? `Default branch flow: push ${branch}, then verify GitHub Actions and HF runtime evidence.`
+      : 'Add a GitHub remote and named branch to enable PR commands.';
   const changed = status.files.length;
   const ahead = status.ahead ?? 0;
   const behind = status.behind ?? 0;
@@ -881,6 +916,8 @@ function gitShipInfo(status: GitStatusSummary): {
       label: 'setup needed',
       detail: 'Missing branch or remote.',
       remoteLabel,
+      prMode,
+      prNote,
       repoUrl
     };
   }
@@ -892,6 +929,11 @@ function gitShipInfo(status: GitStatusSummary): {
       remoteLabel,
       pushCommand,
       compareUrl,
+      prCommand,
+      prUrl,
+      prBaseBranch: baseBranch,
+      prMode,
+      prNote,
       repoUrl
     };
   }
@@ -903,6 +945,11 @@ function gitShipInfo(status: GitStatusSummary): {
       remoteLabel,
       pushCommand,
       compareUrl,
+      prCommand,
+      prUrl,
+      prBaseBranch: baseBranch,
+      prMode,
+      prNote,
       repoUrl
     };
   }
@@ -914,6 +961,11 @@ function gitShipInfo(status: GitStatusSummary): {
       remoteLabel,
       pushCommand,
       compareUrl,
+      prCommand,
+      prUrl,
+      prBaseBranch: baseBranch,
+      prMode,
+      prNote,
       repoUrl
     };
   }
@@ -924,8 +976,17 @@ function gitShipInfo(status: GitStatusSummary): {
     remoteLabel,
     pushCommand,
     compareUrl,
+    prCommand,
+    prUrl,
+    prBaseBranch: baseBranch,
+    prMode,
+    prNote,
     repoUrl
   };
+}
+
+function isDefaultBranch(branch: string): boolean {
+  return branch === 'main' || branch === 'master';
 }
 
 function gitReleaseInfo(status: GitStatusSummary, health?: ServerHealth, actions?: GitHubActionsSummary): {

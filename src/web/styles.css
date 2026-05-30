@@ -685,7 +685,7 @@ body { background: var(--codex-bg); color: var(--codex-text); }
 .ship-state.blocked { color: var(--codex-red); }
 .git-ship-checks {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
   gap: 6px;
 }
 .ship-check {
@@ -726,6 +726,15 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   background: var(--codex-surface);
   color: var(--codex-text);
   padding: 5px 8px;
+}
+.git-pr-note {
+  color: var(--codex-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 18%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 42%);
+  padding: 7px 8px;
 }
 .git-ship-links {
   display: flex;
