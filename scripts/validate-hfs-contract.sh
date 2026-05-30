@@ -185,7 +185,7 @@ require_grep 'COPY --from=source --chown=node:node /opt/source/\.codex-platform-
 require_grep 'CMD /home/node/app/scripts/hf-healthcheck\.sh' cloud/hfs/Dockerfile \
   "cloud/hfs/Dockerfile HEALTHCHECK must call scripts/hf-healthcheck.sh"
 
-require_grep 's/\^ARG CODEX_PLATFORM_COMMIT=\.\*/ARG CODEX_PLATFORM_COMMIT=\$\{commit\}/' cloud/hfs/export_space_bundle.sh \
+require_grep 's\|\^ARG CODEX_PLATFORM_COMMIT=\.\*\|ARG CODEX_PLATFORM_COMMIT=\$\{escaped_commit\}\|' cloud/hfs/export_space_bundle.sh \
   "cloud/hfs/export_space_bundle.sh must pin CODEX_PLATFORM_COMMIT in exported Dockerfile"
 require_grep '^source_commit=\$\{commit\}$' cloud/hfs/export_space_bundle.sh \
   "cloud/hfs/export_space_bundle.sh must write source_commit to BUILD_SOURCE.txt"
