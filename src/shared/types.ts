@@ -207,6 +207,9 @@ export type ServerHealth = {
   dataDir: string;
   appServer: 'demo' | 'starting' | 'ready' | 'error' | 'stopped';
   uptimeSeconds: number;
+  build?: {
+    sha?: string;
+  };
   codexHome?: string;
   huggingFace?: {
     enabled: boolean;

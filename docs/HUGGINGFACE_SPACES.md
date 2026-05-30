@@ -38,6 +38,22 @@ BlueSkyXN/Codex-Platform-HFS
 
 It must not contain `local/`, `.env.local`, `src/`, `docs/`, or `scripts/`; those are fetched from GitHub during build.
 
+## Contract Check
+
+The repository-local static gate validates the Pattern B contract:
+
+```bash
+scripts/static-check.sh
+```
+
+For just the HFS structure:
+
+```bash
+scripts/validate-hfs-contract.sh
+```
+
+These checks are intentionally lightweight. TypeScript checks, builds, Docker builds, and live HFS smoke run in GitHub Actions or Hugging Face runtime.
+
 ## Runtime Layout
 
 ```text
@@ -84,4 +100,12 @@ After HF reports the Space as running:
 scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
 ```
 
-The smoke checks `/healthz`, `/`, and `/api/state`.
+The smoke checks `/healthz`, `/api/config`, `/`, and `/api/state`. It retries during cold starts and accepts either public demo state access or an auth-required `401` when no token is supplied.
+
+For real-mode Spaces, pass the configured token:
+
+```bash
+CODEX_PLATFORM_AUTH_TOKEN=<token> scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
+```
+
+`/healthz` includes the image build SHA when `BUILD_SHA` is present in the runtime image. Use that value with `BUILD_SOURCE.txt` and Hugging Face runtime metadata to confirm takeover.
