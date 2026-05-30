@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { TimelineCard } from '../../shared/types.js';
 import { DiffBlock } from './DiffBlock.js';
+import { Icon } from './Icon.js';
 
 export function CommandCard({ card }: { card: TimelineCard }) {
   const [expanded, setExpanded] = useState(card.status === 'failed' || card.status === 'running' || card.status === 'waiting_approval');
@@ -41,7 +42,7 @@ export function FileChangeCard({ card }: { card: TimelineCard }) {
     <div className="file-card codex-file-card">
       <div className="file-change-header">
         <div className="file-change-main">
-          <span className="file-icon">▧</span>
+          <span className="file-icon"><Icon name="file" size={15} /></span>
           <span className="file-change-title">{card.filePath ?? card.title}</span>
         </div>
         <span className="change-stats"><span className="add-stat">+{stats.added}</span> <span className="del-stat">-{stats.removed}</span></span>

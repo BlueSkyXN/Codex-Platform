@@ -1,4 +1,5 @@
 import type { GitStatusSummary, Project, ServerHealth, ThreadSummary } from '../../shared/types.js';
+import { Icon } from './Icon.js';
 
 function running(status?: string): boolean {
   const s = String(status ?? '').toLowerCase();
@@ -44,7 +45,9 @@ export function TopBar(props: {
         <span className="traffic-dot close" />
         <span className="traffic-dot minimize" />
         <span className="traffic-dot zoom" />
-        <button className="icon-button frame-toggle" onClick={props.onToggleSidebar} title="Toggle sidebar">{sidebarVisible ? '◧' : '◨'}</button>
+        <button className="icon-button frame-toggle" onClick={props.onToggleSidebar} title="Toggle sidebar" aria-label="Toggle sidebar">
+          <Icon name={sidebarVisible ? 'sidebarLeft' : 'sidebarRight'} size={15} />
+        </button>
       </div>
 
       <div className="frame-breadcrumb" title={props.project?.cwd}>
@@ -62,17 +65,17 @@ export function TopBar(props: {
 
       <div className="top-actions codex-actions">
         <button className="ghost compact-action command-button" onClick={props.onOpenCommandPalette} title="Command menu (⌘K)">⌘K</button>
-        <button className={`ghost compact-action activity-button ${props.pendingApprovals ? 'attention' : ''}`} onClick={props.onOpenActivity} title="Open activity center" aria-label="Open activity center">
-          <span aria-hidden="true">◷</span>
+        <button className={`ghost compact-action icon-only activity-button ${props.pendingApprovals ? 'attention' : ''}`} onClick={props.onOpenActivity} title="Open activity center" aria-label="Open activity center">
+          <Icon name="clock" size={15} />
           {props.pendingApprovals ? <span className="top-badge">{props.pendingApprovals}</span> : null}
         </button>
-        {isRunning ? <button className="ghost compact-action stop-action" onClick={props.onInterrupt} disabled={props.busy} title="Interrupt" aria-label="Interrupt">■</button> : null}
-        <button className="ghost compact-action panel-toggle" onClick={toggleInspector} title={inspectorVisible ? 'Hide side panel' : 'Open review panel'} aria-label={inspectorVisible ? 'Hide side panel' : 'Open review panel'}>▤</button>
+        {isRunning ? <button className="ghost compact-action icon-only stop-action" onClick={props.onInterrupt} disabled={props.busy} title="Interrupt" aria-label="Interrupt"><Icon name="stop" size={13} /></button> : null}
+        <button className="ghost compact-action icon-only panel-toggle" onClick={toggleInspector} title={inspectorVisible ? 'Hide side panel' : 'Open review panel'} aria-label={inspectorVisible ? 'Hide side panel' : 'Open review panel'}><Icon name="panel" size={15} /></button>
         <button className="ghost compact-action" disabled title="Requires Git integration">Open</button>
         <button className="ghost compact-action" disabled title="Requires worktree handoff implementation">Hand off</button>
         <button className="ghost compact-action" disabled title="Requires Git integration">Commit</button>
         {props.onLogout ? <button className="ghost compact-action" onClick={props.onLogout}>Lock</button> : null}
-        <button className="ghost compact-action new-thread-action" onClick={props.onNewThread} disabled={props.busy || !props.project} title="New thread" aria-label="New thread">＋</button>
+        <button className="ghost compact-action icon-only new-thread-action" onClick={props.onNewThread} disabled={props.busy || !props.project} title="New thread" aria-label="New thread"><Icon name="plus" size={15} /></button>
       </div>
     </header>
   );

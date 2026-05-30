@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TimelineCard, TimelineCardKind } from '../../shared/types.js';
 import { CommandCard, FileChangeCard } from './cards.js';
+import { Icon, type IconName } from './Icon.js';
 
 const kindFilters: Array<'all' | TimelineCardKind> = ['all', 'agent', 'command', 'fileChange', 'plan', 'tool', 'reasoning'];
 
@@ -36,7 +37,7 @@ export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string;
       {props.cards.length > 0 ? (
         <div className={`timeline-toolbar codex-timeline-toolbar ${toolbarExpanded ? 'expanded' : 'collapsed'}`}>
           <div className="timeline-toolbar-main">
-            <button className={`thread-tool-button ${toolbarExpanded ? 'active' : ''}`} onClick={() => setToolsOpen((value) => !value)} title="Find and filter thread" aria-label="Find and filter thread">⌕</button>
+            <button className={`thread-tool-button ${toolbarExpanded ? 'active' : ''}`} onClick={() => setToolsOpen((value) => !value)} title="Find and filter thread" aria-label="Find and filter thread"><Icon name="search" size={14} /></button>
             <span className="timeline-count">{filtersActive ? `${filteredCards.length}/${props.cards.length}` : `${props.cards.length} events`}</span>
           </div>
           {toolbarExpanded ? (
@@ -75,7 +76,7 @@ export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string;
                 onClick={() => props.onFocus(card.id)}
               >
                 <div className="card-head codex-card-head">
-                  <span className="kind"><span className="kind-icon">{kindIcon(card.kind)}</span>{label(card.kind)}</span>
+                  <span className="kind"><span className="kind-icon"><Icon name={kindIcon(card.kind)} size={13} /></span>{label(card.kind)}</span>
                   <span className={`status ${card.status ?? 'idle'}`}>{statusLabel(card.status)}</span>
                 </div>
                 {card.kind === 'command' ? <CommandCard card={card} /> : card.kind === 'fileChange' ? <FileChangeCard card={card} /> : <GenericCard card={card} />}
@@ -115,16 +116,16 @@ function label(kind: TimelineCard['kind']): string {
   }
 }
 
-function kindIcon(kind: TimelineCard['kind']): string {
+function kindIcon(kind: TimelineCard['kind']): IconName {
   switch (kind) {
-    case 'agent': return '✦';
-    case 'user': return '●';
-    case 'command': return '›';
-    case 'fileChange': return '±';
-    case 'plan': return '☑';
-    case 'reasoning': return '…';
-    case 'tool': return '⌁';
-    default: return '·';
+    case 'agent': return 'agent';
+    case 'user': return 'user';
+    case 'command': return 'terminal';
+    case 'fileChange': return 'file';
+    case 'plan': return 'check';
+    case 'reasoning': return 'clock';
+    case 'tool': return 'tool';
+    default: return 'dot';
   }
 }
 

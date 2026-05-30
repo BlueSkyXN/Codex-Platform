@@ -1,4 +1,5 @@
 import type { ApprovalDecision, ApprovalRequest, InspectorTab, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import { Icon, type IconName } from './Icon.js';
 
 export function ActivityCenter(props: {
   open: boolean;
@@ -26,7 +27,7 @@ export function ActivityCenter(props: {
             <div className="section-title">Activity</div>
             <h2>Remote supervision</h2>
           </div>
-          <button className="icon-button" onClick={props.onClose}>×</button>
+          <button className="icon-button" onClick={props.onClose} title="Close activity center" aria-label="Close activity center"><Icon name="close" size={15} /></button>
         </header>
 
         {props.approvals.length > 0 ? (
@@ -65,7 +66,7 @@ export function ActivityCenter(props: {
           {recentCards.length === 0 ? <div className="empty-mini">No events yet.</div> : null}
           {recentCards.map((card) => (
             <button key={card.id} className="activity-event" onClick={() => props.onOpenInspectorTab(tabForCard(card))}>
-              <span className={`event-kind ${card.kind}`}>{kindIcon(card.kind)}</span>
+              <span className={`event-kind ${card.kind}`}><Icon name={kindIcon(card.kind)} size={13} /></span>
               <span><strong>{card.title}</strong><small>{card.status ?? card.kind}</small></span>
             </button>
           ))}
@@ -95,17 +96,17 @@ function compactThreadId(id: string): string {
   return id.replace(/^thr_/, '').slice(-12) || id;
 }
 
-function kindIcon(kind: TimelineCard['kind']): string {
+function kindIcon(kind: TimelineCard['kind']): IconName {
   switch (kind) {
-    case 'command': return '⌁';
-    case 'fileChange': return 'Δ';
-    case 'approval': return '!';
-    case 'plan': return '☷';
-    case 'reasoning': return '∴';
-    case 'error': return '×';
-    case 'user': return 'U';
-    case 'agent': return 'A';
-    default: return '•';
+    case 'command': return 'terminal';
+    case 'fileChange': return 'file';
+    case 'approval': return 'clock';
+    case 'plan': return 'check';
+    case 'reasoning': return 'clock';
+    case 'error': return 'close';
+    case 'user': return 'user';
+    case 'agent': return 'agent';
+    default: return 'dot';
   }
 }
 

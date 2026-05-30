@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
+import { Icon } from './Icon.js';
 import type { AccountSummary, AgentSummary, ApprovalDecision, ApprovalRequest, FileReadResult, FileTreeNode, GitStatusSummary, InspectorTab, Project, ServerHealth, SkillSummary, ThreadSummary, TimelineCard, CodexWebConfig } from '../../shared/types.js';
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal'];
@@ -404,7 +405,7 @@ function ArtifactsTab({ cards, project }: { cards: TimelineCard[]; project?: Pro
     <section className="panel grow artifacts-panel">
       <div className="section-title">Artifacts</div>
       <div className="artifact-preview-card">
-        <div className="artifact-icon">▤</div>
+        <div className="artifact-icon"><Icon name="panel" size={17} /></div>
         <div>
           <strong>{project?.name ?? 'Project'}</strong>
           <p>Generated previews can be mounted here once file preview routes are added.</p>
@@ -433,7 +434,7 @@ function SkillsTab(props: { skills: SkillSummary[]; loading: boolean; onRefresh?
       <div className="skill-table">
         {props.skills.map((skill) => (
           <article key={skill.id} className={`skill-row ${skill.enabled === false ? 'disabled' : ''}`}>
-            <span className="skill-row-icon">◇</span>
+            <span className="skill-row-icon"><Icon name="spark" size={15} /></span>
             <div>
               <strong>{skill.name}</strong>
               {skill.description ? <p>{skill.description}</p> : null}
@@ -478,7 +479,7 @@ function AgentGroup({ title, agents }: { title: string; agents: AgentSummary[] }
       {agents.map((agent) => (
         <article key={agent.id} className="agent-card">
           <div className="agent-card-head">
-            <span className="agent-avatar">◎</span>
+            <span className="agent-avatar"><Icon name="agent" size={15} /></span>
             <div>
               <strong>{agent.name}</strong>
               {agent.aliases?.length ? <span className="agent-aliases">{agent.aliases.join(', ')}</span> : null}

@@ -1,4 +1,5 @@
 import type { ApprovalRequest, Project, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import { Icon } from './Icon.js';
 
 function statusLabel(status?: string): string {
   if (!status || status === 'loaded') return 'Ready';
@@ -57,13 +58,13 @@ export function ThreadHeader(props: {
       </div>
 
       <div className="thread-metrics codex-thread-actions">
-        <span className="metric branch-metric">⑂ {branchFromThread(props.thread)}</span>
+        <span className="metric branch-metric"><Icon name="branch" size={13} /> {branchFromThread(props.thread)}</span>
         <span className="metric">{props.cards.length} items</span>
         <span className="metric">{commands} commands</span>
         <span className="metric">{fileChanges} files</span>
         {pendingApprovals > 0 ? <span className="metric attention">{pendingApprovals} approvals</span> : null}
         <button className="compact-action thread-stop-action stop-action" onClick={props.onInterrupt} disabled={!props.thread || props.busy || !running} title="Interrupt the current turn" aria-label="Interrupt the current turn">
-          ■
+          <Icon name="stop" size={13} />
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { AgentSummary, SkillSummary, StartTurnRequest, ThreadSummary, CodexWebConfig } from '../../shared/types.js';
+import { Icon } from './Icon.js';
 
 type Suggestion = { kind: 'command' | 'skill' | 'agent'; name: string; description?: string; path?: string; disabled?: boolean };
 type ComposerOptions = Pick<StartTurnRequest, 'model' | 'effort' | 'sandbox' | 'approvalPolicy' | 'summary'> & {
@@ -80,7 +81,7 @@ export function Composer(props: {
               onClick={() => chooseSuggestion(suggestion)}
               disabled={suggestion.disabled}
             >
-              <span className="suggestion-icon">{suggestion.kind === 'skill' ? '◇' : suggestion.kind === 'agent' ? '◎' : '/'}</span>
+              <span className="suggestion-icon"><Icon name={suggestion.kind === 'skill' ? 'spark' : suggestion.kind === 'agent' ? 'agent' : 'terminal'} size={15} /></span>
               <span className="suggestion-main">
                 <strong>{suggestion.kind === 'skill' ? `$${suggestion.name}` : suggestion.kind === 'agent' ? `#${suggestion.name}` : suggestion.name}</strong>
                 <span>{suggestion.description}</span>
@@ -155,12 +156,14 @@ export function Composer(props: {
 
         <div className="composer-bottom-row">
           <div className="composer-left-tools">
-            <button className="round-tool" title="Add context" disabled>＋</button>
+            <button className="round-tool" title="Add context" aria-label="Add context" disabled><Icon name="paperclip" size={16} /></button>
             <span className="mode-option active composer-local-pill" title="Run in the current project directory">Local</span>
             <button className="model-chip composer-model-chip" onClick={() => setShowRunConfig((value) => !value)} title="Configure this turn">
               {model.trim() || props.codexWebConfig?.defaultModel || 'Default model'}
             </button>
-            <button className="model-chip composer-effort-chip" onClick={() => setShowRunConfig((value) => !value)} title="Reasoning effort">{effortLabel(effort)}⌄</button>
+            <button className="model-chip composer-effort-chip" onClick={() => setShowRunConfig((value) => !value)} title="Reasoning effort">
+              {effortLabel(effort)}<Icon name="chevronDown" size={13} />
+            </button>
             {selectedSkill ? (
               <button className="selected-skill-pill" onClick={() => setSelectedSkillName('')} title={selectedSkill.path}>
                 ${selectedSkill.name} ×
@@ -177,10 +180,11 @@ export function Composer(props: {
             {props.skillsError ? <span className="composer-error">skills unavailable</span> : null}
             {props.agentsError ? <span className="composer-error">agents unavailable</span> : null}
             <span className="branch-chip composer-policy-chip">{sandboxLabel(sandbox)} · {approvalLabel(approvalPolicy)}</span>
-            <button className="round-tool" onClick={props.onReloadSkills} disabled={props.skillsLoading || props.agentsLoading} title="Reload skills and agents">{props.skillsLoading || props.agentsLoading ? '…' : '◇'}</button>
-            <button className="round-tool" onClick={() => setShowRunConfig((value) => !value)} title="Run configuration">▣</button>
-            <button className="round-tool" disabled title="Voice input not implemented">⌕</button>
-            <button className="send-orb" onClick={submit} disabled={props.disabled || !text.trim()} title="Send">↑</button>
+            <button className="round-tool" onClick={props.onReloadSkills} disabled={props.skillsLoading || props.agentsLoading} title="Reload skills and agents" aria-label="Reload skills and agents">
+              {props.skillsLoading || props.agentsLoading ? <span className="loading-dot">...</span> : <Icon name="refresh" size={15} />}
+            </button>
+            <button className="round-tool" onClick={() => setShowRunConfig((value) => !value)} title="Run configuration" aria-label="Run configuration"><Icon name="sliders" size={15} /></button>
+            <button className="send-orb" onClick={submit} disabled={props.disabled || !text.trim()} title="Send" aria-label="Send"><Icon name="send" size={17} /></button>
           </div>
         </div>
       </div>

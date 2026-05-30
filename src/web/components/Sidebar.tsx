@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { InspectorTab, Project, ThreadSummary } from '../../shared/types.js';
+import { Icon } from './Icon.js';
 
 export function Sidebar(props: {
   projects: Project[];
@@ -56,15 +57,15 @@ export function Sidebar(props: {
 
       <nav className="sidebar-primary-actions">
         <button className="primary-nav" onClick={props.onNewThread}>
-          <span className="nav-icon">＋</span>
+          <span className="nav-icon"><Icon name="plus" size={15} /></span>
           <span>New thread</span>
         </button>
         <button className="primary-nav" onClick={() => props.onOpenInspectorTab?.('skills')}>
-          <span className="nav-icon">◇</span>
+          <span className="nav-icon"><Icon name="spark" size={15} /></span>
           <span>Skills</span>
         </button>
         <button className="primary-nav" onClick={() => props.onOpenInspectorTab?.('agents')}>
-          <span className="nav-icon">◎</span>
+          <span className="nav-icon"><Icon name="agent" size={15} /></span>
           <span>Agents</span>
         </button>
       </nav>
@@ -77,14 +78,14 @@ export function Sidebar(props: {
         <div className="section-title row">
           <span>Threads</span>
           <span className="row-actions">
-            <button className="small ghost" disabled={!props.onRefreshThreads} onClick={() => void props.onRefreshThreads?.()} title="Reload thread list">↻</button>
+            <button className="small ghost icon-only" disabled={!props.onRefreshThreads} onClick={() => void props.onRefreshThreads?.()} title="Reload thread list" aria-label="Reload thread list"><Icon name="refresh" size={13} /></button>
             <button
               className="small ghost icon-only add-project-button"
               onClick={() => setNewProjectOpen((value) => !value)}
               title={newProjectOpen ? 'Close add project form' : 'Add project'}
               aria-label={newProjectOpen ? 'Close add project form' : 'Add project'}
             >
-              {newProjectOpen ? '×' : '+'}
+              <Icon name={newProjectOpen ? 'close' : 'plus'} size={13} />
             </button>
           </span>
         </div>
@@ -105,7 +106,7 @@ export function Sidebar(props: {
                 onClick={() => props.onSelectProject(project.id)}
                 title={project.cwd}
               >
-                <span className="folder-icon">▱</span>
+                <span className="folder-icon"><Icon name="folder" size={15} /></span>
                 <span className="project-name">{project.name}</span>
                 <span className="project-count">{threads.length || '—'}</span>
               </button>
@@ -134,7 +135,7 @@ export function Sidebar(props: {
 
       <section className="sidebar-footer codex-sidebar-footer">
         <button className="settings-row" onClick={() => props.onOpenInspectorTab?.('settings')}>
-          <span className="nav-icon">⚙</span>
+          <span className="nav-icon"><Icon name="settings" size={15} /></span>
           <span>Settings</span>
         </button>
       </section>

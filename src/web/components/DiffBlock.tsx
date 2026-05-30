@@ -1,3 +1,5 @@
+import { Icon } from './Icon.js';
+
 export function DiffBlock({ diff, compact = false }: { diff?: string; compact?: boolean }) {
   const text = diff || '';
   if (!text) return <div className="empty">No diff content.</div>;
@@ -7,7 +9,7 @@ export function DiffBlock({ diff, compact = false }: { diff?: string; compact?: 
     <div className={`diff-block codex-diff-block ${compact ? 'compact' : ''}`}>
       {visible.map((line, index) => (
         <div key={`${index}:${line}`} className={`diff-line ${lineClass(line)}`}>
-          <span className="diff-comment-hook" title="Inline review comments can be wired here">＋</span>
+          <span className="diff-comment-hook" title="Inline review comments can be wired here"><Icon name="plus" size={12} /></span>
           <span className="diff-lineno">{index + 1}</span>
           <span className="diff-code">{line || ' '}</span>
         </div>

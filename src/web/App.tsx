@@ -534,6 +534,7 @@ export function App() {
       />
       <MobileDock
         approvalCount={state.approvals.length}
+        active={activityOpen ? 'activity' : sidebarVisible ? 'threads' : inspectorVisible ? 'review' : 'chat'}
         onThreads={() => { setSidebarVisible(true); setInspectorVisible(false); }}
         onChat={() => { setSidebarVisible(false); setInspectorVisible(false); }}
         onReview={() => { setSidebarVisible(false); setInspectorVisible(true); setInspectorTab('review'); }}
