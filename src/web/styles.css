@@ -3790,6 +3790,89 @@ button.icon-only {
   font-size: 12px;
 }
 
+.browser-evidence-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 10px;
+}
+
+.browser-evidence-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: start;
+}
+
+.browser-evidence-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.browser-evidence-head strong {
+  font-size: 12px;
+}
+
+.browser-evidence-head span,
+.browser-evidence-head a {
+  min-width: 0;
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.browser-evidence-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-evidence-head a {
+  text-decoration: none;
+}
+
+.browser-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.browser-evidence-item {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  border-left: 1px solid var(--border);
+  padding: 2px 8px;
+}
+
+.browser-evidence-item:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.browser-evidence-item span {
+  color: var(--codex-muted);
+  font-size: 10px;
+}
+
+.browser-evidence-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.browser-evidence-item.ok strong {
+  color: var(--codex-green);
+}
+
+.browser-evidence-item.warn strong {
+  color: var(--codex-yellow);
+}
+
 .browser-target-list {
   display: grid;
   gap: 5px;
@@ -3950,6 +4033,7 @@ button.icon-only {
 
 @media (prefers-color-scheme: dark) {
   .browser-context-card div,
+  .browser-evidence-card,
   .terminal-metrics div,
   .artifact-detail {
     background: var(--codex-soft);
@@ -3969,8 +4053,21 @@ button.icon-only {
 
 @media (max-width: 820px) {
   .browser-context-card,
+  .browser-evidence-grid,
   .terminal-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .browser-evidence-item,
+  .browser-evidence-item:first-child {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 8px 0 0;
+  }
+
+  .browser-evidence-item:first-child {
+    border-top: 0;
+    padding-top: 0;
   }
 
   .browser-preview-frame {

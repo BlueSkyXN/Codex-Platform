@@ -385,6 +385,7 @@ function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project
   const [selectedUrl, setSelectedUrl] = useState('');
   const targets = browserTargets(cards, health);
   const activeTarget = targets.find((target) => target.url === selectedUrl) ?? targets[0];
+  const evidence = browserEvidence(activeTarget, health);
 
   return (
     <section className="panel grow browser-panel">
@@ -408,6 +409,24 @@ function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project
         <div>
           <span>Deploy</span>
           <strong>{health?.huggingFace?.enabled ? 'Hugging Face' : 'local/self-hosted'}</strong>
+        </div>
+      </div>
+
+      <div className="browser-evidence-card">
+        <div className="browser-evidence-head">
+          <div>
+            <strong>Runtime evidence</strong>
+            <span>{activeTarget ? activeTarget.source : 'No preview target selected'}</span>
+          </div>
+          {activeTarget?.kind === 'space' ? <a href={`${activeTarget.url.replace(/\/$/, '')}/healthz`} target="_blank" rel="noreferrer">healthz</a> : null}
+        </div>
+        <div className="browser-evidence-grid">
+          {evidence.map((item) => (
+            <div key={item.label} className={`browser-evidence-item ${item.state ?? ''}`}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -445,6 +464,37 @@ function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project
       ) : null}
     </section>
   );
+}
+
+function browserEvidence(activeTarget: BrowserTarget | undefined, health?: ServerHealth): Array<{ label: string; value: string; state?: 'ok' | 'warn' | 'idle' }> {
+  return [
+    {
+      label: 'Target',
+      value: activeTarget ? targetKindLabel(activeTarget.kind) : 'none',
+      state: activeTarget ? 'ok' : 'idle'
+    },
+    {
+      label: 'Ready',
+      value: health ? (health.ready ? 'ready' : health.ok ? 'starting' : 'unhealthy') : 'unknown',
+      state: health?.ready ? 'ok' : health ? 'warn' : 'idle'
+    },
+    {
+      label: 'Build',
+      value: health?.build?.sha ? shortSha(health.build.sha) : 'unversioned',
+      state: health?.build?.sha ? 'ok' : 'idle'
+    },
+    {
+      label: 'Space',
+      value: health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local',
+      state: health?.huggingFace?.enabled ? 'ok' : 'idle'
+    }
+  ];
+}
+
+function targetKindLabel(kind: BrowserTarget['kind']): string {
+  if (kind === 'space') return 'HF Space';
+  if (kind === 'local') return 'local';
+  return 'remote';
 }
 
 
