@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
   AgentSummary,
   FileReadResult,
@@ -57,6 +57,7 @@ export function Composer(props: {
   const [showContextPicker, setShowContextPicker] = useState(false);
   const [contextAttachments, setContextAttachments] = useState<TurnContextAttachment[]>([]);
   const [contextBusyId, setContextBusyId] = useState<string | undefined>();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const agents = props.agents ?? [];
   const selectedSkill = useMemo(() => props.skills.find((skill) => skill.name === selectedSkillName), [props.skills, selectedSkillName]);
@@ -65,6 +66,7 @@ export function Composer(props: {
   const terminalCards = useMemo(() => (props.cards ?? []).filter((card) => card.kind === 'command'), [props.cards]);
   const lastTerminalCard = terminalCards.at(-1);
   const fileOptions = useMemo(() => flattenTree(props.fileTree).filter((item) => item.node.path !== '.').slice(0, 18), [props.fileTree]);
+  const showStarterPrompts = !text.trim() && contextAttachments.length === 0 && (props.cards?.length ?? 0) === 0;
 
   async function submit() {
     const trimmed = text.trim();
@@ -122,6 +124,13 @@ export function Composer(props: {
       setText((current) => replaceTrigger(current, `${suggestion.name} `));
     }
     setShowSuggestions(false);
+  }
+
+  function chooseStarterPrompt(prompt: string) {
+    setText(prompt);
+    setShowSuggestions(false);
+    setShowContextPicker(false);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   const placeholder = 'Ask Codex anything…';
@@ -310,6 +319,7 @@ export function Composer(props: {
           </div>
         ) : null}
         <textarea
+          ref={textareaRef}
           value={text}
           disabled={props.disabled}
           onChange={(e) => {
@@ -337,7 +347,7 @@ export function Composer(props: {
               onClick={() => setShowContextPicker((value) => !value)}
               disabled={props.disabled}
             >
-              <Icon name="paperclip" size={16} />
+              <Icon name="plus" size={16} />
               {contextAttachments.length ? <span className="tool-count">{contextAttachments.length}</span> : null}
             </button>
             <span className="mode-option active composer-local-pill" title="Run in the current project directory">Local</span>
@@ -371,6 +381,21 @@ export function Composer(props: {
           </div>
         </div>
       </div>
+
+      {showStarterPrompts ? (
+        <div className="composer-starter-prompts" aria-label="Starter prompts">
+          {starterPrompts.map((prompt) => (
+            <button key={prompt.title} className="starter-prompt" onClick={() => chooseStarterPrompt(prompt.prompt)} disabled={props.disabled}>
+              <span className="starter-prompt-icon"><Icon name={prompt.icon} size={14} /></span>
+              <span>
+                <strong>{prompt.title}</strong>
+                <small>{prompt.subtitle}</small>
+              </span>
+              <Icon name="plus" size={13} />
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="composer-hint codex-composer-hint" aria-hidden="true" />
     </div>
@@ -695,4 +720,31 @@ const commands = [
   { name: '/goal', description: 'Set a durable goal for this thread.' },
   { name: '/fix', description: 'Diagnose a failure and make a minimal patch.' },
   { name: '/agent', description: 'Delegate investigation to a custom or built-in subagent.' }
+];
+
+const starterPrompts: Array<{ title: string; subtitle: string; prompt: string; icon: IconName }> = [
+  {
+    title: 'Review current changes',
+    subtitle: 'Inspect Git status, diffs, and commit readiness.',
+    prompt: 'Review the current working tree, summarize the risky changes, and tell me what is ready to commit.',
+    icon: 'check'
+  },
+  {
+    title: 'Plan next UI pass',
+    subtitle: 'Prioritize visual and workflow improvements.',
+    prompt: 'Audit this command center UI and propose the next focused OpenAI Codex-style improvement pass.',
+    icon: 'panel'
+  },
+  {
+    title: 'Inspect Skills and Agents',
+    subtitle: 'Check available capabilities and diagnostics.',
+    prompt: 'Inspect the available Skills and Agents for this workspace and summarize what can be used next.',
+    icon: 'agent'
+  },
+  {
+    title: 'Verify deployment',
+    subtitle: 'Compare GitHub Actions, source commit, and HF runtime.',
+    prompt: 'Verify the GitHub and Hugging Face deployment chain for this project and report any mismatch.',
+    icon: 'branch'
+  }
 ];
