@@ -42,6 +42,8 @@ export function normalizeSkills(payload: unknown): SkillSummary[] {
       enabled: boolFrom(value.enabled),
       scope: stringFrom(value.scope),
       source: nestedSource,
+      state: skillState(boolFrom(value.enabled), path),
+      diagnostic: skillDiagnostic(boolFrom(value.enabled), path, nestedSource),
       raw: value
     });
   }
@@ -55,6 +57,19 @@ export function normalizeSkills(payload: unknown): SkillSummary[] {
     seen.add(key);
     return true;
   }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function skillState(enabled: boolean | undefined, path?: string): SkillSummary['state'] {
+  if (enabled === false) return 'disabled';
+  if (!path) return 'warning';
+  return 'ready';
+}
+
+function skillDiagnostic(enabled: boolean | undefined, path?: string, source?: string): string {
+  if (enabled === false) return 'Disabled by the runtime.';
+  if (!path) return 'Loaded without a SKILL.md path; invocation may need runtime lookup.';
+  if (!source) return 'Discovered skill with a concrete path.';
+  return `Discovered from ${source}.`;
 }
 
 export function normalizeAccount(payload: unknown): AccountSummary {

@@ -109,6 +109,10 @@ function scanAgentDir(root: string, scope: 'repo' | 'user'): AgentSummary[] {
         effort: parsed.model_reasoning_effort,
         aliases: parsed.nickname_candidates,
         hasDeveloperInstructions: Boolean(parsed.developer_instructions),
+        state: Boolean(parsed.developer_instructions) ? 'ready' : 'warning',
+        diagnostic: Boolean(parsed.developer_instructions)
+          ? `Loaded from ${root}.`
+          : 'Loaded without developer_instructions; delegation behavior may be generic.',
         raw: {
           file,
           scope,
@@ -126,6 +130,8 @@ function scanAgentDir(root: string, scope: 'repo' | 'user'): AgentSummary[] {
         path: file,
         scope,
         source: root,
+        state: 'error',
+        diagnostic: 'TOML metadata could not be parsed.',
         raw: { file, parseError: true }
       });
     }

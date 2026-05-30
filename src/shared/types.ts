@@ -79,6 +79,8 @@ export type SkillSummary = {
   scope?: string;
   enabled?: boolean;
   source?: string;
+  state?: 'ready' | 'disabled' | 'warning' | 'error' | string;
+  diagnostic?: string;
   cwd?: string;
   raw?: unknown;
 };
@@ -148,6 +150,8 @@ export type AgentSummary = {
   effort?: string;
   aliases?: string[];
   hasDeveloperInstructions?: boolean;
+  state?: 'ready' | 'warning' | 'error' | string;
+  diagnostic?: string;
   raw?: unknown;
 };
 

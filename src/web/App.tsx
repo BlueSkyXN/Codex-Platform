@@ -265,23 +265,24 @@ export function App() {
     setAgentsLoading(true);
     setSkillsError(undefined);
     setAgentsError(undefined);
-    try {
-      const [nextSkills, nextAgents] = await Promise.all([
-        api.skills(selectedProject.id, forceReload),
-        api.agents(selectedProject.id).then((result) => result.data)
-      ]);
-      setSkills(nextSkills);
-      setAgents(nextAgents);
-    } catch (error) {
+    const [skillsResult, agentsResult] = await Promise.allSettled([
+      api.skills(selectedProject.id, forceReload),
+      api.agents(selectedProject.id).then((result) => result.data)
+    ]);
+    if (skillsResult.status === 'fulfilled') {
+      setSkills(skillsResult.value);
+    } else {
       setSkills([]);
-      setAgents([]);
-      const message = error instanceof Error ? error.message : String(error);
-      setSkillsError(message);
-      setAgentsError(message);
-    } finally {
-      setSkillsLoading(false);
-      setAgentsLoading(false);
+      setSkillsError(errorMessage(skillsResult.reason));
     }
+    if (agentsResult.status === 'fulfilled') {
+      setAgents(agentsResult.value);
+    } else {
+      setAgents([]);
+      setAgentsError(errorMessage(agentsResult.reason));
+    }
+    setSkillsLoading(false);
+    setAgentsLoading(false);
   }
 
   async function reloadSkills(forceReload = true) {
@@ -660,6 +661,8 @@ export function App() {
         agents={agents}
         skillsLoading={skillsLoading}
         agentsLoading={agentsLoading}
+        skillsError={skillsError}
+        agentsError={agentsError}
         account={account}
         health={health}
         gitStatus={gitStatus}
@@ -686,6 +689,10 @@ export function App() {
 
 function isNarrowViewport(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function BootScreen({ title, subtitle }: { title: string; subtitle?: string }) {

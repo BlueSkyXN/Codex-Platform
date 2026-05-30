@@ -3528,6 +3528,85 @@ button.icon-only {
   white-space: normal;
 }
 
+.capability-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.capability-summary-card {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 8px;
+}
+
+.capability-summary-card span,
+.capability-diagnostic {
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.capability-summary-card strong {
+  color: var(--codex-text);
+  font-size: 15px;
+  line-height: 1.1;
+}
+
+.capability-summary-card.ok strong,
+.capability-state.ready {
+  color: var(--codex-green);
+}
+
+.capability-summary-card.warn strong,
+.capability-state.warning,
+.capability-state.disabled {
+  color: var(--codex-yellow);
+}
+
+.capability-state.error {
+  color: var(--codex-red);
+}
+
+.capability-error {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, var(--codex-red), var(--border) 55%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--codex-red), transparent 94%);
+  padding: 10px;
+}
+
+.capability-error code {
+  color: var(--codex-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.capability-state-stack {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.capability-state {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fafafa;
+  padding: 2px 6px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.capability-diagnostic {
+  margin-top: 4px;
+}
+
 @media (max-width: 820px) {
   .management-backdrop {
     align-items: flex-end;
@@ -3550,6 +3629,15 @@ button.icon-only {
   .management-panel .skill-scope {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .capability-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .capability-state-stack {
+    grid-column: 2;
+    justify-items: start;
   }
 }
 

@@ -10,6 +10,8 @@ export function ManagementDrawer(props: {
   agents: AgentSummary[];
   skillsLoading?: boolean;
   agentsLoading?: boolean;
+  skillsError?: string;
+  agentsError?: string;
   account?: AccountSummary;
   health?: ServerHealth;
   gitStatus?: GitStatusSummary;
@@ -40,8 +42,8 @@ export function ManagementDrawer(props: {
           ))}
         </nav>
 
-        {props.tab === 'skills' ? <SkillsRegistry skills={props.skills} loading={Boolean(props.skillsLoading)} onRefresh={props.onRefreshSkills} /> : null}
-        {props.tab === 'agents' ? <AgentsRegistry agents={props.agents} loading={Boolean(props.agentsLoading)} onRefresh={props.onRefreshSkills} /> : null}
+        {props.tab === 'skills' ? <SkillsRegistry skills={props.skills} loading={Boolean(props.skillsLoading)} error={props.skillsError} onRefresh={props.onRefreshSkills} /> : null}
+        {props.tab === 'agents' ? <AgentsRegistry agents={props.agents} loading={Boolean(props.agentsLoading)} error={props.agentsError} onRefresh={props.onRefreshSkills} /> : null}
         {props.tab === 'settings' ? (
           <RuntimeSettings
             health={props.health}
@@ -58,7 +60,8 @@ export function ManagementDrawer(props: {
   );
 }
 
-function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; onRefresh?: () => void }) {
+function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; error?: string; onRefresh?: () => void }) {
+  const stats = skillStats(props.skills);
   return (
     <section className="management-panel skills-panel">
       <div className="pane-header">
@@ -68,6 +71,14 @@ function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; onRef
         </div>
         <button className="small ghost" onClick={props.onRefresh} disabled={props.loading || !props.onRefresh}>{props.loading ? 'Loading...' : 'Reload'}</button>
       </div>
+      <CapabilitySummary
+        items={[
+          { label: 'Ready', value: String(stats.ready), tone: 'ok' },
+          { label: 'Attention', value: String(stats.attention), tone: stats.attention ? 'warn' : undefined },
+          { label: 'Sources', value: String(stats.sources) }
+        ]}
+      />
+      {props.error ? <CapabilityError message={props.error} /> : null}
       {props.skills.length === 0 ? <div className="empty">No skills returned for this project.</div> : null}
       <div className="skill-table management-list">
         {props.skills.map((skill) => (
@@ -76,9 +87,13 @@ function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; onRef
             <div>
               <strong>{skill.name}</strong>
               {skill.description ? <p>{skill.description}</p> : null}
+              {skill.diagnostic ? <p className="capability-diagnostic">{skill.diagnostic}</p> : null}
               {skill.path ? <code className="agent-path" title={skill.path}>{skill.path}</code> : null}
             </div>
-            <span className="skill-scope">{skillScopeLabel(skill)}</span>
+            <span className="capability-state-stack">
+              <span className={`capability-state ${capabilityState(skill)}`}>{capabilityStateLabel(capabilityState(skill))}</span>
+              <span className="skill-scope">{skillScopeLabel(skill)}</span>
+            </span>
           </article>
         ))}
       </div>
@@ -86,9 +101,10 @@ function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; onRef
   );
 }
 
-function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; onRefresh?: () => void }) {
+function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; error?: string; onRefresh?: () => void }) {
   const repoAgents = props.agents.filter((agent) => agent.scope === 'repo');
   const userAgents = props.agents.filter((agent) => agent.scope !== 'repo');
+  const stats = agentStats(props.agents);
   return (
     <section className="management-panel agents-panel">
       <div className="pane-header">
@@ -98,6 +114,14 @@ function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; onRef
         </div>
         <button className="small ghost" onClick={props.onRefresh} disabled={props.loading || !props.onRefresh}>{props.loading ? 'Loading...' : 'Reload'}</button>
       </div>
+      <CapabilitySummary
+        items={[
+          { label: 'Project', value: String(stats.repo) },
+          { label: 'User', value: String(stats.user) },
+          { label: 'Attention', value: String(stats.attention), tone: stats.attention ? 'warn' : undefined }
+        ]}
+      />
+      {props.error ? <CapabilityError message={props.error} /> : null}
       {props.agents.length === 0 ? <div className="empty">No custom agents found. Built-in agents such as explorer and worker can still be requested in natural language.</div> : null}
       <AgentGroup title="Project agents" agents={repoAgents} />
       <AgentGroup title="User agents" agents={userAgents} />
@@ -122,9 +146,13 @@ function AgentGroup({ title, agents }: { title: string; agents: AgentSummary[] }
               <strong>{agent.name}</strong>
               {agent.aliases?.length ? <span className="agent-aliases">{agent.aliases.join(', ')}</span> : null}
             </div>
-            <span className="skill-scope">{agent.scope ?? 'agent'}</span>
+            <span className="capability-state-stack">
+              <span className={`capability-state ${capabilityState(agent)}`}>{capabilityStateLabel(capabilityState(agent))}</span>
+              <span className="skill-scope">{agent.scope ?? 'agent'}</span>
+            </span>
           </div>
           {agent.description ? <p>{agent.description}</p> : null}
+          {agent.diagnostic ? <p className="capability-diagnostic">{agent.diagnostic}</p> : null}
           <div className="agent-meta-row">
             {agent.model ? <code>{agent.model}</code> : null}
             {agent.effort ? <code>{agent.effort}</code> : null}
@@ -134,6 +162,28 @@ function AgentGroup({ title, agents }: { title: string; agents: AgentSummary[] }
           {agent.path ? <code className="agent-path" title={agent.path}>{agent.path}</code> : null}
         </article>
       ))}
+    </div>
+  );
+}
+
+function CapabilitySummary(props: { items: Array<{ label: string; value: string; tone?: 'ok' | 'warn' }> }) {
+  return (
+    <div className="capability-summary-grid">
+      {props.items.map((item) => (
+        <div key={item.label} className={`capability-summary-card ${item.tone ?? ''}`}>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CapabilityError(props: { message: string }) {
+  return (
+    <div className="capability-error">
+      <strong>Discovery failed</strong>
+      <code>{props.message}</code>
     </div>
   );
 }
@@ -221,6 +271,48 @@ function releaseStateLabel(sourceSynced?: boolean, buildMatchesGit?: boolean): s
   if (state === 'ok') return 'verified';
   if (state === 'warn') return 'attention';
   return 'partial';
+}
+
+function skillStats(skills: SkillSummary[]): { ready: number; attention: number; sources: number } {
+  const sources = new Set<string>();
+  let ready = 0;
+  let attention = 0;
+  for (const skill of skills) {
+    if (skill.source) sources.add(skill.source);
+    const state = capabilityState(skill);
+    if (state === 'ready') ready += 1;
+    else attention += 1;
+  }
+  return { ready, attention, sources: sources.size };
+}
+
+function agentStats(agents: AgentSummary[]): { repo: number; user: number; attention: number } {
+  let repo = 0;
+  let user = 0;
+  let attention = 0;
+  for (const agent of agents) {
+    if (agent.scope === 'repo') repo += 1;
+    else user += 1;
+    if (capabilityState(agent) !== 'ready') attention += 1;
+  }
+  return { repo, user, attention };
+}
+
+function capabilityState(item: SkillSummary | AgentSummary): 'ready' | 'disabled' | 'warning' | 'error' {
+  if (item.state === 'error') return 'error';
+  if ('enabled' in item && item.enabled === false) return 'disabled';
+  if (item.state === 'disabled') return 'disabled';
+  if (item.state === 'warning') return 'warning';
+  if (!item.path) return 'warning';
+  if ('hasDeveloperInstructions' in item && item.hasDeveloperInstructions === false) return 'warning';
+  return 'ready';
+}
+
+function capabilityStateLabel(state: ReturnType<typeof capabilityState>): string {
+  if (state === 'ready') return 'ready';
+  if (state === 'disabled') return 'disabled';
+  if (state === 'error') return 'error';
+  return 'attention';
 }
 
 function tabLabel(tab: ManagementTab): string {
