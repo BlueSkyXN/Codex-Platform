@@ -239,7 +239,7 @@ export type AccountSummary = {
 
 export type InspectorTab = 'review' | 'plan' | 'diff' | 'files' | 'git' | 'terminal' | 'browser' | 'artifacts' | 'raw';
 
-export type ManagementTab = 'skills' | 'agents' | 'settings';
+export type ManagementTab = 'skills' | 'agents' | 'automations' | 'triage' | 'settings';
 
 export type UiEvent =
   | { type: 'connected'; serverTime: number; demoMode: boolean }

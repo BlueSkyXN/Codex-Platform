@@ -1,7 +1,7 @@
-import type { AccountSummary, AgentSummary, CodexWebConfig, GitHubActionsSummary, GitStatusSummary, ManagementTab, ServerHealth, SkillSummary } from '../../shared/types.js';
+import type { AccountSummary, AgentSummary, ApprovalRecord, ApprovalRequest, CodexWebConfig, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { Icon } from './Icon.js';
 
-const managementTabs: ManagementTab[] = ['skills', 'agents', 'settings'];
+const managementTabs: ManagementTab[] = ['skills', 'agents', 'automations', 'triage', 'settings'];
 
 export function ManagementDrawer(props: {
   open: boolean;
@@ -17,6 +17,12 @@ export function ManagementDrawer(props: {
   githubActions?: GitHubActionsSummary;
   gitStatus?: GitStatusSummary;
   codexWebConfig?: CodexWebConfig;
+  approvals: ApprovalRequest[];
+  approvalHistory: ApprovalRecord[];
+  gitOperations: GitOperationRecord[];
+  threads: ThreadSummary[];
+  cards: TimelineCard[];
+  errors: string[];
   notificationsEnabled: boolean;
   notificationsSupported: boolean;
   onClose: () => void;
@@ -25,6 +31,8 @@ export function ManagementDrawer(props: {
   onUseSkill?: (skill: SkillSummary) => void;
   onUseAgent?: (agent: AgentSummary) => void;
   onToggleNotifications?: (enabled: boolean) => void;
+  onOpenInspectorTab?: (tab: InspectorTab) => void;
+  onSelectThread?: (threadId: string) => void | Promise<void>;
 }) {
   if (!props.open) return null;
 
@@ -47,6 +55,29 @@ export function ManagementDrawer(props: {
 
         {props.tab === 'skills' ? <SkillsRegistry skills={props.skills} loading={Boolean(props.skillsLoading)} error={props.skillsError} onRefresh={props.onRefreshSkills} onUseSkill={props.onUseSkill} /> : null}
         {props.tab === 'agents' ? <AgentsRegistry agents={props.agents} loading={Boolean(props.agentsLoading)} error={props.agentsError} onRefresh={props.onRefreshSkills} onUseAgent={props.onUseAgent} /> : null}
+        {props.tab === 'automations' ? (
+          <AutomationsPanel
+            threads={props.threads}
+            approvals={props.approvals}
+            gitOperations={props.gitOperations}
+            githubActions={props.githubActions}
+            health={props.health}
+            onOpenInspectorTab={props.onOpenInspectorTab}
+          />
+        ) : null}
+        {props.tab === 'triage' ? (
+          <TriagePanel
+            approvals={props.approvals}
+            approvalHistory={props.approvalHistory}
+            gitOperations={props.gitOperations}
+            threads={props.threads}
+            cards={props.cards}
+            errors={props.errors}
+            githubActions={props.githubActions}
+            onOpenInspectorTab={props.onOpenInspectorTab}
+            onSelectThread={props.onSelectThread}
+          />
+        ) : null}
         {props.tab === 'settings' ? (
           <RuntimeSettings
             health={props.health}
@@ -169,6 +200,193 @@ function AgentGroup({ title, agents, onUseAgent }: { title: string; agents: Agen
         </article>
       ))}
     </div>
+  );
+}
+
+function AutomationsPanel(props: {
+  threads: ThreadSummary[];
+  approvals: ApprovalRequest[];
+  gitOperations: GitOperationRecord[];
+  githubActions?: GitHubActionsSummary;
+  health?: ServerHealth;
+  onOpenInspectorTab?: (tab: InspectorTab) => void;
+}) {
+  const activeThreads = props.threads.filter((thread) => isActiveThread(thread.status)).length;
+  const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed').length;
+  const releaseState = props.githubActions?.state ?? 'unknown';
+  const rows = [
+    {
+      id: 'release',
+      title: 'Release verification',
+      detail: `${githubActionsValue(props.githubActions)} · ${props.health?.huggingFace?.publicUrl ?? props.health?.huggingFace?.spaceHost ?? 'no Space target'}`,
+      state: releaseState === 'success' ? 'ready' : releaseState === 'failure' ? 'attention' : 'waiting',
+      action: () => props.onOpenInspectorTab?.('git')
+    },
+    {
+      id: 'approvals',
+      title: 'Approval sweep',
+      detail: `${props.approvals.length} pending approval${props.approvals.length === 1 ? '' : 's'}`,
+      state: props.approvals.length ? 'attention' : 'ready',
+      action: () => props.onOpenInspectorTab?.('review')
+    },
+    {
+      id: 'threads',
+      title: 'Thread supervision',
+      detail: `${activeThreads} running or blocked thread${activeThreads === 1 ? '' : 's'}`,
+      state: activeThreads ? 'running' : 'ready',
+      action: () => props.onOpenInspectorTab?.('review')
+    },
+    {
+      id: 'git',
+      title: 'Git operation audit',
+      detail: failedGit ? `${failedGit} failed Git action${failedGit === 1 ? '' : 's'}` : 'latest Git operations clear',
+      state: failedGit ? 'attention' : 'ready',
+      action: () => props.onOpenInspectorTab?.('git')
+    }
+  ];
+
+  return (
+    <section className="management-panel automation-panel">
+      <div className="pane-header">
+        <div>
+          <div className="section-title">Automations</div>
+          <div className="subtle">Release, approval, thread, and Git supervision lanes.</div>
+        </div>
+        <span className={`capability-state ${props.approvals.length || failedGit ? 'warning' : 'ready'}`}>{props.approvals.length || failedGit ? 'attention' : 'ready'}</span>
+      </div>
+      <CapabilitySummary
+        items={[
+          { label: 'Active', value: String(activeThreads), tone: activeThreads ? 'warn' : undefined },
+          { label: 'Approvals', value: String(props.approvals.length), tone: props.approvals.length ? 'warn' : undefined },
+          { label: 'Actions', value: props.githubActions ? githubActionsValue(props.githubActions) : 'loading', tone: props.githubActions?.state === 'failure' ? 'warn' : props.githubActions?.state === 'success' ? 'ok' : undefined }
+        ]}
+      />
+      <div className="automation-lanes">
+        {rows.map((row) => (
+          <button key={row.id} className={`automation-lane ${row.state}`} onClick={row.action} disabled={!props.onOpenInspectorTab}>
+            <span className="automation-lane-icon"><Icon name="automation" size={15} /></span>
+            <span>
+              <strong>{row.title}</strong>
+              <small>{row.detail}</small>
+            </span>
+            <span className="lane-state">{row.state}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TriagePanel(props: {
+  approvals: ApprovalRequest[];
+  approvalHistory: ApprovalRecord[];
+  gitOperations: GitOperationRecord[];
+  threads: ThreadSummary[];
+  cards: TimelineCard[];
+  errors: string[];
+  githubActions?: GitHubActionsSummary;
+  onOpenInspectorTab?: (tab: InspectorTab) => void;
+  onSelectThread?: (threadId: string) => void | Promise<void>;
+}) {
+  const failedThreads = props.threads.filter((thread) => isFailedThread(thread.status));
+  const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed');
+  const reviewCards = props.cards.filter((card) => card.kind === 'fileChange' || card.kind === 'error').slice(-8).reverse();
+  const items: Array<{ id: string; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; tab?: InspectorTab; threadId?: string }> = [];
+
+  for (const approval of props.approvals.slice(0, 4)) {
+    items.push({
+      id: `approval-${approval.requestId}`,
+      title: approval.title,
+      detail: approval.command ?? approval.reason ?? approval.kind,
+      tone: 'attention',
+      tab: 'review',
+      threadId: approval.threadId
+    });
+  }
+  for (const thread of failedThreads.slice(0, 4)) {
+    items.push({
+      id: `thread-${thread.id}`,
+      title: thread.name || thread.preview || compactThreadId(thread.id),
+      detail: `${thread.status ?? 'failed'} · ${compactThreadId(thread.id)}`,
+      tone: 'warn',
+      tab: 'review',
+      threadId: thread.id
+    });
+  }
+  for (const operation of failedGit.slice(0, 3)) {
+    items.push({
+      id: `git-${operation.id}`,
+      title: operation.title,
+      detail: operation.error ?? operation.stderr ?? operation.detail ?? operation.kind,
+      tone: 'warn',
+      tab: 'git'
+    });
+  }
+  if (props.githubActions?.state === 'failure') {
+    items.push({
+      id: 'github-actions',
+      title: 'GitHub Actions attention',
+      detail: githubActionsDetail(props.githubActions),
+      tone: 'warn',
+      tab: 'git'
+    });
+  }
+  for (const card of reviewCards) {
+    items.push({
+      id: `card-${card.id}`,
+      title: card.title,
+      detail: card.filePath ?? card.status ?? card.kind,
+      tone: card.kind === 'error' ? 'warn' : 'ready',
+      tab: card.kind === 'fileChange' ? 'diff' : 'review',
+      threadId: card.threadId
+    });
+  }
+
+  const visibleItems = items.slice(0, 12);
+
+  return (
+    <section className="management-panel triage-panel">
+      <div className="pane-header">
+        <div>
+          <div className="section-title">Triage</div>
+          <div className="subtle">Approvals, failures, review work, and release risks.</div>
+        </div>
+        <span className={`capability-state ${visibleItems.some((item) => item.tone !== 'ready') ? 'warning' : 'ready'}`}>{visibleItems.length || 'clear'}</span>
+      </div>
+      <CapabilitySummary
+        items={[
+          { label: 'Approvals', value: String(props.approvals.length), tone: props.approvals.length ? 'warn' : undefined },
+          { label: 'Failures', value: String(failedThreads.length + failedGit.length + props.errors.length), tone: failedThreads.length + failedGit.length + props.errors.length ? 'warn' : undefined },
+          { label: 'Decisions', value: String(props.approvalHistory.length) }
+        ]}
+      />
+      {visibleItems.length === 0 ? <div className="empty">No triage items waiting.</div> : null}
+      <div className="triage-list">
+        {visibleItems.map((item) => (
+          <button
+            key={item.id}
+            className={`triage-row ${item.tone}`}
+            onClick={() => {
+              if (item.threadId) void props.onSelectThread?.(item.threadId);
+              if (item.tab) props.onOpenInspectorTab?.(item.tab);
+            }}
+            disabled={!props.onOpenInspectorTab && !props.onSelectThread}
+          >
+            <span className="triage-icon"><Icon name={item.tone === 'ready' ? 'check' : 'inbox'} size={15} /></span>
+            <span>
+              <strong>{item.title}</strong>
+              <small>{item.detail}</small>
+            </span>
+            <span className="lane-state">{item.tone}</span>
+          </button>
+        ))}
+      </div>
+      {props.errors.length > 0 ? (
+        <div className="triage-errors">
+          {props.errors.slice(0, 3).map((error, index) => <code key={index}>{error}</code>)}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -372,6 +590,8 @@ function tabLabel(tab: ManagementTab): string {
   switch (tab) {
     case 'skills': return 'Skills';
     case 'agents': return 'Agents';
+    case 'automations': return 'Automations';
+    case 'triage': return 'Triage';
     case 'settings': return 'Settings';
   }
 }
@@ -379,6 +599,8 @@ function tabLabel(tab: ManagementTab): string {
 function tabTitle(tab: ManagementTab): string {
   if (tab === 'skills') return 'Skills registry';
   if (tab === 'agents') return 'Agents registry';
+  if (tab === 'automations') return 'Automations';
+  if (tab === 'triage') return 'Triage inbox';
   return 'Runtime settings';
 }
 
@@ -387,4 +609,18 @@ function skillScopeLabel(skill: SkillSummary): string {
   if (!value) return 'Personal';
   if (value.includes('/') || value.includes('\\')) return 'Project';
   return value;
+}
+
+function isActiveThread(status?: string): boolean {
+  const value = String(status ?? '').toLowerCase();
+  return value.includes('run') || value.includes('progress') || value.includes('approval') || value.includes('block');
+}
+
+function isFailedThread(status?: string): boolean {
+  const value = String(status ?? '').toLowerCase();
+  return value.includes('fail') || value.includes('error') || value.includes('cancel');
+}
+
+function compactThreadId(id: string): string {
+  return id.replace(/^thr_/, '').slice(-12) || id;
 }

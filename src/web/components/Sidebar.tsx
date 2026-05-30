@@ -56,18 +56,32 @@ export function Sidebar(props: {
       </div>
 
       <nav className="sidebar-primary-actions">
-        <button className="primary-nav" onClick={props.onNewThread}>
-          <span className="nav-icon"><Icon name="plus" size={15} /></span>
-          <span>New thread</span>
-        </button>
-        <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('skills')}>
-          <span className="nav-icon"><Icon name="spark" size={15} /></span>
-          <span>Skills</span>
-        </button>
-        <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('agents')}>
-          <span className="nav-icon"><Icon name="agent" size={15} /></span>
-          <span>Agents</span>
-        </button>
+        <div className="sidebar-nav-group">
+          <div className="sidebar-nav-label">Work</div>
+          <button className="primary-nav" onClick={props.onNewThread}>
+            <span className="nav-icon"><Icon name="plus" size={15} /></span>
+            <span>New thread</span>
+          </button>
+        </div>
+        <div className="sidebar-nav-group">
+          <div className="sidebar-nav-label">Capabilities</div>
+          <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('skills')}>
+            <span className="nav-icon"><Icon name="spark" size={15} /></span>
+            <span>Skills</span>
+          </button>
+          <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('agents')}>
+            <span className="nav-icon"><Icon name="agent" size={15} /></span>
+            <span>Agents</span>
+          </button>
+          <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('automations')}>
+            <span className="nav-icon"><Icon name="automation" size={15} /></span>
+            <span>Automations</span>
+          </button>
+          <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('triage')}>
+            <span className="nav-icon"><Icon name="inbox" size={15} /></span>
+            <span>Triage</span>
+          </button>
+        </div>
       </nav>
 
       <section className="sidebar-search-block">

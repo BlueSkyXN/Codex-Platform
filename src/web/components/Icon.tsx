@@ -2,6 +2,7 @@ import type { SVGProps } from 'react';
 
 export type IconName =
   | 'agent'
+  | 'automation'
   | 'branch'
   | 'chat'
   | 'check'
@@ -11,6 +12,7 @@ export type IconName =
   | 'dot'
   | 'file'
   | 'folder'
+  | 'inbox'
   | 'menu'
   | 'panel'
   | 'paperclip'
@@ -66,6 +68,16 @@ function iconPath(name: IconName) {
           <path d="M12 3.5V6" />
         </>
       );
+    case 'automation':
+      return (
+        <>
+          <path d="M7 7.5A6.5 6.5 0 0 1 18.4 11" />
+          <path d="M17 7.5h1.8V5.7" />
+          <path d="M17 16.5A6.5 6.5 0 0 1 5.6 13" />
+          <path d="M7 16.5H5.2v1.8" />
+          <path d="M12 8.5v3.8l2.4 1.4" />
+        </>
+      );
     case 'branch':
       return (
         <>
@@ -115,6 +127,14 @@ function iconPath(name: IconName) {
       );
     case 'folder':
       return <path d="M3.5 7.5h6l2 2h9v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />;
+    case 'inbox':
+      return (
+        <>
+          <path d="M4.5 5.5h15l-1.7 8.2a3 3 0 0 1-2.9 2.4H9.1a3 3 0 0 1-2.9-2.4z" />
+          <path d="M8.5 16.1v1.4a1.5 1.5 0 0 0 1.5 1.5h4a1.5 1.5 0 0 0 1.5-1.5v-1.4" />
+          <path d="M9 10.5h6" />
+        </>
+      );
     case 'menu':
       return (
         <>

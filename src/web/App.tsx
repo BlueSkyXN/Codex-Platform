@@ -692,6 +692,12 @@ export function App() {
         githubActions={githubActions}
         gitStatus={gitStatus}
         codexWebConfig={codexWebConfig}
+        approvals={state.approvals}
+        approvalHistory={state.approvalHistory}
+        gitOperations={state.gitOperations}
+        threads={state.threads}
+        cards={state.cards}
+        errors={state.errors}
         notificationsEnabled={notificationsEnabled}
         notificationsSupported={typeof Notification !== 'undefined'}
         onClose={() => setManagementOpen(false)}
@@ -700,6 +706,8 @@ export function App() {
         onUseSkill={(skill) => useComposerCapability('skill', skill.name)}
         onUseAgent={(agent) => useComposerCapability('agent', agent.name)}
         onToggleNotifications={(enabled) => void toggleNotifications(enabled)}
+        onOpenInspectorTab={(tab) => { setInspectorVisible(true); setInspectorTab(tab); }}
+        onSelectThread={selectThread}
       />
       <MobileDock
         approvalCount={state.approvals.length}
