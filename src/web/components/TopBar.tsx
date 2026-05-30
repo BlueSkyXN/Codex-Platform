@@ -42,6 +42,10 @@ export function TopBar(props: {
   const inspectorVisible = props.inspectorVisible ?? props.showInspector ?? true;
   const appServer = props.health?.appServer ?? (props.demoMode ? 'demo' : 'starting');
   const ready = props.health?.ready || props.demoMode;
+  const toggleInspector = () => {
+    if (!inspectorVisible && props.onOpenReview) props.onOpenReview();
+    else props.onToggleInspector();
+  };
 
   return (
     <header className="topbar app-frame-bar">
@@ -74,8 +78,7 @@ export function TopBar(props: {
           {props.pendingApprovals ? <span className="top-badge">{props.pendingApprovals}</span> : null}
         </button>
         {isRunning ? <button className="ghost compact-action stop-action" onClick={props.onInterrupt} disabled={props.busy} title="Interrupt" aria-label="Interrupt">■</button> : null}
-        <button className="ghost compact-action panel-toggle" onClick={props.onToggleInspector} title={inspectorVisible ? 'Hide side panel' : 'Show side panel'} aria-label={inspectorVisible ? 'Hide side panel' : 'Show side panel'}>▤</button>
-        <button className="ghost compact-action review-action" onClick={props.onOpenReview} title="Open review" aria-label="Open review">✓</button>
+        <button className="ghost compact-action panel-toggle" onClick={toggleInspector} title={inspectorVisible ? 'Hide side panel' : 'Open review panel'} aria-label={inspectorVisible ? 'Hide side panel' : 'Open review panel'}>▤</button>
         <button className="ghost compact-action" disabled title="Requires Git integration">Open</button>
         <button className="ghost compact-action" disabled title="Requires worktree handoff implementation">Hand off</button>
         <button className="ghost compact-action" disabled title="Requires Git integration">Commit</button>

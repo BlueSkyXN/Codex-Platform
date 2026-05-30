@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import type { AgentSummary, SkillSummary, StartTurnRequest, ThreadSummary, CodexWebConfig } from '../../shared/types.js';
 
 type Suggestion = { kind: 'command' | 'skill' | 'agent'; name: string; description?: string; path?: string; disabled?: boolean };
-type Mode = 'Local' | 'Worktree' | 'Cloud';
 type ComposerOptions = Pick<StartTurnRequest, 'model' | 'effort' | 'sandbox' | 'approvalPolicy' | 'summary'> & {
   skill?: { name: string; path: string };
   agent?: { name: string; path?: string };
@@ -24,7 +23,6 @@ export function Composer(props: {
   const [text, setText] = useState('');
   const [selectedSkillName, setSelectedSkillName] = useState('');
   const [selectedAgentName, setSelectedAgentName] = useState('');
-  const [mode, setMode] = useState<Mode>('Local');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showRunConfig, setShowRunConfig] = useState(false);
   const [model, setModel] = useState(props.codexWebConfig?.defaultModel ?? '');
@@ -185,17 +183,7 @@ export function Composer(props: {
         </div>
 
         <div className="mode-row">
-          {(['Local', 'Worktree', 'Cloud'] as Mode[]).map((item) => (
-            <button
-              key={item}
-              className={`mode-option ${mode === item ? 'active' : ''}`}
-              onClick={() => setMode(item)}
-              disabled={item !== 'Local'}
-              title={item === 'Local' ? 'Run in the current project directory' : `${item} mode needs workspace orchestration`}
-            >
-              {item}
-            </button>
-          ))}
+          <button className="mode-option active" title="Run in the current project directory">Local</button>
           <span className="mode-spacer" />
           <span className="branch-chip">{sandboxLabel(sandbox)} · {approvalLabel(approvalPolicy)}</span>
         </div>

@@ -21,11 +21,6 @@ export function Sidebar(props: {
   const [savingProject, setSavingProject] = useState(false);
 
   const lower = query.trim().toLowerCase();
-  const activeThreads = useMemo(() => props.threads
-    .filter((thread) => isThreadActive(thread.status))
-    .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
-    .slice(0, 5), [props.threads]);
-
   const projectsWithThreads = useMemo(() => props.projects.map((project) => ({
     project,
     threads: props.threads
@@ -64,10 +59,6 @@ export function Sidebar(props: {
           <span className="nav-icon">＋</span>
           <span>New thread</span>
         </button>
-        <button className="primary-nav" disabled title="Automation runtime is not wired yet">
-          <span className="nav-icon">⌁</span>
-          <span>Automations</span>
-        </button>
         <button className="primary-nav" onClick={() => props.onOpenInspectorTab?.('skills')}>
           <span className="nav-icon">◇</span>
           <span>Skills</span>
@@ -78,20 +69,8 @@ export function Sidebar(props: {
         </button>
       </nav>
 
-      {activeThreads.length > 0 ? (
-        <section className="active-thread-strip">
-          {activeThreads.map((thread) => (
-            <button key={thread.id} className={`queue-row ${thread.id === props.selectedThreadId ? 'active' : ''}`} onClick={() => props.onSelectThread(thread.id)}>
-              <span className={`queue-indicator ${statusClass(thread.status)}`} />
-              <span className="queue-title">{thread.name || thread.preview || compactThreadId(thread.id)}</span>
-              <span className={`queue-status ${statusClass(thread.status)}`}>{shortStatus(thread.status)}</span>
-            </button>
-          ))}
-        </section>
-      ) : null}
-
       <section className="sidebar-search-block">
-        <input className="sidebar-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search projects and threads" />
+        <input className="sidebar-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" />
       </section>
 
       <section className="thread-section project-tree-section">
@@ -99,7 +78,14 @@ export function Sidebar(props: {
           <span>Threads</span>
           <span className="row-actions">
             <button className="small ghost" disabled={!props.onRefreshThreads} onClick={() => void props.onRefreshThreads?.()} title="Reload thread list">↻</button>
-            <button className="small ghost" onClick={() => setNewProjectOpen((value) => !value)}>{newProjectOpen ? 'Close' : 'Add project'}</button>
+            <button
+              className="small ghost icon-only add-project-button"
+              onClick={() => setNewProjectOpen((value) => !value)}
+              title={newProjectOpen ? 'Close add project form' : 'Add project'}
+              aria-label={newProjectOpen ? 'Close add project form' : 'Add project'}
+            >
+              {newProjectOpen ? '×' : '+'}
+            </button>
           </span>
         </div>
 
@@ -135,7 +121,7 @@ export function Sidebar(props: {
                       <span className={`thread-dot ${statusClass(thread.status)}`} />
                       <span className="thread-labels">
                         <span className="thread-title">{thread.name || thread.preview || compactThreadId(thread.id)}</span>
-                        <span className="thread-meta-line">{shortStatus(thread.status)} · {timeAgo(thread.updatedAt ?? thread.createdAt)}</span>
+                        <span className="thread-meta-line">{threadMeta(thread.status, thread.updatedAt ?? thread.createdAt)}</span>
                       </span>
                     </button>
                   ))}
@@ -156,16 +142,6 @@ export function Sidebar(props: {
   );
 }
 
-function isThreadActive(status?: string): boolean {
-  const s = String(status ?? '').toLowerCase();
-  return s.includes('running') || s.includes('active') || s.includes('approval') || s.includes('progress');
-}
-
-function shortPath(path: string): string {
-  const parts = path.split('/').filter(Boolean);
-  return parts.length <= 2 ? path : `…/${parts.slice(-2).join('/')}`;
-}
-
 function compactThreadId(id: string): string {
   return id.replace(/^thr_/, '').slice(-10);
 }
@@ -177,9 +153,16 @@ function statusClass(status?: string): string {
 function shortStatus(status?: string): string {
   if (!status) return 'ready';
   if (status === 'loaded') return 'ready';
+  if (status === 'idle') return 'ready';
   if (status === 'waiting_approval') return 'approval';
   if (status === 'inProgress') return 'running';
   return status.replace(/_/g, ' ');
+}
+
+function threadMeta(status: string | undefined, value?: number): string {
+  const when = timeAgo(value);
+  const state = shortStatus(status);
+  return state === 'ready' ? when : `${state} · ${when}`;
 }
 
 function timeAgo(value?: number): string {

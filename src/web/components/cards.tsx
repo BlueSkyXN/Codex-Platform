@@ -52,8 +52,6 @@ export function FileChangeCard({ card }: { card: TimelineCard }) {
         <button className="small ghost" onClick={(event) => { event.stopPropagation(); setExpanded((value) => !value); }}>
           {expanded ? 'Collapse diff' : 'Open diff'}
         </button>
-        <button className="small ghost" disabled title="Requires Git integration">Stage file</button>
-        <button className="small ghost" disabled title="Requires Git integration">Revert</button>
       </div>
     </div>
   );

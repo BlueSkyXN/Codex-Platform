@@ -453,7 +453,7 @@ export function App() {
         ) : null}
         <main className="thread-column">
           <ThreadHeader project={selectedProject} thread={selectedThread} cards={selectedCards} approvals={selectedApprovals} busy={busy} onInterrupt={interrupt} />
-          <ApprovalRail approvals={selectedApprovals} onDecision={approve} />
+          {!inspectorVisible ? <ApprovalRail approvals={selectedApprovals} onDecision={approve} /> : null}
           <Timeline cards={selectedCards} focusedCardId={state.focusedCardId} projectName={selectedProject?.name} onFocus={(cardId) => { dispatch({ type: 'raw', method: 'focus', params: { cardId } }); const card = selectedCards.find((item) => item.id === cardId); const tab = tabForCard(card); if (tab) setInspectorTab(tab); }} />
           <Composer
             disabled={!selectedProject || busy}
