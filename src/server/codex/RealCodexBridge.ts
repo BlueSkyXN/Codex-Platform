@@ -4,6 +4,7 @@ import type { ApprovalDecision, StartTurnRequest, ThreadSummary, UiEvent } from 
 import { JsonRpcLineClient, type JsonRpcMessage } from './JsonRpcLineClient.js';
 import type { CodexBridge } from './Bridge.js';
 import { approvalFromServerRequest, normalizeNotification, threadFromCodex } from './EventNormalizer.js';
+import { renderTurnText } from './turnContext.js';
 
 function resultThread(result: unknown): unknown {
   if (result && typeof result === 'object' && 'thread' in result) return (result as { thread: unknown }).thread;
@@ -118,9 +119,7 @@ export class RealCodexBridge extends EventEmitter implements CodexBridge {
 
   async startTurn(threadId: string, request: StartTurnRequest): Promise<unknown> {
     await this.start();
-    const text = request.agent?.name
-      ? `Use the ${request.agent.name} custom agent for this task. ${request.text}`
-      : request.text;
+    const text = renderTurnText(request);
     const input: unknown[] = [{ type: 'text', text }];
     if (request.skill) input.push({ type: 'skill', name: request.skill.name, path: request.skill.path });
     const params: Record<string, unknown> = {

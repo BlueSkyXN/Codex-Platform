@@ -5,6 +5,8 @@ import type {
   CreateThreadRequest,
   FileReadResult,
   FileTreeNode,
+  GitActionResult,
+  GitDiffResult,
   GitStatusSummary,
   Project,
   ServerHealth,
@@ -83,5 +85,15 @@ export const api = {
   account: () => request<unknown>('/api/account'),
   fileTree: (projectId: string, path = '', depth = 3) => request<{ tree: FileTreeNode }>(`/api/projects/${encodeURIComponent(projectId)}/files/tree?path=${encodeURIComponent(path)}&depth=${depth}`),
   fileRead: (projectId: string, path: string) => request<FileReadResult>(`/api/projects/${encodeURIComponent(projectId)}/files/read?path=${encodeURIComponent(path)}`),
-  gitStatus: (projectId: string) => request<GitStatusSummary>(`/api/projects/${encodeURIComponent(projectId)}/git/status`)
+  gitStatus: (projectId: string) => request<GitStatusSummary>(`/api/projects/${encodeURIComponent(projectId)}/git/status`),
+  gitDiff: (projectId: string, path?: string, cached = false) => {
+    const params = new URLSearchParams();
+    if (path) params.set('path', path);
+    if (cached) params.set('cached', 'true');
+    const query = params.toString();
+    return request<GitDiffResult>(`/api/projects/${encodeURIComponent(projectId)}/git/diff${query ? `?${query}` : ''}`);
+  },
+  gitStage: (projectId: string, paths: string[]) => request<GitActionResult>(`/api/projects/${encodeURIComponent(projectId)}/git/stage`, { method: 'POST', body: JSON.stringify({ paths }) }),
+  gitUnstage: (projectId: string, paths: string[]) => request<GitActionResult>(`/api/projects/${encodeURIComponent(projectId)}/git/unstage`, { method: 'POST', body: JSON.stringify({ paths }) }),
+  gitCommit: (projectId: string, message: string) => request<GitActionResult>(`/api/projects/${encodeURIComponent(projectId)}/git/commit`, { method: 'POST', body: JSON.stringify({ message }) })
 };

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { InspectorTab, Project, ThreadSummary } from '../../shared/types.js';
+import type { InspectorTab, ManagementTab, Project, ThreadSummary } from '../../shared/types.js';
 
 type PaletteAction = {
   id: string;
@@ -24,6 +24,7 @@ export function CommandPalette(props: {
   onSelectProject: (projectId: string) => void;
   onSelectThread: (threadId: string) => void | Promise<void>;
   onOpenInspectorTab: (tab: InspectorTab) => void;
+  onOpenManagementTab: (tab: ManagementTab) => void;
   onToggleSidebar: () => void;
   onToggleInspector: () => void;
   onOpenActivity: () => void;
@@ -52,9 +53,12 @@ export function CommandPalette(props: {
       { id: 'terminal', group: 'Navigation', title: 'Open terminal pane', subtitle: 'Commands and outputs from the thread', shortcut: '⌘J', run: () => props.onOpenInspectorTab('terminal') },
       { id: 'files', group: 'Navigation', title: 'Open files pane', subtitle: 'Browse the active project without leaving Codex-Platform', run: () => props.onOpenInspectorTab('files') },
       { id: 'git', group: 'Navigation', title: 'Open Git pane', subtitle: 'Inspect branch and working tree status', run: () => props.onOpenInspectorTab('git') },
-      { id: 'skills', group: 'Navigation', title: 'Open skills pane', subtitle: 'Available project/user/admin skills', run: () => props.onOpenInspectorTab('skills') },
-      { id: 'agents', group: 'Navigation', title: 'Open custom agents pane', subtitle: 'Project and user .codex/agents TOML presets', run: () => props.onOpenInspectorTab('agents') },
-      { id: 'settings', group: 'Navigation', title: 'Open settings pane', subtitle: 'Runtime, workspace, auth, notification settings', run: () => props.onOpenInspectorTab('settings') },
+      { id: 'browser', group: 'Navigation', title: 'Open browser pane', subtitle: 'Preview local dev servers and Hugging Face Space targets', run: () => props.onOpenInspectorTab('browser') },
+      { id: 'artifacts', group: 'Navigation', title: 'Open artifacts pane', subtitle: 'Generated files, summaries, and previews for the thread', run: () => props.onOpenInspectorTab('artifacts') },
+      { id: 'raw', group: 'Navigation', title: 'Open raw debug pane', subtitle: 'Focused card, thread, and project payloads', run: () => props.onOpenInspectorTab('raw') },
+      { id: 'skills', group: 'Management', title: 'Open skills registry', subtitle: 'Available project/user/admin skills', run: () => props.onOpenManagementTab('skills') },
+      { id: 'agents', group: 'Management', title: 'Open agent registry', subtitle: 'Project and user .codex/agents TOML presets', run: () => props.onOpenManagementTab('agents') },
+      { id: 'settings', group: 'Management', title: 'Open runtime settings', subtitle: 'Runtime, workspace, auth, notification settings', run: () => props.onOpenManagementTab('settings') },
       { id: 'toggle-sidebar', group: 'Layout', title: 'Toggle sidebar', subtitle: 'Show or hide project/thread navigation', shortcut: '⌘B', run: props.onToggleSidebar },
       { id: 'toggle-inspector', group: 'Layout', title: 'Toggle side panel', subtitle: 'Show or hide review/terminal/artifacts pane', shortcut: '⌘⌥B', run: props.onToggleInspector },
       { id: 'copy-thread', group: 'Utilities', title: 'Copy current thread id', subtitle: props.selectedThreadId ?? 'No selected thread', disabled: !props.selectedThreadId, run: () => void navigator.clipboard?.writeText(props.selectedThreadId ?? '') },

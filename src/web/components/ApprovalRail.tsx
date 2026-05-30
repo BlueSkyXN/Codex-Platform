@@ -2,7 +2,11 @@ import type { ApprovalDecision, ApprovalRequest } from '../../shared/types.js';
 
 const defaultDecisions: ApprovalDecision[] = ['decline', 'accept', 'acceptForSession', 'cancel'];
 
-export function ApprovalRail(props: { approvals: ApprovalRequest[]; onDecision: (requestId: string | number, decision: ApprovalDecision) => void }) {
+export function ApprovalRail(props: {
+  approvals: ApprovalRequest[];
+  onDecision: (requestId: string | number, decision: ApprovalDecision) => void;
+  onFocusApproval?: (approval: ApprovalRequest) => void;
+}) {
   if (props.approvals.length === 0) return null;
   return (
     <div className="approval-rail">
@@ -10,7 +14,7 @@ export function ApprovalRail(props: { approvals: ApprovalRequest[]; onDecision: 
         const decisions = approval.availableDecisions?.length ? approval.availableDecisions : defaultDecisions;
         return (
           <div className="approval-card" key={String(approval.requestId)}>
-            <div className="approval-title">{approval.title}</div>
+            <button className="approval-title approval-focus-button" onClick={() => props.onFocusApproval?.(approval)}>{approval.title}</button>
             {approval.reason ? <div className="approval-reason">{approval.reason}</div> : null}
             {approval.command ? <pre className="approval-command">{approval.command}</pre> : null}
             {approval.grantRoot ? <div className="mono subtle">grant root: {approval.grantRoot}</div> : null}

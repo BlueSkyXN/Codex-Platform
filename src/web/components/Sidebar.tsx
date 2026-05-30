@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { InspectorTab, Project, ThreadSummary } from '../../shared/types.js';
+import type { ManagementTab, Project, ThreadSummary } from '../../shared/types.js';
 import { Icon } from './Icon.js';
 
 export function Sidebar(props: {
@@ -13,7 +13,7 @@ export function Sidebar(props: {
   onAddProject?: (input: { cwd: string; name?: string }) => Promise<void>;
   onNewProject?: (cwd: string, name?: string) => Promise<void>;
   onRefreshThreads?: () => Promise<void>;
-  onOpenInspectorTab?: (tab: InspectorTab) => void;
+  onOpenManagementTab?: (tab: ManagementTab) => void;
 }) {
   const [query, setQuery] = useState('');
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -48,10 +48,10 @@ export function Sidebar(props: {
   return (
     <aside className="sidebar codex-sidebar">
       <div className="sidebar-head">
-        <div className="codex-logo" aria-hidden="true">C</div>
+        <div className="codex-logo" aria-hidden="true">CP</div>
         <div>
-          <div className="sidebar-brand">Codex</div>
-          <div className="sidebar-caption">Standalone web UI</div>
+          <div className="sidebar-brand">Codex Platform</div>
+          <div className="sidebar-caption">Agent command center</div>
         </div>
       </div>
 
@@ -60,11 +60,11 @@ export function Sidebar(props: {
           <span className="nav-icon"><Icon name="plus" size={15} /></span>
           <span>New thread</span>
         </button>
-        <button className="primary-nav" onClick={() => props.onOpenInspectorTab?.('skills')}>
+        <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('skills')}>
           <span className="nav-icon"><Icon name="spark" size={15} /></span>
           <span>Skills</span>
         </button>
-        <button className="primary-nav" onClick={() => props.onOpenInspectorTab?.('agents')}>
+        <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('agents')}>
           <span className="nav-icon"><Icon name="agent" size={15} /></span>
           <span>Agents</span>
         </button>
@@ -134,7 +134,7 @@ export function Sidebar(props: {
       </section>
 
       <section className="sidebar-footer codex-sidebar-footer">
-        <button className="settings-row" onClick={() => props.onOpenInspectorTab?.('settings')}>
+        <button className="settings-row" onClick={() => props.onOpenManagementTab?.('settings')}>
           <span className="nav-icon"><Icon name="settings" size={15} /></span>
           <span>Settings</span>
         </button>

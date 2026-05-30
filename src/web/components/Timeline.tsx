@@ -74,6 +74,15 @@ export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string;
               <article
                 className={`timeline-card codex-timeline-card ${card.kind} ${card.id === props.focusedCardId ? 'focused' : ''}`}
                 onClick={() => props.onFocus(card.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    props.onFocus(card.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-current={card.id === props.focusedCardId ? 'true' : undefined}
               >
                 <div className="card-head codex-card-head">
                   <span className="kind"><span className="kind-icon"><Icon name={kindIcon(card.kind)} size={13} /></span>{label(card.kind)}</span>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react';
-import type { AccountSummary, AgentSummary, FileReadResult, FileTreeNode, GitStatusSummary, InspectorTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { AccountSummary, AgentSummary, FileReadResult, FileTreeNode, GitDiffResult, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
 import { api, eventStreamUrl, getStoredToken, setStoredToken } from './lib/api.js';
 import { initialState, reduce } from './lib/reducer.js';
 import { normalizeAccount } from './lib/normalize.js';
@@ -13,6 +13,7 @@ import { ThreadHeader } from './components/ThreadHeader.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { ActivityCenter } from './components/ActivityCenter.js';
 import { MobileDock } from './components/MobileDock.js';
+import { ManagementDrawer } from './components/ManagementDrawer.js';
 
 export function App() {
   const [state, dispatch] = useReducer(reduce, initialState);
@@ -34,10 +35,16 @@ export function App() {
   const [authError, setAuthError] = useState<string | undefined>();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [managementOpen, setManagementOpen] = useState(false);
+  const [managementTab, setManagementTab] = useState<ManagementTab>('skills');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => window.localStorage.getItem('codex-platform-notifications') === 'true');
   const [fileTree, setFileTree] = useState<FileTreeNode | undefined>();
   const [fileContent, setFileContent] = useState<FileReadResult | undefined>();
   const [gitStatus, setGitStatus] = useState<GitStatusSummary | undefined>();
+  const [gitDiff, setGitDiff] = useState<GitDiffResult | undefined>();
+  const [selectedGitPath, setSelectedGitPath] = useState<string | undefined>();
+  const [gitActionBusy, setGitActionBusy] = useState(false);
+  const [gitActionMessage, setGitActionMessage] = useState<string | undefined>();
   const [projectPanelLoading, setProjectPanelLoading] = useState(false);
   const [projectPanelError, setProjectPanelError] = useState<string | undefined>();
   const notifiedApprovals = useRef<Set<string>>(new Set());
@@ -135,6 +142,27 @@ export function App() {
   const selectedCards = useMemo(() => state.cards.filter((c) => c.threadId === selectedThread?.id), [state.cards, selectedThread?.id]);
   const focusedCard = useMemo(() => selectedCards.find((c) => c.id === state.focusedCardId) ?? selectedCards[selectedCards.length - 1], [selectedCards, state.focusedCardId]);
   const selectedApprovals = useMemo(() => state.approvals.filter((a) => !a.threadId || a.threadId === selectedThread?.id), [state.approvals, selectedThread?.id]);
+
+  function openManagementTab(tab: ManagementTab) {
+    setManagementTab(tab);
+    setManagementOpen(true);
+  }
+
+  function focusCard(cardId: string, openInspector = true, knownCard?: TimelineCard) {
+    dispatch({ type: 'raw', method: 'focus', params: { cardId } });
+    const card = knownCard ?? selectedCards.find((item) => item.id === cardId);
+    const tab = tabForCard(card);
+    if (tab) setInspectorTab(tab);
+    if (openInspector && card) setInspectorVisible(true);
+  }
+
+  function focusApproval(approval: { itemId?: string; kind?: string }) {
+    if (approval.itemId) {
+      dispatch({ type: 'raw', method: 'focus', params: { cardId: approval.itemId } });
+    }
+    setInspectorVisible(true);
+    setInspectorTab('review');
+  }
 
   useEffect(() => {
     if (!notificationsEnabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -272,10 +300,78 @@ export function App() {
       setFileTree(treeResult.tree);
       setGitStatus(gitResult);
       setFileContent(undefined);
+      const nextGitFile = gitResult.files.find((file) => file.path === selectedGitPath) ?? gitResult.files[0];
+      setSelectedGitPath(nextGitFile?.path);
+      if (nextGitFile) {
+        const cached = nextGitFile.index.trim() !== '' && nextGitFile.index !== '?' && (nextGitFile.workingTree.trim() === '');
+        setGitDiff(await api.gitDiff(selectedProject.id, nextGitFile.path, cached));
+      } else {
+        setGitDiff(undefined);
+      }
     } catch (error) {
       setProjectPanelError(error instanceof Error ? error.message : String(error));
     } finally {
       setProjectPanelLoading(false);
+    }
+  }
+
+  async function selectGitFile(path: string, cached = false) {
+    if (!selectedProject?.id || !path) return;
+    setSelectedGitPath(path);
+    setProjectPanelLoading(true);
+    setProjectPanelError(undefined);
+    try {
+      const next = await api.gitDiff(selectedProject.id, path, cached);
+      setGitDiff(next);
+      setInspectorVisible(true);
+      setInspectorTab('git');
+    } catch (error) {
+      setGitDiff(undefined);
+      setProjectPanelError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProjectPanelLoading(false);
+    }
+  }
+
+  async function runGitAction(action: 'stage' | 'unstage', paths: string[]) {
+    if (!selectedProject?.id || paths.length === 0) return;
+    setGitActionBusy(true);
+    setProjectPanelError(undefined);
+    setGitActionMessage(undefined);
+    try {
+      const result = action === 'stage' ? await api.gitStage(selectedProject.id, paths) : await api.gitUnstage(selectedProject.id, paths);
+      setGitStatus(result.status);
+      const nextGitFile = result.status.files.find((file) => file.path === selectedGitPath) ?? result.status.files[0];
+      setSelectedGitPath(nextGitFile?.path);
+      if (nextGitFile) {
+        const cached = nextGitFile.index.trim() !== '' && nextGitFile.index !== '?' && (nextGitFile.workingTree.trim() === '');
+        setGitDiff(await api.gitDiff(selectedProject.id, nextGitFile.path, cached));
+      } else {
+        setGitDiff(undefined);
+      }
+      setGitActionMessage(action === 'stage' ? `Staged ${paths.length} file${paths.length === 1 ? '' : 's'}.` : `Unstaged ${paths.length} file${paths.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      setProjectPanelError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGitActionBusy(false);
+    }
+  }
+
+  async function commitGit(message: string) {
+    if (!selectedProject?.id) return;
+    setGitActionBusy(true);
+    setProjectPanelError(undefined);
+    setGitActionMessage(undefined);
+    try {
+      const result = await api.gitCommit(selectedProject.id, message);
+      setGitStatus(result.status);
+      setGitDiff(undefined);
+      setSelectedGitPath(undefined);
+      setGitActionMessage('Committed staged changes.');
+    } catch (error) {
+      setProjectPanelError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGitActionBusy(false);
     }
   }
 
@@ -293,6 +389,11 @@ export function App() {
     } finally {
       setProjectPanelLoading(false);
     }
+  }
+
+  async function readProjectFileForContext(path: string): Promise<FileReadResult> {
+    if (!selectedProject?.id) throw new Error('No project selected.');
+    return await api.fileRead(selectedProject.id, path);
   }
 
   async function startReview() {
@@ -448,25 +549,31 @@ export function App() {
             onNewThread={createThread}
             onAddProject={(input) => addProject(input.cwd, input.name)}
             onRefreshThreads={refreshThreads}
-            onOpenInspectorTab={(tab) => { setInspectorVisible(true); setInspectorTab(tab); }}
+            onOpenManagementTab={openManagementTab}
           />
         ) : null}
         <main className="thread-column">
           <ThreadHeader project={selectedProject} thread={selectedThread} cards={selectedCards} approvals={selectedApprovals} busy={busy} onInterrupt={interrupt} />
-          {!inspectorVisible ? <ApprovalRail approvals={selectedApprovals} onDecision={approve} /> : null}
-          <Timeline cards={selectedCards} focusedCardId={state.focusedCardId} projectName={selectedProject?.name} onFocus={(cardId) => { dispatch({ type: 'raw', method: 'focus', params: { cardId } }); const card = selectedCards.find((item) => item.id === cardId); const tab = tabForCard(card); if (tab) setInspectorTab(tab); }} />
+          {!inspectorVisible ? <ApprovalRail approvals={selectedApprovals} onDecision={approve} onFocusApproval={focusApproval} /> : null}
+          <Timeline cards={selectedCards} focusedCardId={state.focusedCardId} projectName={selectedProject?.name} onFocus={(cardId) => focusCard(cardId)} />
           <Composer
             disabled={!selectedProject || busy}
             onSubmit={startTurn}
             selectedThread={selectedThread}
             skills={skills}
             agents={agents}
+            cards={selectedCards}
+            fileTree={fileTree}
+            fileContent={fileContent}
+            gitStatus={gitStatus}
+            gitDiff={gitDiff}
             skillsLoading={skillsLoading}
             agentsLoading={agentsLoading}
             skillsError={skillsError}
             agentsError={agentsError}
             codexWebConfig={codexWebConfig}
             onReloadSkills={() => reloadSkills(true)}
+            onReadFileContext={readProjectFileForContext}
           />
         </main>
         {inspectorVisible ? (
@@ -477,27 +584,27 @@ export function App() {
             project={selectedProject}
             thread={selectedThread}
             errors={state.errors}
-            skills={skills}
-            agents={agents}
-            skillsLoading={skillsLoading}
-            agentsLoading={agentsLoading}
             account={account}
-            health={health}
-            codexWebConfig={codexWebConfig}
-            notificationsEnabled={notificationsEnabled}
-            notificationsSupported={typeof Notification !== 'undefined'}
             fileTree={fileTree}
             fileContent={fileContent}
             gitStatus={gitStatus}
+            gitDiff={gitDiff}
+            selectedGitPath={selectedGitPath}
+            gitActionBusy={gitActionBusy}
+            gitActionMessage={gitActionMessage}
             projectPanelLoading={projectPanelLoading}
             projectPanelError={projectPanelError}
+            health={health}
             onSelectFile={(path) => void selectProjectFile(path)}
+            onSelectGitFile={(path, cached) => void selectGitFile(path, cached)}
+            onGitStage={(paths) => void runGitAction('stage', paths)}
+            onGitUnstage={(paths) => void runGitAction('unstage', paths)}
+            onGitCommit={(message) => void commitGit(message)}
             onRefreshProjectPanels={() => void reloadProjectPanels()}
             onStartReview={() => void startReview()}
-            onToggleNotifications={(enabled) => void toggleNotifications(enabled)}
+            onFocusCard={(cardId) => focusCard(cardId, false)}
             tab={inspectorTab}
             onTabChange={setInspectorTab}
-            onRefreshSkills={() => reloadSkills(true)}
             onDecision={approve}
           />
         ) : null}
@@ -515,6 +622,7 @@ export function App() {
         onSelectProject={(projectId) => dispatch({ type: 'raw', method: 'selectProject', params: { projectId } })}
         onSelectThread={selectThread}
         onOpenInspectorTab={(tab) => { setInspectorVisible(true); setInspectorTab(tab); }}
+        onOpenManagementTab={openManagementTab}
         onToggleSidebar={() => setSidebarVisible((value) => !value)}
         onToggleInspector={() => setInspectorVisible((value) => !value)}
         onOpenActivity={() => setActivityOpen(true)}
@@ -530,7 +638,29 @@ export function App() {
         onClose={() => setActivityOpen(false)}
         onSelectThread={selectThread}
         onDecision={approve}
+        onFocusCard={(card) => {
+          if (card.threadId !== selectedThread?.id) void selectThread(card.threadId);
+          focusCard(card.id, true, card);
+          setActivityOpen(false);
+        }}
         onOpenInspectorTab={(tab) => { setInspectorVisible(true); setInspectorTab(tab); setActivityOpen(false); }}
+      />
+      <ManagementDrawer
+        open={managementOpen}
+        tab={managementTab}
+        skills={skills}
+        agents={agents}
+        skillsLoading={skillsLoading}
+        agentsLoading={agentsLoading}
+        account={account}
+        health={health}
+        codexWebConfig={codexWebConfig}
+        notificationsEnabled={notificationsEnabled}
+        notificationsSupported={typeof Notification !== 'undefined'}
+        onClose={() => setManagementOpen(false)}
+        onTabChange={setManagementTab}
+        onRefreshSkills={() => reloadSkills(true)}
+        onToggleNotifications={(enabled) => void toggleNotifications(enabled)}
       />
       <MobileDock
         approvalCount={state.approvals.length}

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
 import { Icon } from './Icon.js';
-import type { AccountSummary, AgentSummary, ApprovalDecision, ApprovalRequest, FileReadResult, FileTreeNode, GitStatusSummary, InspectorTab, Project, ServerHealth, SkillSummary, ThreadSummary, TimelineCard, CodexWebConfig } from '../../shared/types.js';
+import type { AccountSummary, ApprovalDecision, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitStatusSummary, InspectorTab, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 
-const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal'];
+const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
 
 export function Inspector(props: {
   card?: TimelineCard;
@@ -12,28 +12,28 @@ export function Inspector(props: {
   project?: Project;
   thread?: ThreadSummary;
   errors: string[];
-  skills: SkillSummary[];
-  agents?: AgentSummary[];
-  skillsLoading?: boolean;
-  agentsLoading?: boolean;
   fileTree?: FileTreeNode;
   fileContent?: FileReadResult;
   gitStatus?: GitStatusSummary;
+  gitDiff?: GitDiffResult;
+  selectedGitPath?: string;
+  gitActionBusy?: boolean;
+  gitActionMessage?: string;
   projectPanelLoading?: boolean;
   projectPanelError?: string;
   account?: AccountSummary;
   health?: ServerHealth;
-  codexWebConfig?: CodexWebConfig;
-  notificationsEnabled?: boolean;
-  notificationsSupported?: boolean;
-  onToggleNotifications?: (enabled: boolean) => void;
   tab?: InspectorTab;
   onTabChange?: (tab: InspectorTab) => void;
   onDecision: (requestId: string | number, decision: ApprovalDecision) => void;
-  onRefreshSkills?: () => void;
   onRefreshProjectPanels?: () => void;
   onSelectFile?: (path: string) => void;
+  onSelectGitFile?: (path: string, cached?: boolean) => void;
+  onGitStage?: (paths: string[]) => void;
+  onGitUnstage?: (paths: string[]) => void;
+  onGitCommit?: (message: string) => void;
   onStartReview?: () => void;
+  onFocusCard?: (cardId: string) => void;
   open?: boolean;
 }) {
   const [internalTab, setInternalTab] = useState<InspectorTab>('review');
@@ -43,7 +43,6 @@ export function Inspector(props: {
   const plans = props.cards.filter((card) => card.kind === 'plan' || card.kind === 'reasoning');
   const diffs = props.cards.filter((card) => card.kind === 'fileChange');
   const commands = props.cards.filter((card) => card.kind === 'command');
-  const visibleTabs = primaryTabs.includes(activeTab) ? primaryTabs : [activeTab, ...primaryTabs];
 
   return (
     <aside className={`inspector codex-inspector ${props.open === false ? 'closed' : ''}`}>
@@ -56,7 +55,7 @@ export function Inspector(props: {
       </div>
 
       <div className="inspector-tabs codex-inspector-tabs">
-        {visibleTabs.map((item) => (
+        {primaryTabs.map((item) => (
           <button key={item} className={`tab ${activeTab === item ? 'active' : ''}`} onClick={() => setActiveTab(item)}>{tabLabel(item)}</button>
         ))}
       </div>
@@ -77,14 +76,27 @@ export function Inspector(props: {
         />
       ) : null}
       {activeTab === 'plan' ? <PlanTab plans={plans} /> : null}
-      {activeTab === 'diff' ? <DiffTab diffs={diffs} focusedCard={props.card} /> : null}
+      {activeTab === 'diff' ? <DiffTab diffs={diffs} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'files' ? <FilesTab tree={props.fileTree} file={props.fileContent} loading={Boolean(props.projectPanelLoading)} error={props.projectPanelError} onSelectFile={props.onSelectFile} onRefresh={props.onRefreshProjectPanels} /> : null}
-      {activeTab === 'git' ? <GitTab status={props.gitStatus} loading={Boolean(props.projectPanelLoading)} error={props.projectPanelError} onRefresh={props.onRefreshProjectPanels} /> : null}
-      {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} /> : null}
-      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} /> : null}
-      {activeTab === 'skills' ? <SkillsTab skills={props.skills} loading={Boolean(props.skillsLoading)} onRefresh={props.onRefreshSkills ?? (() => undefined)} /> : null}
-      {activeTab === 'agents' ? <AgentsTab agents={props.agents ?? []} loading={Boolean(props.agentsLoading)} onRefresh={props.onRefreshSkills ?? (() => undefined)} /> : null}
-      {activeTab === 'settings' ? <SettingsTab health={props.health} codexWebConfig={props.codexWebConfig} account={props.account} notificationsEnabled={Boolean(props.notificationsEnabled)} notificationsSupported={props.notificationsSupported !== false} onToggleNotifications={props.onToggleNotifications} /> : null}
+      {activeTab === 'git' ? (
+        <GitTab
+          status={props.gitStatus}
+          diff={props.gitDiff}
+          selectedPath={props.selectedGitPath}
+          loading={Boolean(props.projectPanelLoading)}
+          actionBusy={Boolean(props.gitActionBusy)}
+          actionMessage={props.gitActionMessage}
+          error={props.projectPanelError}
+          onRefresh={props.onRefreshProjectPanels}
+          onSelectFile={props.onSelectGitFile}
+          onStage={props.onGitStage}
+          onUnstage={props.onGitUnstage}
+          onCommit={props.onGitCommit}
+        />
+      ) : null}
+      {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
+      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} /> : null}
+      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} /> : null}
     </aside>
   );
@@ -144,8 +156,6 @@ function ReviewTab(props: {
         </div>
         <div className="review-actions-row">
           <button className="small primary" disabled={!props.onStartReview} onClick={props.onStartReview}>Start review</button>
-          {changedFiles > 0 ? <button className="small ghost" disabled title="Requires Git stage integration">Stage</button> : null}
-          {changedFiles > 0 ? <button className="small ghost" disabled title="Requires PR integration">Commit</button> : null}
         </div>
       </section>
 
@@ -217,7 +227,7 @@ function PlanTab({ plans }: { plans: TimelineCard[] }) {
   );
 }
 
-function DiffTab({ diffs, focusedCard }: { diffs: TimelineCard[]; focusedCard?: TimelineCard }) {
+function DiffTab({ diffs, focusedCard, onFocusCard }: { diffs: TimelineCard[]; focusedCard?: TimelineCard; onFocusCard?: (cardId: string) => void }) {
   const [scope, setScope] = useState<'uncommitted' | 'branch' | 'turn'>('uncommitted');
   const focusedDiff = focusedCard?.kind === 'fileChange' ? focusedCard : diffs.at(-1);
   return (
@@ -236,7 +246,12 @@ function DiffTab({ diffs, focusedCard }: { diffs: TimelineCard[]; focusedCard?: 
       {diffs.length === 0 ? <div className="empty">No file changes reported.</div> : null}
       {diffs.length > 0 ? (
         <div className="review-file-list">
-          {diffs.map((diff) => <button key={diff.id} className={`review-file-row ${diff.id === focusedDiff?.id ? 'active' : ''}`}><span>{diff.filePath ?? diff.title}</span><span>{diffStats(diff.diff).label}</span></button>)}
+          {diffs.map((diff) => (
+            <button key={diff.id} className={`review-file-row ${diff.id === focusedDiff?.id ? 'active' : ''}`} onClick={() => onFocusCard?.(diff.id)}>
+              <span>{diff.filePath ?? diff.title}</span>
+              <span>{diffStats(diff.diff).label}</span>
+            </button>
+          ))}
         </div>
       ) : null}
       {focusedDiff ? <FocusedCard card={focusedDiff} /> : null}
@@ -244,8 +259,9 @@ function DiffTab({ diffs, focusedCard }: { diffs: TimelineCard[]; focusedCard?: 
   );
 }
 
-function TerminalTab({ commands, focusedCard }: { commands: TimelineCard[]; focusedCard?: TimelineCard }) {
+function TerminalTab({ commands, focusedCard, onFocusCard }: { commands: TimelineCard[]; focusedCard?: TimelineCard; onFocusCard?: (cardId: string) => void }) {
   const focusedCommand = focusedCard?.kind === 'command' ? focusedCard : commands.at(-1);
+  const failedCount = commands.filter((command) => String(command.status ?? '').toLowerCase().includes('fail') || (command.exitCode ?? 0) !== 0).length;
   return (
     <section className="panel grow terminal-panel">
       <div className="review-pane-header">
@@ -255,13 +271,89 @@ function TerminalTab({ commands, focusedCard }: { commands: TimelineCard[]; focu
         </div>
         <button className="small ghost" disabled title="Requires process control">Clear</button>
       </div>
+      <div className="terminal-metrics">
+        <div><span>Runs</span><strong>{commands.length}</strong></div>
+        <div><span>Failed</span><strong>{failedCount}</strong></div>
+        <div><span>Focused</span><strong>{focusedCommand?.status ?? 'none'}</strong></div>
+      </div>
       {commands.length === 0 ? <div className="empty">No command executions yet.</div> : null}
       {commands.length > 0 ? (
         <div className="command-run-list">
-          {commands.map((command) => <button key={command.id} className={`command-run-row ${command.status ?? ''} ${command.id === focusedCommand?.id ? 'active' : ''}`}><span>{command.command ?? command.title}</span><span>{command.status ?? 'ready'}</span></button>)}
+          {commands.map((command) => (
+            <button key={command.id} className={`command-run-row ${command.status ?? ''} ${command.id === focusedCommand?.id ? 'active' : ''}`} onClick={() => onFocusCard?.(command.id)}>
+              <span>{command.command ?? command.title}</span>
+              <span>{command.status ?? 'ready'}</span>
+            </button>
+          ))}
         </div>
       ) : null}
       {focusedCommand ? <FocusedCard card={focusedCommand} /> : null}
+    </section>
+  );
+}
+
+function BrowserTab({ cards, project, health }: { cards: TimelineCard[]; project?: Project; health?: ServerHealth }) {
+  const [selectedUrl, setSelectedUrl] = useState('');
+  const targets = browserTargets(cards, health);
+  const activeTarget = targets.find((target) => target.url === selectedUrl) ?? targets[0];
+
+  return (
+    <section className="panel grow browser-panel">
+      <div className="review-pane-header">
+        <div>
+          <div className="section-title">Browser</div>
+          <div className="panel-title">Preview surface</div>
+        </div>
+        {activeTarget ? <a className="small browser-open-link" href={activeTarget.url} target="_blank" rel="noreferrer">Open</a> : null}
+      </div>
+
+      <div className="browser-context-card">
+        <div>
+          <span>Project</span>
+          <strong>{project?.name ?? 'No project'}</strong>
+        </div>
+        <div>
+          <span>Runtime</span>
+          <strong>{health?.appServer ?? 'unknown'}</strong>
+        </div>
+        <div>
+          <span>Deploy</span>
+          <strong>{health?.huggingFace?.enabled ? 'Hugging Face' : 'local/self-hosted'}</strong>
+        </div>
+      </div>
+
+      {targets.length > 0 ? (
+        <div className="browser-target-list">
+          {targets.map((target) => (
+            <button key={target.id} className={`browser-target-row ${target.url === activeTarget?.url ? 'active' : ''}`} onClick={() => setSelectedUrl(target.url)}>
+              <span>
+                <strong>{target.title}</strong>
+                <small>{target.subtitle}</small>
+              </span>
+              <code>{target.kind}</code>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="empty">
+          No browser preview URL has been captured yet. Start a dev server from a thread; localhost or HTTPS URLs printed by commands will appear here.
+        </div>
+      )}
+
+      {activeTarget ? (
+        <div className="browser-preview-card">
+          <div className="browser-url-row">
+            <code title={activeTarget.url}>{activeTarget.url}</code>
+            <span>{activeTarget.source}</span>
+          </div>
+          <iframe
+            className="browser-preview-frame"
+            title={`Preview: ${activeTarget.title}`}
+            src={activeTarget.url}
+            sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
+          />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -327,9 +419,27 @@ function FileTree(props: { node: FileTreeNode; level: number; selectedPath?: str
   );
 }
 
-function GitTab(props: { status?: GitStatusSummary; loading: boolean; error?: string; onRefresh?: () => void }) {
+function GitTab(props: {
+  status?: GitStatusSummary;
+  diff?: GitDiffResult;
+  selectedPath?: string;
+  loading: boolean;
+  actionBusy: boolean;
+  actionMessage?: string;
+  error?: string;
+  onRefresh?: () => void;
+  onSelectFile?: (path: string, cached?: boolean) => void;
+  onStage?: (paths: string[]) => void;
+  onUnstage?: (paths: string[]) => void;
+  onCommit?: (message: string) => void;
+}) {
+  const [commitMessage, setCommitMessage] = useState('');
   const status = props.status;
   const grouped = groupGitFiles(status?.files ?? []);
+  const files = status?.files ?? [];
+  const stageablePaths = files.filter(canStageFile).map((file) => file.path);
+  const stagedPaths = files.filter(canUnstageFile).map((file) => file.path);
+  const hasStagedChanges = stagedPaths.length > 0;
   return (
     <section className="panel grow git-panel">
       <div className="review-pane-header">
@@ -340,6 +450,7 @@ function GitTab(props: { status?: GitStatusSummary; loading: boolean; error?: st
         <button className="small ghost" disabled={props.loading || !props.onRefresh} onClick={props.onRefresh}>{props.loading ? 'Loading…' : 'Refresh'}</button>
       </div>
       {props.error ? <div className="error-line">{props.error}</div> : null}
+      {props.actionMessage ? <div className="success-line">{props.actionMessage}</div> : null}
       {!status ? <div className="empty">Git status has not loaded.</div> : null}
       {status && !status.isRepo ? <div className="empty">This project is not a Git repository, or Git status failed: {status.error ?? 'unknown error'}</div> : null}
       {status?.isRepo ? (
@@ -350,28 +461,65 @@ function GitTab(props: { status?: GitStatusSummary; loading: boolean; error?: st
             <div><span>Ahead</span><strong>{status.ahead ?? 0}</strong></div>
             <div><span>Behind</span><strong>{status.behind ?? 0}</strong></div>
           </div>
-          <div className="review-actions-row">
-            <button className="small ghost" disabled title="Stage integration is intentionally not enabled yet">Stage selected</button>
-            <button className="small ghost" disabled title="Revert integration is intentionally not enabled yet">Revert selected</button>
-            <button className="small ghost" disabled title="Commit integration is intentionally not enabled yet">Commit</button>
+          <div className="git-action-bar">
+            <button className="small ghost" disabled={props.actionBusy || stageablePaths.length === 0 || !props.onStage} onClick={() => props.onStage?.(stageablePaths)}>Stage all</button>
+            <button className="small ghost" disabled={props.actionBusy || stagedPaths.length === 0 || !props.onUnstage} onClick={() => props.onUnstage?.(stagedPaths)}>Unstage all</button>
           </div>
           {status.files.length === 0 ? <div className="empty">Working tree clean.</div> : null}
           {Object.entries(grouped).map(([label, files]) => files.length ? (
             <div key={label} className="git-group">
               <div className="section-title">{label}</div>
               {files.map((file) => (
-                <div key={`${file.index}:${file.workingTree}:${file.path}`} className="git-file-row">
+                <div
+                  key={`${file.index}:${file.workingTree}:${file.path}`}
+                  className={`git-file-row ${props.selectedPath === file.path ? 'active' : ''}`}
+                >
                   <span className={`git-status status-${file.status}`}>{file.index}{file.workingTree}</span>
-                  <span>{file.path}</span>
-                  <code>{file.status}</code>
+                  <button className="git-file-main" onClick={() => props.onSelectFile?.(file.path, canUnstageFile(file) && !canStageFile(file))}>{file.path}</button>
+                  <span className="git-row-actions">
+                    {canStageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onStage} onClick={() => props.onStage?.([file.path])}>Stage</button> : null}
+                    {canUnstageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onUnstage} onClick={() => props.onUnstage?.([file.path])}>Unstage</button> : null}
+                    <code>{file.status}</code>
+                  </span>
                 </div>
               ))}
             </div>
           ) : null)}
+          <div className="git-diff-preview">
+            <div className="review-pane-header compact">
+              <div>
+                <div className="section-title">Diff preview</div>
+                <div className="panel-title">{props.diff?.path ?? props.selectedPath ?? 'Select a file'}</div>
+              </div>
+              {props.diff?.cached ? <span className="branch-chip">staged</span> : null}
+            </div>
+            {props.loading ? <div className="empty">Loading diff...</div> : null}
+            {!props.loading && props.diff?.diff ? <DiffBlock diff={props.diff.diff} /> : null}
+            {!props.loading && props.selectedPath && !props.diff?.diff ? <div className="empty">No diff available for the selected file.</div> : null}
+            {!props.selectedPath ? <div className="empty">Select a changed file to preview its diff.</div> : null}
+          </div>
+          <div className="git-commit-box">
+            <div>
+              <div className="section-title">Commit</div>
+              <div className="subtle">Commits staged changes in the active project. Push and PR are planned for the next phase.</div>
+            </div>
+            <textarea value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Commit message" rows={3} />
+            <button className="small primary" disabled={props.actionBusy || !hasStagedChanges || !commitMessage.trim() || !props.onCommit} onClick={() => props.onCommit?.(commitMessage)}>
+              {props.actionBusy ? 'Working...' : 'Commit staged changes'}
+            </button>
+          </div>
         </>
       ) : null}
     </section>
   );
+}
+
+function canStageFile(file: GitStatusSummary['files'][number]): boolean {
+  return file.status === 'untracked' || file.workingTree.trim() !== '';
+}
+
+function canUnstageFile(file: GitStatusSummary['files'][number]): boolean {
+  return file.index.trim() !== '' && file.index !== '?';
 }
 
 function groupGitFiles(files: GitStatusSummary['files']): Record<string, GitStatusSummary['files']> {
@@ -398,137 +546,57 @@ function formatBytes(size: number): string {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function ArtifactsTab({ cards, project }: { cards: TimelineCard[]; project?: Project }) {
-  const files = cards.filter((card) => card.kind === 'fileChange');
-  const summaries = cards.filter((card) => card.kind === 'agent' || card.kind === 'plan').slice(-4).reverse();
+function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; project?: Project; onFocusCard?: (cardId: string) => void }) {
+  const artifacts = cards
+    .filter((card) => card.kind === 'fileChange' || card.kind === 'agent' || card.kind === 'plan' || (card.kind === 'command' && (card.stdout || card.stderr)))
+    .slice(-12)
+    .reverse();
+  const [selectedId, setSelectedId] = useState('');
+  const selected = artifacts.find((artifact) => artifact.id === selectedId) ?? artifacts[0];
   return (
     <section className="panel grow artifacts-panel">
-      <div className="section-title">Artifacts</div>
+      <div className="review-pane-header">
+        <div>
+          <div className="section-title">Artifacts</div>
+          <div className="panel-title">Thread outputs</div>
+        </div>
+        <span className="side-panel-count">{artifacts.length} items</span>
+      </div>
+
       <div className="artifact-preview-card">
         <div className="artifact-icon"><Icon name="panel" size={17} /></div>
         <div>
-          <strong>{project?.name ?? 'Project'}</strong>
-          <p>Generated previews can be mounted here once file preview routes are added.</p>
+          <strong>{project?.name ?? 'Project'} output shelf</strong>
+          <p>Files, diffs, command logs, and agent summaries from this thread stay here so the timeline remains review-focused.</p>
         </div>
       </div>
-      <div className="section-title">Recent files</div>
-      {files.length === 0 ? <div className="empty">No generated file previews yet.</div> : null}
-      {files.map((file) => <div key={file.id} className="artifact-file-row"><span>{file.filePath ?? file.title}</span><code>{diffStats(file.diff).label}</code></div>)}
-      <div className="section-title">Summaries</div>
-      {summaries.map((summary) => <article key={summary.id} className="summary-card"><strong>{summary.title}</strong>{summary.text ? <p>{summary.text}</p> : null}</article>)}
-    </section>
-  );
-}
 
-function SkillsTab(props: { skills: SkillSummary[]; loading: boolean; onRefresh?: () => void }) {
-  return (
-    <section className="panel grow skills-panel">
-      <div className="pane-header">
-        <div>
-          <div className="section-title">Skills</div>
-          <div className="subtle">Available to the active project through app-server.</div>
-        </div>
-        <button className="small ghost" onClick={props.onRefresh} disabled={props.loading || !props.onRefresh}>{props.loading ? 'Loading…' : 'Reload'}</button>
-      </div>
-      {props.skills.length === 0 ? <div className="empty">No skills returned for this project.</div> : null}
-      <div className="skill-table">
-        {props.skills.map((skill) => (
-          <article key={skill.id} className={`skill-row ${skill.enabled === false ? 'disabled' : ''}`}>
-            <span className="skill-row-icon"><Icon name="spark" size={15} /></span>
-            <div>
-              <strong>{skill.name}</strong>
-              {skill.description ? <p>{skill.description}</p> : null}
-            </div>
-            <span className="skill-scope">{skill.scope ?? skill.source ?? 'Personal'}</span>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-
-function AgentsTab(props: { agents: AgentSummary[]; loading: boolean; onRefresh?: () => void }) {
-  const repoAgents = props.agents.filter((agent) => agent.scope === 'repo');
-  const userAgents = props.agents.filter((agent) => agent.scope !== 'repo');
-  return (
-    <section className="panel grow agents-panel">
-      <div className="pane-header">
-        <div>
-          <div className="section-title">Custom agents</div>
-          <div className="subtle">Discovered from ~/.codex/agents and project .codex/agents.</div>
-        </div>
-        <button className="small ghost" onClick={props.onRefresh} disabled={props.loading || !props.onRefresh}>{props.loading ? 'Loading…' : 'Reload'}</button>
-      </div>
-      {props.agents.length === 0 ? <div className="empty">No custom agents found. Built-in agents such as explorer and worker can still be requested in natural language.</div> : null}
-      <AgentGroup title="Project agents" agents={repoAgents} />
-      <AgentGroup title="User agents" agents={userAgents} />
-      <div className="agent-help-card">
-        <strong>Composer shortcut</strong>
-        <p>Type <code>#</code> in the composer to pick one of these agents. Codex-Platform prefixes the next turn with a direct delegation request.</p>
-      </div>
-    </section>
-  );
-}
-
-function AgentGroup({ title, agents }: { title: string; agents: AgentSummary[] }) {
-  if (!agents.length) return null;
-  return (
-    <div className="agent-group">
-      <div className="section-title">{title}</div>
-      {agents.map((agent) => (
-        <article key={agent.id} className="agent-card">
-          <div className="agent-card-head">
-            <span className="agent-avatar"><Icon name="agent" size={15} /></span>
-            <div>
-              <strong>{agent.name}</strong>
-              {agent.aliases?.length ? <span className="agent-aliases">{agent.aliases.join(', ')}</span> : null}
-            </div>
-            <span className="skill-scope">{agent.scope ?? 'agent'}</span>
+      {artifacts.length === 0 ? <div className="empty">No artifacts have been produced in this thread yet.</div> : null}
+      {artifacts.length > 0 ? (
+        <div className="artifact-workbench">
+          <div className="artifact-list">
+            {artifacts.map((artifact) => (
+              <button key={artifact.id} className={`artifact-file-row ${artifact.id === selected?.id ? 'active' : ''}`} onClick={() => setSelectedId(artifact.id)}>
+                <span>
+                  <strong>{artifact.filePath ?? artifact.title}</strong>
+                  <small>{artifactSubtitle(artifact)}</small>
+                </span>
+                <code>{artifactKind(artifact)}</code>
+              </button>
+            ))}
           </div>
-          {agent.description ? <p>{agent.description}</p> : null}
-          <div className="agent-meta-row">
-            {agent.model ? <code>{agent.model}</code> : null}
-            {agent.effort ? <code>{agent.effort}</code> : null}
-            {agent.sandbox ? <code>{agent.sandbox}</code> : null}
-            {agent.hasDeveloperInstructions ? <code>instructions</code> : null}
-          </div>
-          {agent.path ? <code className="agent-path" title={agent.path}>{agent.path}</code> : null}
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function SettingsTab(props: { health?: ServerHealth; codexWebConfig?: CodexWebConfig; account?: AccountSummary; notificationsEnabled: boolean; notificationsSupported: boolean; onToggleNotifications?: (enabled: boolean) => void }) {
-  return (
-    <section className="panel grow">
-      <div className="section-title">Runtime settings</div>
-      <div className="kv"><span>Auth</span><strong>{props.codexWebConfig?.authRequired ? 'required' : 'not required'}</strong></div>
-      <div className="kv"><span>Mode</span><strong>{props.codexWebConfig?.demoMode ? 'demo' : 'real app-server'}</strong></div>
-      <div className="kv"><span>Runtime</span><strong>{props.health?.appServer ?? 'unknown'}</strong></div>
-      <div className="kv"><span>Deploy target</span><strong>{props.health?.huggingFace?.enabled ? 'Hugging Face Space' : 'self-hosted'}</strong></div>
-      {props.health?.huggingFace?.spaceHost ? <div className="kv"><span>Space host</span><code>{props.health.huggingFace.spaceHost}</code></div> : null}
-      {props.health?.codexHome ? <div className="kv"><span>Codex home</span><code>{props.health.codexHome}</code></div> : null}
-      <div className="kv"><span>Account</span><strong>{props.account?.email ?? props.account?.mode ?? '—'}</strong></div>
-      <div className="kv"><span>Approval</span><code>{props.codexWebConfig?.defaultApprovalPolicy ?? '—'}</code></div>
-      <div className="kv"><span>Sandbox</span><code>{props.codexWebConfig?.defaultSandbox ?? '—'}</code></div>
-      <div className="kv"><span>Default model</span><code>{props.codexWebConfig?.defaultModel ?? 'Codex default'}</code></div>
-      <div className="settings-toggle-row">
-        <div>
-          <strong>Browser approval notifications</strong>
-          <span>Useful when supervising long running agents from another tab or device.</span>
-        </div>
-        <button disabled={!props.notificationsSupported || !props.onToggleNotifications} onClick={() => props.onToggleNotifications?.(!props.notificationsEnabled)}>
-          {props.notificationsEnabled ? 'Enabled' : 'Enable'}
-        </button>
-      </div>
-      <div className="kv"><span>Workspace</span><code>{props.health?.workspaceRoot ?? '—'}</code></div>
-      <div className="kv"><span>Data dir</span><code>{props.health?.dataDir ?? '—'}</code></div>
-      {props.health?.allowedWorkspaceRoots?.length ? (
-        <div className="settings-list">
-          <div className="section-title">Allowed project roots</div>
-          {props.health.allowedWorkspaceRoots.map((root) => <code key={root}>{root}</code>)}
+          {selected ? (
+            <div className="artifact-detail">
+              <div className="artifact-detail-head">
+                <div>
+                  <div className="section-title">{artifactKind(selected)}</div>
+                  <div className="panel-title">{selected.filePath ?? selected.title}</div>
+                </div>
+                <button className="small ghost" onClick={() => onFocusCard?.(selected.id)}>Focus</button>
+              </div>
+              <FocusedCard card={selected} />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -583,10 +651,8 @@ function tabLabel(tab: InspectorTab): string {
     case 'files': return 'Files';
     case 'git': return 'Git';
     case 'terminal': return 'Terminal';
+    case 'browser': return 'Browser';
     case 'artifacts': return 'Artifacts';
-    case 'skills': return 'Skills';
-    case 'agents': return 'Agents';
-    case 'settings': return 'Settings';
     case 'raw': return 'Raw';
   }
 }
@@ -596,7 +662,9 @@ function tabTitle(tab: InspectorTab): string {
   if (tab === 'files') return 'Project files';
   if (tab === 'git') return 'Git explorer';
   if (tab === 'terminal') return 'Terminal and actions';
-  if (tab === 'artifacts') return 'Sidebar and artifacts';
+  if (tab === 'browser') return 'Browser preview';
+  if (tab === 'artifacts') return 'Artifacts and previews';
+  if (tab === 'raw') return 'Raw debug';
   return tabLabel(tab);
 }
 
@@ -615,4 +683,90 @@ function diffStats(diff?: string): { added: number; removed: number; label: stri
     if (line.startsWith('-')) removed += 1;
   }
   return { added, removed, label: `+${added} −${removed}` };
+}
+
+type BrowserTarget = {
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
+  source: string;
+  kind: 'local' | 'remote' | 'space';
+};
+
+function browserTargets(cards: TimelineCard[], health?: ServerHealth): BrowserTarget[] {
+  const seen = new Set<string>();
+  const targets: BrowserTarget[] = [];
+
+  const push = (target: BrowserTarget) => {
+    if (seen.has(target.url)) return;
+    seen.add(target.url);
+    targets.push(target);
+  };
+
+  if (health?.huggingFace?.publicUrl) {
+    push({
+      id: `hf:${health.huggingFace.publicUrl}`,
+      title: 'Hugging Face Space',
+      subtitle: health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured Space target',
+      url: health.huggingFace.publicUrl,
+      source: 'runtime health',
+      kind: 'space'
+    });
+  } else if (health?.huggingFace?.spaceHost) {
+    const url = `https://${health.huggingFace.spaceHost}`;
+    push({
+      id: `hf:${url}`,
+      title: 'Hugging Face Space',
+      subtitle: health.huggingFace.spaceId ?? health.huggingFace.spaceHost,
+      url,
+      source: 'runtime health',
+      kind: 'space'
+    });
+  }
+
+  for (const card of [...cards].reverse()) {
+    if (card.kind !== 'command') continue;
+    for (const url of extractUrls([card.command, card.stdout, card.stderr, card.text].filter(Boolean).join('\n'))) {
+      push({
+        id: `${card.id}:${url}`,
+        title: localUrlLabel(url),
+        subtitle: card.command ?? card.title,
+        url,
+        source: `command ${card.id}`,
+        kind: isLocalUrl(url) ? 'local' : 'remote'
+      });
+    }
+  }
+
+  return targets.slice(0, 8);
+}
+
+function extractUrls(value: string): string[] {
+  const matches = value.match(/\bhttps?:\/\/[^\s<>"'`]+/g) ?? [];
+  return matches.map((url) => url.replace(/[),.;\]]+$/, '')).filter((url, index, all) => all.indexOf(url) === index);
+}
+
+function isLocalUrl(url: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?\b/i.test(url);
+}
+
+function localUrlLabel(url: string): string {
+  if (!isLocalUrl(url)) return new URL(url).hostname;
+  const parsed = new URL(url);
+  return parsed.port ? `Local preview :${parsed.port}` : 'Local preview';
+}
+
+function artifactKind(card: TimelineCard): string {
+  if (card.kind === 'fileChange') return 'diff';
+  if (card.kind === 'command') return 'terminal log';
+  if (card.kind === 'plan') return 'plan';
+  if (card.kind === 'agent') return 'summary';
+  return card.kind;
+}
+
+function artifactSubtitle(card: TimelineCard): string {
+  if (card.kind === 'fileChange') return diffStats(card.diff).label;
+  if (card.kind === 'command') return card.exitCode === null || card.exitCode === undefined ? card.status ?? 'command output' : `exit ${card.exitCode}`;
+  return card.status ?? card.kind;
 }

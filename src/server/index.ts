@@ -14,7 +14,7 @@ import type { CodexBridge } from './codex/Bridge.js';
 import { DemoCodexBridge } from './codex/DemoCodexBridge.js';
 import { RealCodexBridge } from './codex/RealCodexBridge.js';
 import { readProjectFile, readProjectTree } from './workspace/files.js';
-import { readGitStatus } from './workspace/git.js';
+import { commitGitChanges, readGitDiff, readGitStatus, stageGitPaths, unstageGitPaths } from './workspace/git.js';
 
 assertSafeRuntimeConfig();
 if (config.huggingFace.autoCreateWorkspace || config.demoMode) {
@@ -290,6 +290,56 @@ app.get('/api/projects/:projectId/git/status', asyncRoute(async (req, res) => {
   if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
   const status = await readGitStatus(project.cwd, config.limits.gitCommandTimeoutMs);
   res.json(status);
+}));
+
+app.get('/api/projects/:projectId/git/diff', asyncRoute(async (req, res) => {
+  const project = registry.get(String(req.params.projectId));
+  if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  const filePath = typeof req.query.path === 'string' && req.query.path ? req.query.path : undefined;
+  const cached = String(req.query.cached ?? '').toLowerCase() === 'true';
+  try {
+    const diff = await readGitDiff(project.cwd, { filePath, cached }, config.limits.gitCommandTimeoutMs);
+    res.json(diff);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(400).json({ error: message });
+  }
+}));
+
+app.post('/api/projects/:projectId/git/stage', asyncRoute(async (req, res) => {
+  const project = registry.get(String(req.params.projectId));
+  if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  try {
+    const result = await stageGitPaths(project.cwd, req.body?.paths, config.limits.gitCommandTimeoutMs);
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(400).json({ error: message });
+  }
+}));
+
+app.post('/api/projects/:projectId/git/unstage', asyncRoute(async (req, res) => {
+  const project = registry.get(String(req.params.projectId));
+  if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  try {
+    const result = await unstageGitPaths(project.cwd, req.body?.paths, config.limits.gitCommandTimeoutMs);
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(400).json({ error: message });
+  }
+}));
+
+app.post('/api/projects/:projectId/git/commit', asyncRoute(async (req, res) => {
+  const project = registry.get(String(req.params.projectId));
+  if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  try {
+    const result = await commitGitChanges(project.cwd, String(req.body?.message ?? ''), config.limits.gitCommandTimeoutMs);
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(400).json({ error: message });
+  }
 }));
 
 

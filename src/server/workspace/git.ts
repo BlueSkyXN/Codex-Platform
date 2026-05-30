@@ -1,8 +1,14 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { GitFileStatus, GitStatusSummary } from '../../shared/types.js';
+import path from 'node:path';
+import type { GitActionResult, GitDiffResult, GitFileStatus, GitStatusSummary } from '../../shared/types.js';
 
 const execFileAsync = promisify(execFile);
+
+type GitCommandResult = {
+  stdout: string;
+  stderr: string;
+};
 
 export async function readGitStatus(cwd: string, timeoutMs: number): Promise<GitStatusSummary> {
   try {
@@ -18,6 +24,54 @@ export async function readGitStatus(cwd: string, timeoutMs: number): Promise<Git
       error: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+export async function readGitDiff(cwd: string, input: { filePath?: string; cached?: boolean }, timeoutMs: number): Promise<GitDiffResult> {
+  const args = ['diff'];
+  if (input.cached) args.push('--cached');
+  if (input.filePath) args.push('--', safeGitPath(input.filePath));
+  const result = await runGit(cwd, args, timeoutMs);
+  return { path: input.filePath, cached: Boolean(input.cached), diff: result.stdout };
+}
+
+export async function stageGitPaths(cwd: string, paths: string[], timeoutMs: number): Promise<GitActionResult> {
+  const safePaths = safeGitPaths(paths);
+  const result = await runGit(cwd, ['add', '--', ...safePaths], timeoutMs);
+  return { ok: true, stdout: result.stdout, stderr: result.stderr, status: await readGitStatus(cwd, timeoutMs) };
+}
+
+export async function unstageGitPaths(cwd: string, paths: string[], timeoutMs: number): Promise<GitActionResult> {
+  const safePaths = safeGitPaths(paths);
+  const result = await runGit(cwd, ['restore', '--staged', '--', ...safePaths], timeoutMs);
+  return { ok: true, stdout: result.stdout, stderr: result.stderr, status: await readGitStatus(cwd, timeoutMs) };
+}
+
+export async function commitGitChanges(cwd: string, message: string, timeoutMs: number): Promise<GitActionResult> {
+  const trimmed = message.trim();
+  if (!trimmed) throw new Error('Commit message is required.');
+  const result = await runGit(cwd, ['commit', '-m', trimmed], timeoutMs);
+  return { ok: true, stdout: result.stdout, stderr: result.stderr, status: await readGitStatus(cwd, timeoutMs) };
+}
+
+async function runGit(cwd: string, args: string[], timeoutMs: number): Promise<GitCommandResult> {
+  const { stdout, stderr } = await execFileAsync('git', ['-C', cwd, ...args], {
+    timeout: timeoutMs,
+    maxBuffer: 4 * 1024 * 1024
+  });
+  return { stdout, stderr };
+}
+
+function safeGitPaths(paths: string[]): string[] {
+  if (!Array.isArray(paths) || paths.length === 0) throw new Error('At least one file path is required.');
+  return paths.map(safeGitPath);
+}
+
+function safeGitPath(filePath: string): string {
+  const value = String(filePath ?? '').trim();
+  if (!value) throw new Error('File path is required.');
+  if (path.isAbsolute(value)) throw new Error(`Git file path must be relative: ${value}`);
+  if (value.split(/[\\/]+/).includes('..')) throw new Error(`Git file path cannot contain '..': ${value}`);
+  return `:(literal)${value}`;
 }
 
 function parseGitStatus(stdout: string): GitStatusSummary {

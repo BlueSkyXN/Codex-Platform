@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { ApprovalDecision, ApprovalRequest, StartTurnRequest, ThreadSummary, UiEvent } from '../../shared/types.js';
 import type { CodexBridge } from './Bridge.js';
+import { renderTurnText } from './turnContext.js';
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,7 +52,7 @@ export class DemoCodexBridge extends EventEmitter implements CodexBridge {
 
   async startTurn(threadId: string, request: StartTurnRequest): Promise<unknown> {
     const turnId = `turn_demo_${++this.turnCounter}`;
-    void this.playDemoTurn(threadId, turnId, request.agent?.name ? `#${request.agent.name} ${request.text}` : request.text);
+    void this.playDemoTurn(threadId, turnId, renderTurnText(request));
     return { turn: { id: turnId, status: 'inProgress', items: [] } };
   }
 

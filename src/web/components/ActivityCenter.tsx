@@ -12,6 +12,7 @@ export function ActivityCenter(props: {
   onSelectThread: (threadId: string) => void | Promise<void>;
   onDecision: (requestId: string | number, decision: ApprovalDecision) => void;
   onOpenInspectorTab: (tab: InspectorTab) => void;
+  onFocusCard?: (card: TimelineCard) => void;
 }) {
   if (!props.open) return null;
   const activeThreads = props.threads
@@ -65,7 +66,7 @@ export function ActivityCenter(props: {
           <div className="activity-section-title row-title"><span>Recent events</span><button className="small ghost" onClick={() => props.onOpenInspectorTab('raw')}>Raw</button></div>
           {recentCards.length === 0 ? <div className="empty-mini">No events yet.</div> : null}
           {recentCards.map((card) => (
-            <button key={card.id} className="activity-event" onClick={() => props.onOpenInspectorTab(tabForCard(card))}>
+            <button key={card.id} className="activity-event" onClick={() => props.onFocusCard ? props.onFocusCard(card) : props.onOpenInspectorTab(tabForCard(card))}>
               <span className={`event-kind ${card.kind}`}><Icon name={kindIcon(card.kind)} size={13} /></span>
               <span><strong>{card.title}</strong><small>{card.status ?? card.kind}</small></span>
             </button>

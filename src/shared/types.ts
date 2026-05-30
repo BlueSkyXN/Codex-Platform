@@ -119,6 +119,19 @@ export type GitStatusSummary = {
   error?: string;
 };
 
+export type GitActionResult = {
+  ok: boolean;
+  stdout?: string;
+  stderr?: string;
+  status: GitStatusSummary;
+};
+
+export type GitDiffResult = {
+  path?: string;
+  cached?: boolean;
+  diff: string;
+};
+
 
 export type AgentSummary = {
   id: string;
@@ -135,6 +148,20 @@ export type AgentSummary = {
   raw?: unknown;
 };
 
+export type TurnContextAttachmentKind = 'file' | 'folder' | 'gitStatus' | 'gitDiff' | 'terminal' | 'skill' | 'agent';
+
+export type TurnContextAttachment = {
+  id: string;
+  kind: TurnContextAttachmentKind;
+  title: string;
+  subtitle?: string;
+  path?: string;
+  content?: string;
+  truncated?: boolean;
+  metadata?: JsonRecord;
+  createdAt?: number;
+};
+
 export type AccountSummary = {
   authenticated?: boolean;
   mode?: string;
@@ -143,7 +170,9 @@ export type AccountSummary = {
   raw?: unknown;
 };
 
-export type InspectorTab = 'review' | 'plan' | 'diff' | 'files' | 'git' | 'terminal' | 'artifacts' | 'skills' | 'agents' | 'settings' | 'raw';
+export type InspectorTab = 'review' | 'plan' | 'diff' | 'files' | 'git' | 'terminal' | 'browser' | 'artifacts' | 'raw';
+
+export type ManagementTab = 'skills' | 'agents' | 'settings';
 
 export type UiEvent =
   | { type: 'connected'; serverTime: number; demoMode: boolean }
@@ -195,6 +224,7 @@ export type StartTurnRequest = {
     name: string;
     path?: string;
   };
+  context?: TurnContextAttachment[];
 };
 
 export type ServerHealth = {

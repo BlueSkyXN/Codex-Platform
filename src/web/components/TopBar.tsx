@@ -71,9 +71,6 @@ export function TopBar(props: {
         </button>
         {isRunning ? <button className="ghost compact-action icon-only stop-action" onClick={props.onInterrupt} disabled={props.busy} title="Interrupt" aria-label="Interrupt"><Icon name="stop" size={13} /></button> : null}
         <button className="ghost compact-action icon-only panel-toggle" onClick={toggleInspector} title={inspectorVisible ? 'Hide side panel' : 'Open review panel'} aria-label={inspectorVisible ? 'Hide side panel' : 'Open review panel'}><Icon name="panel" size={15} /></button>
-        <button className="ghost compact-action" disabled title="Requires Git integration">Open</button>
-        <button className="ghost compact-action" disabled title="Requires worktree handoff implementation">Hand off</button>
-        <button className="ghost compact-action" disabled title="Requires Git integration">Commit</button>
         {props.onLogout ? <button className="ghost compact-action" onClick={props.onLogout}>Lock</button> : null}
         <button className="ghost compact-action icon-only new-thread-action" onClick={props.onNewThread} disabled={props.busy || !props.project} title="New thread" aria-label="New thread"><Icon name="plus" size={15} /></button>
       </div>
