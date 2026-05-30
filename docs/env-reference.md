@@ -85,6 +85,13 @@ Public demo mode should not set Codex/OpenAI credentials. Real mode should use a
 
 GitHub Actions values are deployment and verification inputs. They are separate from HF runtime Variables and Secrets.
 
+## Runtime GitHub Status
+
+| Key | Required | Purpose |
+| --- | --- | --- |
+| `GITHUB_TOKEN` or `GH_TOKEN` | Optional | Server-side token for reading GitHub Actions status in the Release verification panel. Public repositories can often use unauthenticated reads; private repositories or tighter rate limits should use a token. |
+| `CODEX_PLATFORM_GITHUB_ACTIONS_TIMEOUT_MS` | Optional | Timeout for the GitHub Actions status request; defaults to `8000`. |
+
 ## Compatibility Aliases
 
 The app still accepts these legacy aliases:

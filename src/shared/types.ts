@@ -137,6 +137,33 @@ export type GitDiffResult = {
   diff: string;
 };
 
+export type GitHubActionsRun = {
+  id: number;
+  name: string;
+  status?: string;
+  conclusion?: string | null;
+  headSha?: string;
+  branch?: string;
+  event?: string;
+  htmlUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type GitHubActionsSummary = {
+  state: 'success' | 'pending' | 'failure' | 'unknown' | 'unavailable';
+  repo?: string;
+  branch?: string;
+  headSha?: string;
+  checkedSha?: string;
+  htmlUrl?: string;
+  totalRuns?: number;
+  matchedRuns?: number;
+  runs: GitHubActionsRun[];
+  error?: string;
+  fetchedAt: number;
+};
+
 
 export type AgentSummary = {
   id: string;

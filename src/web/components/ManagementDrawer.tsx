@@ -1,4 +1,4 @@
-import type { AccountSummary, AgentSummary, CodexWebConfig, GitStatusSummary, ManagementTab, ServerHealth, SkillSummary } from '../../shared/types.js';
+import type { AccountSummary, AgentSummary, CodexWebConfig, GitHubActionsSummary, GitStatusSummary, ManagementTab, ServerHealth, SkillSummary } from '../../shared/types.js';
 import { Icon } from './Icon.js';
 
 const managementTabs: ManagementTab[] = ['skills', 'agents', 'settings'];
@@ -14,6 +14,7 @@ export function ManagementDrawer(props: {
   agentsError?: string;
   account?: AccountSummary;
   health?: ServerHealth;
+  githubActions?: GitHubActionsSummary;
   gitStatus?: GitStatusSummary;
   codexWebConfig?: CodexWebConfig;
   notificationsEnabled: boolean;
@@ -47,6 +48,7 @@ export function ManagementDrawer(props: {
         {props.tab === 'settings' ? (
           <RuntimeSettings
             health={props.health}
+            githubActions={props.githubActions}
             gitStatus={props.gitStatus}
             codexWebConfig={props.codexWebConfig}
             account={props.account}
@@ -188,12 +190,13 @@ function CapabilityError(props: { message: string }) {
   );
 }
 
-function RuntimeSettings(props: { health?: ServerHealth; gitStatus?: GitStatusSummary; codexWebConfig?: CodexWebConfig; account?: AccountSummary; notificationsEnabled: boolean; notificationsSupported: boolean; onToggleNotifications?: (enabled: boolean) => void }) {
+function RuntimeSettings(props: { health?: ServerHealth; githubActions?: GitHubActionsSummary; gitStatus?: GitStatusSummary; codexWebConfig?: CodexWebConfig; account?: AccountSummary; notificationsEnabled: boolean; notificationsSupported: boolean; onToggleNotifications?: (enabled: boolean) => void }) {
   const buildSha = props.health?.build?.sha;
   const gitHead = props.gitStatus?.head;
   const upstreamHead = props.gitStatus?.upstreamHead;
   const sourceSynced = gitHead && upstreamHead ? gitHead === upstreamHead : undefined;
   const buildMatchesGit = buildSha && gitHead ? buildSha === gitHead : undefined;
+  const actionsState = props.githubActions ? githubActionsCheckState(props.githubActions) : undefined;
   return (
     <section className="management-panel">
       <div className="section-title">Runtime settings</div>
@@ -203,14 +206,16 @@ function RuntimeSettings(props: { health?: ServerHealth; gitStatus?: GitStatusSu
             <strong>Release verification</strong>
             <span>GitHub source, running build, and Space target evidence.</span>
           </div>
-          <span className={`release-state ${releaseState(sourceSynced, buildMatchesGit)}`}>{releaseStateLabel(sourceSynced, buildMatchesGit)}</span>
+          <span className={`release-state ${releaseState(sourceSynced, buildMatchesGit, actionsState)}`}>{releaseStateLabel(sourceSynced, buildMatchesGit, actionsState)}</span>
         </div>
         <div className="release-check-list">
           <ReleaseCheck label="GitHub source" value={gitHead ? shortSha(gitHead) : 'unknown'} detail={props.gitStatus?.remoteUrl ?? props.gitStatus?.upstream ?? 'No origin remote detected'} state={sourceSynced} />
           <ReleaseCheck label="Upstream sync" value={upstreamHead ? shortSha(upstreamHead) : 'unknown'} detail={sourceSynced === undefined ? 'No upstream HEAD available' : sourceSynced ? 'Local HEAD matches upstream' : 'Local HEAD differs from upstream'} state={sourceSynced} />
+          <ReleaseCheck label="GitHub Actions" value={githubActionsValue(props.githubActions)} detail={githubActionsDetail(props.githubActions)} state={actionsState} href={props.githubActions?.htmlUrl} />
           <ReleaseCheck label="Running build" value={buildSha ? shortSha(buildSha) : 'not pinned'} detail={buildMatchesGit === undefined ? 'Build SHA is only present in release images' : buildMatchesGit ? 'Build SHA matches local Git HEAD' : 'Build SHA differs from local Git HEAD'} state={buildMatchesGit} />
           <ReleaseCheck label="HF target" value={props.health?.huggingFace?.enabled ? 'configured' : 'self-hosted'} detail={props.health?.huggingFace?.publicUrl ?? props.health?.huggingFace?.spaceHost ?? 'No Hugging Face Space URL'} state={props.health?.huggingFace?.enabled ? true : undefined} />
         </div>
+        {props.githubActions?.runs.length ? <GitHubActionsRuns actions={props.githubActions} /> : null}
       </div>
       <div className="kv"><span>Auth</span><strong>{props.codexWebConfig?.authRequired ? 'required' : 'not required'}</strong></div>
       <div className="kv"><span>Mode</span><strong>{props.codexWebConfig?.demoMode ? 'demo' : 'real app-server'}</strong></div>
@@ -243,15 +248,29 @@ function RuntimeSettings(props: { health?: ServerHealth; gitStatus?: GitStatusSu
   );
 }
 
-function ReleaseCheck(props: { label: string; value: string; detail: string; state?: boolean }) {
+function ReleaseCheck(props: { label: string; value: string; detail: string; state?: boolean; href?: string }) {
   return (
     <div className="release-check">
       <span className={`release-dot ${props.state === undefined ? 'unknown' : props.state ? 'ok' : 'warn'}`} />
       <div>
         <strong>{props.label}</strong>
-        <code title={props.detail}>{props.value}</code>
+        {props.href ? <a href={props.href} target="_blank" rel="noreferrer" title={props.detail}>{props.value}</a> : <code title={props.detail}>{props.value}</code>}
         <small title={props.detail}>{props.detail}</small>
       </div>
+    </div>
+  );
+}
+
+function GitHubActionsRuns(props: { actions: GitHubActionsSummary }) {
+  return (
+    <div className="github-actions-runs" aria-label="GitHub Actions runs">
+      {props.actions.runs.slice(0, 4).map((run) => (
+        <a key={run.id} href={run.htmlUrl} target="_blank" rel="noreferrer" className={`github-actions-run ${githubActionsRunState(run)}`}>
+          <span>{run.name}</span>
+          <strong>{run.conclusion ?? run.status ?? 'unknown'}</strong>
+          <code>{run.headSha ? shortSha(run.headSha) : '-'}</code>
+        </a>
+      ))}
     </div>
   );
 }
@@ -260,17 +279,47 @@ function shortSha(value: string): string {
   return value.slice(0, 12);
 }
 
-function releaseState(sourceSynced?: boolean, buildMatchesGit?: boolean): string {
-  if (sourceSynced === false || buildMatchesGit === false) return 'warn';
-  if (sourceSynced === true && buildMatchesGit === true) return 'ok';
+function releaseState(sourceSynced?: boolean, buildMatchesGit?: boolean, actionsState?: boolean): string {
+  if (sourceSynced === false || buildMatchesGit === false || actionsState === false) return 'warn';
+  if (sourceSynced === true && buildMatchesGit === true && actionsState === true) return 'ok';
   return 'unknown';
 }
 
-function releaseStateLabel(sourceSynced?: boolean, buildMatchesGit?: boolean): string {
-  const state = releaseState(sourceSynced, buildMatchesGit);
+function releaseStateLabel(sourceSynced?: boolean, buildMatchesGit?: boolean, actionsState?: boolean): string {
+  const state = releaseState(sourceSynced, buildMatchesGit, actionsState);
   if (state === 'ok') return 'verified';
   if (state === 'warn') return 'attention';
   return 'partial';
+}
+
+function githubActionsCheckState(actions: GitHubActionsSummary): boolean | undefined {
+  if (actions.state === 'success') return true;
+  if (actions.state === 'failure') return false;
+  return undefined;
+}
+
+function githubActionsValue(actions?: GitHubActionsSummary): string {
+  if (!actions) return 'loading';
+  if (actions.state === 'success') return 'passing';
+  if (actions.state === 'failure') return 'failing';
+  if (actions.state === 'pending') return 'pending';
+  if (actions.state === 'unknown') return 'unknown';
+  return 'unavailable';
+}
+
+function githubActionsDetail(actions?: GitHubActionsSummary): string {
+  if (!actions) return 'GitHub Actions status has not loaded yet.';
+  if (actions.error) return actions.error;
+  const matched = actions.matchedRuns ?? 0;
+  const repo = actions.repo ? `${actions.repo}` : 'GitHub repository';
+  if (matched > 0) return `${matched} workflow run${matched === 1 ? '' : 's'} found for ${actions.checkedSha ? shortSha(actions.checkedSha) : 'current HEAD'} in ${repo}.`;
+  return `No matching workflow run found for ${actions.headSha ? shortSha(actions.headSha) : 'current HEAD'} in ${repo}.`;
+}
+
+function githubActionsRunState(run: GitHubActionsSummary['runs'][number]): string {
+  if (run.status !== 'completed') return 'pending';
+  if (run.conclusion === 'success' || run.conclusion === 'skipped' || run.conclusion === 'neutral') return 'success';
+  return 'failure';
 }
 
 function skillStats(skills: SkillSummary[]): { ready: number; attention: number; sources: number } {

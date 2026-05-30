@@ -7,6 +7,7 @@ import type {
   FileTreeNode,
   GitActionResult,
   GitDiffResult,
+  GitHubActionsSummary,
   GitStatusSummary,
   Project,
   ServerHealth,
@@ -86,6 +87,7 @@ export const api = {
   fileTree: (projectId: string, path = '', depth = 3) => request<{ tree: FileTreeNode }>(`/api/projects/${encodeURIComponent(projectId)}/files/tree?path=${encodeURIComponent(path)}&depth=${depth}`),
   fileRead: (projectId: string, path: string) => request<FileReadResult>(`/api/projects/${encodeURIComponent(projectId)}/files/read?path=${encodeURIComponent(path)}`),
   gitStatus: (projectId: string) => request<GitStatusSummary>(`/api/projects/${encodeURIComponent(projectId)}/git/status`),
+  githubActions: (projectId: string) => request<GitHubActionsSummary>(`/api/projects/${encodeURIComponent(projectId)}/github/actions`),
   gitDiff: (projectId: string, path?: string, cached = false) => {
     const params = new URLSearchParams();
     if (path) params.set('path', path);

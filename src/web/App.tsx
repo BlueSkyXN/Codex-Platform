@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react';
-import type { AccountSummary, AgentSummary, FileReadResult, FileTreeNode, GitDiffResult, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { AccountSummary, AgentSummary, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
 import { api, eventStreamUrl, getStoredToken, setStoredToken } from './lib/api.js';
 import { initialState, reduce } from './lib/reducer.js';
 import { normalizeAccount } from './lib/normalize.js';
@@ -42,6 +42,7 @@ export function App() {
   const [fileContent, setFileContent] = useState<FileReadResult | undefined>();
   const [gitStatus, setGitStatus] = useState<GitStatusSummary | undefined>();
   const [gitDiff, setGitDiff] = useState<GitDiffResult | undefined>();
+  const [githubActions, setGithubActions] = useState<GitHubActionsSummary | undefined>();
   const [selectedGitPath, setSelectedGitPath] = useState<string | undefined>();
   const [gitActionBusy, setGitActionBusy] = useState(false);
   const [gitActionMessage, setGitActionMessage] = useState<string | undefined>();
@@ -294,12 +295,19 @@ export function App() {
     setProjectPanelLoading(true);
     setProjectPanelError(undefined);
     try {
-      const [treeResult, gitResult] = await Promise.all([
+      const [treeResult, gitResult, actionsResult] = await Promise.all([
         api.fileTree(selectedProject.id, '', 3),
-        api.gitStatus(selectedProject.id)
+        api.gitStatus(selectedProject.id),
+        api.githubActions(selectedProject.id).catch((error): GitHubActionsSummary => ({
+          state: 'unavailable',
+          runs: [],
+          error: errorMessage(error),
+          fetchedAt: Date.now()
+        }))
       ]);
       setFileTree(treeResult.tree);
       setGitStatus(gitResult);
+      setGithubActions(actionsResult);
       setFileContent(undefined);
       const nextGitFile = gitResult.files.find((file) => file.path === selectedGitPath) ?? gitResult.files[0];
       setSelectedGitPath(nextGitFile?.path);
@@ -311,6 +319,7 @@ export function App() {
       }
     } catch (error) {
       setProjectPanelError(error instanceof Error ? error.message : String(error));
+      setGithubActions(undefined);
     } finally {
       setProjectPanelLoading(false);
     }
@@ -665,6 +674,7 @@ export function App() {
         agentsError={agentsError}
         account={account}
         health={health}
+        githubActions={githubActions}
         gitStatus={gitStatus}
         codexWebConfig={codexWebConfig}
         notificationsEnabled={notificationsEnabled}

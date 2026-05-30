@@ -134,6 +134,10 @@ export const config = {
     maxFileReadBytes: intAny(['CODEX_PLATFORM_MAX_FILE_READ_BYTES', 'CODEX_WEB_MAX_FILE_READ_BYTES'], 256 * 1024),
     gitCommandTimeoutMs: intAny(['CODEX_PLATFORM_GIT_TIMEOUT_MS', 'CODEX_WEB_GIT_TIMEOUT_MS'], 8_000)
   },
+  github: {
+    token: firstEnv('GITHUB_TOKEN', 'GH_TOKEN'),
+    actionsTimeoutMs: intAny(['CODEX_PLATFORM_GITHUB_ACTIONS_TIMEOUT_MS'], 8_000)
+  },
   persistence: {
     projectsFile: path.join(dataDir, 'projects.json'),
     snapshotFile: path.join(dataDir, 'snapshot.json'),
