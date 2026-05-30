@@ -654,6 +654,7 @@ export function App() {
         agentsLoading={agentsLoading}
         account={account}
         health={health}
+        gitStatus={gitStatus}
         codexWebConfig={codexWebConfig}
         notificationsEnabled={notificationsEnabled}
         notificationsSupported={typeof Notification !== 'undefined'}

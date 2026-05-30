@@ -112,6 +112,9 @@ export type GitStatusSummary = {
   isRepo: boolean;
   branch?: string;
   upstream?: string;
+  head?: string;
+  upstreamHead?: string;
+  remoteUrl?: string;
   ahead?: number;
   behind?: number;
   files: GitFileStatus[];

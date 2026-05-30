@@ -1,4 +1,4 @@
-import type { AccountSummary, AgentSummary, CodexWebConfig, ManagementTab, ServerHealth, SkillSummary } from '../../shared/types.js';
+import type { AccountSummary, AgentSummary, CodexWebConfig, GitStatusSummary, ManagementTab, ServerHealth, SkillSummary } from '../../shared/types.js';
 import { Icon } from './Icon.js';
 
 const managementTabs: ManagementTab[] = ['skills', 'agents', 'settings'];
@@ -12,6 +12,7 @@ export function ManagementDrawer(props: {
   agentsLoading?: boolean;
   account?: AccountSummary;
   health?: ServerHealth;
+  gitStatus?: GitStatusSummary;
   codexWebConfig?: CodexWebConfig;
   notificationsEnabled: boolean;
   notificationsSupported: boolean;
@@ -44,6 +45,7 @@ export function ManagementDrawer(props: {
         {props.tab === 'settings' ? (
           <RuntimeSettings
             health={props.health}
+            gitStatus={props.gitStatus}
             codexWebConfig={props.codexWebConfig}
             account={props.account}
             notificationsEnabled={props.notificationsEnabled}
@@ -136,10 +138,30 @@ function AgentGroup({ title, agents }: { title: string; agents: AgentSummary[] }
   );
 }
 
-function RuntimeSettings(props: { health?: ServerHealth; codexWebConfig?: CodexWebConfig; account?: AccountSummary; notificationsEnabled: boolean; notificationsSupported: boolean; onToggleNotifications?: (enabled: boolean) => void }) {
+function RuntimeSettings(props: { health?: ServerHealth; gitStatus?: GitStatusSummary; codexWebConfig?: CodexWebConfig; account?: AccountSummary; notificationsEnabled: boolean; notificationsSupported: boolean; onToggleNotifications?: (enabled: boolean) => void }) {
+  const buildSha = props.health?.build?.sha;
+  const gitHead = props.gitStatus?.head;
+  const upstreamHead = props.gitStatus?.upstreamHead;
+  const sourceSynced = gitHead && upstreamHead ? gitHead === upstreamHead : undefined;
+  const buildMatchesGit = buildSha && gitHead ? buildSha === gitHead : undefined;
   return (
     <section className="management-panel">
       <div className="section-title">Runtime settings</div>
+      <div className="release-verification-card">
+        <div className="release-card-head">
+          <div>
+            <strong>Release verification</strong>
+            <span>GitHub source, running build, and Space target evidence.</span>
+          </div>
+          <span className={`release-state ${releaseState(sourceSynced, buildMatchesGit)}`}>{releaseStateLabel(sourceSynced, buildMatchesGit)}</span>
+        </div>
+        <div className="release-check-list">
+          <ReleaseCheck label="GitHub source" value={gitHead ? shortSha(gitHead) : 'unknown'} detail={props.gitStatus?.remoteUrl ?? props.gitStatus?.upstream ?? 'No origin remote detected'} state={sourceSynced} />
+          <ReleaseCheck label="Upstream sync" value={upstreamHead ? shortSha(upstreamHead) : 'unknown'} detail={sourceSynced === undefined ? 'No upstream HEAD available' : sourceSynced ? 'Local HEAD matches upstream' : 'Local HEAD differs from upstream'} state={sourceSynced} />
+          <ReleaseCheck label="Running build" value={buildSha ? shortSha(buildSha) : 'not pinned'} detail={buildMatchesGit === undefined ? 'Build SHA is only present in release images' : buildMatchesGit ? 'Build SHA matches local Git HEAD' : 'Build SHA differs from local Git HEAD'} state={buildMatchesGit} />
+          <ReleaseCheck label="HF target" value={props.health?.huggingFace?.enabled ? 'configured' : 'self-hosted'} detail={props.health?.huggingFace?.publicUrl ?? props.health?.huggingFace?.spaceHost ?? 'No Hugging Face Space URL'} state={props.health?.huggingFace?.enabled ? true : undefined} />
+        </div>
+      </div>
       <div className="kv"><span>Auth</span><strong>{props.codexWebConfig?.authRequired ? 'required' : 'not required'}</strong></div>
       <div className="kv"><span>Mode</span><strong>{props.codexWebConfig?.demoMode ? 'demo' : 'real app-server'}</strong></div>
       <div className="kv"><span>Runtime</span><strong>{props.health?.appServer ?? 'unknown'}</strong></div>
@@ -169,6 +191,36 @@ function RuntimeSettings(props: { health?: ServerHealth; codexWebConfig?: CodexW
       ) : null}
     </section>
   );
+}
+
+function ReleaseCheck(props: { label: string; value: string; detail: string; state?: boolean }) {
+  return (
+    <div className="release-check">
+      <span className={`release-dot ${props.state === undefined ? 'unknown' : props.state ? 'ok' : 'warn'}`} />
+      <div>
+        <strong>{props.label}</strong>
+        <code title={props.detail}>{props.value}</code>
+        <small title={props.detail}>{props.detail}</small>
+      </div>
+    </div>
+  );
+}
+
+function shortSha(value: string): string {
+  return value.slice(0, 12);
+}
+
+function releaseState(sourceSynced?: boolean, buildMatchesGit?: boolean): string {
+  if (sourceSynced === false || buildMatchesGit === false) return 'warn';
+  if (sourceSynced === true && buildMatchesGit === true) return 'ok';
+  return 'unknown';
+}
+
+function releaseStateLabel(sourceSynced?: boolean, buildMatchesGit?: boolean): string {
+  const state = releaseState(sourceSynced, buildMatchesGit);
+  if (state === 'ok') return 'verified';
+  if (state === 'warn') return 'attention';
+  return 'partial';
 }
 
 function tabLabel(tab: ManagementTab): string {

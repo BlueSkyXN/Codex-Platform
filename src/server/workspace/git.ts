@@ -16,7 +16,16 @@ export async function readGitStatus(cwd: string, timeoutMs: number): Promise<Git
       timeout: timeoutMs,
       maxBuffer: 1024 * 1024
     });
-    return parseGitStatus(stdout);
+    const summary = parseGitStatus(stdout);
+    const [head, upstreamHead, remoteUrl] = await Promise.all([
+      runGitOptional(cwd, ['rev-parse', '--verify', 'HEAD'], timeoutMs),
+      runGitOptional(cwd, ['rev-parse', '--verify', '@{u}'], timeoutMs),
+      runGitOptional(cwd, ['remote', 'get-url', 'origin'], timeoutMs)
+    ]);
+    summary.head = head || undefined;
+    summary.upstreamHead = upstreamHead || undefined;
+    summary.remoteUrl = remoteUrl || undefined;
+    return summary;
   } catch (error) {
     return {
       isRepo: false,
@@ -59,6 +68,15 @@ async function runGit(cwd: string, args: string[], timeoutMs: number): Promise<G
     maxBuffer: 4 * 1024 * 1024
   });
   return { stdout, stderr };
+}
+
+async function runGitOptional(cwd: string, args: string[], timeoutMs: number): Promise<string> {
+  try {
+    const result = await runGit(cwd, args, timeoutMs);
+    return result.stdout.trim();
+  } catch {
+    return '';
+  }
 }
 
 function safeGitPaths(paths: string[]): string[] {

@@ -460,7 +460,15 @@ function GitTab(props: {
             <div><span>Upstream</span><strong>{status.upstream ?? '—'}</strong></div>
             <div><span>Ahead</span><strong>{status.ahead ?? 0}</strong></div>
             <div><span>Behind</span><strong>{status.behind ?? 0}</strong></div>
+            <div><span>HEAD</span><strong title={status.head}>{status.head ? shortSha(status.head) : '—'}</strong></div>
+            <div><span>Upstream SHA</span><strong title={status.upstreamHead}>{status.upstreamHead ? shortSha(status.upstreamHead) : '—'}</strong></div>
           </div>
+          {status.remoteUrl ? (
+            <div className="git-remote-row">
+              <span>Origin</span>
+              <code title={status.remoteUrl}>{status.remoteUrl}</code>
+            </div>
+          ) : null}
           <div className="git-action-bar">
             <button className="small ghost" disabled={props.actionBusy || stageablePaths.length === 0 || !props.onStage} onClick={() => props.onStage?.(stageablePaths)}>Stage all</button>
             <button className="small ghost" disabled={props.actionBusy || stagedPaths.length === 0 || !props.onUnstage} onClick={() => props.onUnstage?.(stagedPaths)}>Unstage all</button>
@@ -544,6 +552,10 @@ function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function shortSha(value: string): string {
+  return value.slice(0, 12);
 }
 
 function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; project?: Project; onFocusCard?: (cardId: string) => void }) {
