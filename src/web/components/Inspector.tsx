@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DiffBlock } from './DiffBlock.js';
 import { Icon } from './Icon.js';
-import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
@@ -19,6 +19,7 @@ export function Inspector(props: {
   gitStatus?: GitStatusSummary;
   gitDiff?: GitDiffResult;
   gitOperations?: GitOperationRecord[];
+  githubActions?: GitHubActionsSummary;
   rawEvents?: RawEventRecord[];
   selectedGitPath?: string;
   gitActionBusy?: boolean;
@@ -89,6 +90,8 @@ export function Inspector(props: {
           status={props.gitStatus}
           diff={props.gitDiff}
           operations={props.gitOperations ?? []}
+          githubActions={props.githubActions}
+          health={props.health}
           selectedPath={props.selectedGitPath}
           loading={Boolean(props.projectPanelLoading)}
           actionBusy={Boolean(props.gitActionBusy)}
@@ -562,6 +565,8 @@ function GitTab(props: {
   status?: GitStatusSummary;
   diff?: GitDiffResult;
   operations: GitOperationRecord[];
+  githubActions?: GitHubActionsSummary;
+  health?: ServerHealth;
   selectedPath?: string;
   loading: boolean;
   actionBusy: boolean;
@@ -582,6 +587,7 @@ function GitTab(props: {
   const stagedPaths = files.filter(canUnstageFile).map((file) => file.path);
   const hasStagedChanges = stagedPaths.length > 0;
   const shipInfo = status?.isRepo ? gitShipInfo(status) : undefined;
+  const releaseInfo = status?.isRepo ? gitReleaseInfo(status, props.health, props.githubActions) : undefined;
 
   async function copyPushCommand(command?: string) {
     if (!command) return;
@@ -643,6 +649,24 @@ function GitTab(props: {
               <div className="git-ship-links">
                 {shipInfo.compareUrl ? <a href={shipInfo.compareUrl} target="_blank" rel="noreferrer">Open compare</a> : null}
                 {shipInfo.repoUrl ? <a href={shipInfo.repoUrl} target="_blank" rel="noreferrer">Open repo</a> : null}
+              </div>
+            </div>
+          ) : null}
+          {releaseInfo ? (
+            <div className="git-ship-card git-release-card">
+              <div className="git-ship-head">
+                <div>
+                  <strong>Deployment evidence</strong>
+                  <span>{releaseInfo.detail}</span>
+                </div>
+                <span className={`ship-state ${releaseInfo.state}`}>{releaseInfo.label}</span>
+              </div>
+              <div className="git-ship-checks">
+                {releaseInfo.checks.map((check) => <ShipCheck key={check.label} label={check.label} value={check.value} state={check.state} />)}
+              </div>
+              <div className="git-ship-links">
+                {releaseInfo.actionsUrl ? <a href={releaseInfo.actionsUrl} target="_blank" rel="noreferrer">Open Actions</a> : null}
+                {releaseInfo.healthUrl ? <a href={releaseInfo.healthUrl} target="_blank" rel="noreferrer">Open healthz</a> : null}
               </div>
             </div>
           ) : null}
@@ -824,6 +848,71 @@ function gitShipInfo(status: GitStatusSummary): {
     compareUrl,
     repoUrl
   };
+}
+
+function gitReleaseInfo(status: GitStatusSummary, health?: ServerHealth, actions?: GitHubActionsSummary): {
+  state: 'ready' | 'review' | 'blocked';
+  label: string;
+  detail: string;
+  checks: Array<{ label: string; value: string; state: 'ok' | 'warn' | 'idle' }>;
+  actionsUrl?: string;
+  healthUrl?: string;
+} {
+  const buildSha = health?.build?.sha;
+  const sourceSha = status.head;
+  const buildMatchesHead = buildSha && sourceSha ? buildSha === sourceSha : undefined;
+  const actionsState = githubActionsShipState(actions);
+  const hfTarget = health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local';
+  const healthBaseUrl = health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : undefined);
+  const checks = [
+    { label: 'Actions', value: githubActionsShipLabel(actions), state: actionsState },
+    { label: 'Runtime build', value: buildSha ? shortSha(buildSha) : 'unversioned', state: buildSha ? 'ok' : 'idle' },
+    { label: 'Build vs HEAD', value: buildMatchesHead === undefined ? 'unknown' : buildMatchesHead ? 'match' : 'mismatch', state: buildMatchesHead === undefined ? 'idle' : buildMatchesHead ? 'ok' : 'warn' },
+    { label: 'HF target', value: hfTarget, state: health?.huggingFace?.enabled ? 'ok' : 'idle' }
+  ] satisfies Array<{ label: string; value: string; state: 'ok' | 'warn' | 'idle' }>;
+
+  if (actionsState === 'warn' || buildMatchesHead === false) {
+    return {
+      state: 'blocked',
+      label: 'attention',
+      detail: 'Post-push verification has a failing or mismatched signal.',
+      checks,
+      actionsUrl: actions?.htmlUrl,
+      healthUrl: healthBaseUrl ? `${healthBaseUrl.replace(/\/$/, '')}/healthz` : undefined
+    };
+  }
+  if (actionsState === 'ok' && buildMatchesHead === true && health?.huggingFace?.enabled) {
+    return {
+      state: 'ready',
+      label: 'verified',
+      detail: 'GitHub Actions, runtime build SHA, and HF target line up.',
+      checks,
+      actionsUrl: actions?.htmlUrl,
+      healthUrl: healthBaseUrl ? `${healthBaseUrl.replace(/\/$/, '')}/healthz` : undefined
+    };
+  }
+  return {
+    state: 'review',
+    label: 'partial',
+    detail: 'Use this after push to confirm Actions and HF runtime evidence.',
+    checks,
+    actionsUrl: actions?.htmlUrl,
+    healthUrl: healthBaseUrl ? `${healthBaseUrl.replace(/\/$/, '')}/healthz` : undefined
+  };
+}
+
+function githubActionsShipState(actions?: GitHubActionsSummary): 'ok' | 'warn' | 'idle' {
+  if (!actions || actions.state === 'unavailable' || actions.state === 'unknown') return 'idle';
+  if (actions.state === 'success') return 'ok';
+  return 'warn';
+}
+
+function githubActionsShipLabel(actions?: GitHubActionsSummary): string {
+  if (!actions) return 'loading';
+  if (actions.state === 'success') return 'passing';
+  if (actions.state === 'failure') return 'failing';
+  if (actions.state === 'pending') return 'pending';
+  return 'unknown';
 }
 
 function githubRemoteUrl(remote?: string): string | undefined {

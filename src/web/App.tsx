@@ -618,6 +618,7 @@ export function App() {
             gitStatus={gitStatus}
             gitDiff={gitDiff}
             gitOperations={selectedGitOperations}
+            githubActions={githubActions}
             rawEvents={state.rawEvents}
             selectedGitPath={selectedGitPath}
             gitActionBusy={gitActionBusy}
