@@ -73,7 +73,7 @@ export function TopBar(props: {
           <span aria-hidden="true">◷</span>
           {props.pendingApprovals ? <span className="top-badge">{props.pendingApprovals}</span> : null}
         </button>
-        {isRunning ? <button className="ghost compact-action" onClick={props.onInterrupt} disabled={props.busy}>Interrupt</button> : null}
+        {isRunning ? <button className="ghost compact-action stop-action" onClick={props.onInterrupt} disabled={props.busy} title="Interrupt" aria-label="Interrupt">■</button> : null}
         <button className="ghost compact-action panel-toggle" onClick={props.onToggleInspector} title={inspectorVisible ? 'Hide side panel' : 'Show side panel'} aria-label={inspectorVisible ? 'Hide side panel' : 'Show side panel'}>▤</button>
         <button className="ghost compact-action review-action" onClick={props.onOpenReview} title="Open review" aria-label="Open review">✓</button>
         <button className="ghost compact-action" disabled title="Requires Git integration">Open</button>

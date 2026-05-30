@@ -62,8 +62,8 @@ export function ThreadHeader(props: {
         <span className="metric">{commands} commands</span>
         <span className="metric">{fileChanges} files</span>
         {pendingApprovals > 0 ? <span className="metric attention">{pendingApprovals} approvals</span> : null}
-        <button className="compact-action" onClick={props.onInterrupt} disabled={!props.thread || props.busy || !running} title="Interrupt the current turn">
-          Interrupt
+        <button className="compact-action thread-stop-action stop-action" onClick={props.onInterrupt} disabled={!props.thread || props.busy || !running} title="Interrupt the current turn" aria-label="Interrupt the current turn">
+          ■
         </button>
       </div>
     </div>

@@ -7,6 +7,7 @@ const kindFilters: Array<'all' | TimelineCardKind> = ['all', 'agent', 'command',
 export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string; projectName?: string; onFocus: (cardId: string) => void }) {
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<'all' | TimelineCardKind>('all');
+  const [toolsOpen, setToolsOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const filteredCards = useMemo(() => {
@@ -23,6 +24,8 @@ export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string;
   }, [props.cards, query, kind]);
 
   const latestTurnId = props.cards.at(-1)?.turnId;
+  const filtersActive = query.trim().length > 0 || kind !== 'all';
+  const toolbarExpanded = toolsOpen || filtersActive;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -31,18 +34,23 @@ export function Timeline(props: { cards: TimelineCard[]; focusedCardId?: string;
   return (
     <div className="timeline-shell codex-timeline-shell">
       {props.cards.length > 0 ? (
-        <div className="timeline-toolbar codex-timeline-toolbar">
+        <div className={`timeline-toolbar codex-timeline-toolbar ${toolbarExpanded ? 'expanded' : 'collapsed'}`}>
           <div className="timeline-toolbar-main">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find in thread" />
-            <span className="timeline-count">{filteredCards.length}/{props.cards.length}</span>
+            <button className={`thread-tool-button ${toolbarExpanded ? 'active' : ''}`} onClick={() => setToolsOpen((value) => !value)} title="Find and filter thread" aria-label="Find and filter thread">⌕</button>
+            <span className="timeline-count">{filtersActive ? `${filteredCards.length}/${props.cards.length}` : `${props.cards.length} events`}</span>
           </div>
-          <div className="filter-row compact-filter-row">
-            {kindFilters.map((item) => (
-              <button key={item} className={`filter-chip ${kind === item ? 'active' : ''}`} onClick={() => setKind(item)}>
-                {item === 'all' ? 'All' : label(item)}
-              </button>
-            ))}
-          </div>
+          {toolbarExpanded ? (
+            <div className="timeline-filter-panel">
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find in thread" />
+              <div className="filter-row compact-filter-row">
+                {kindFilters.map((item) => (
+                  <button key={item} className={`filter-chip ${kind === item ? 'active' : ''}`} onClick={() => setKind(item)}>
+                    {item === 'all' ? 'All' : label(item)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

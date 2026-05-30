@@ -104,6 +104,10 @@ function ReviewTab(props: {
   const commands = props.cards.filter((card) => card.kind === 'command');
   const diffs = props.cards.filter((card) => card.kind === 'fileChange');
   const failedCommands = commands.filter((card) => String(card.status ?? '').includes('failed')).length;
+  const changedFiles = props.gitStatus?.files.length ?? diffs.length;
+  const status = props.thread?.status ?? 'ready';
+  const branch = props.gitStatus?.isRepo ? props.gitStatus.branch ?? 'HEAD' : 'not a git repo';
+  const account = props.account?.email ?? props.account?.mode ?? (props.account?.authenticated ? 'authenticated' : undefined);
   return (
     <>
       <section className="panel review-summary-panel">
@@ -112,25 +116,34 @@ function ReviewTab(props: {
             <div className="section-title">Review</div>
             <div className="panel-title">{props.thread?.name || props.thread?.preview || 'Current thread'}</div>
           </div>
-          <span className={`status ${props.thread?.status ?? 'idle'}`}>{props.thread?.status ?? 'ready'}</span>
+          <span className={`status ${props.thread?.status ?? 'idle'}`}>{status}</span>
         </div>
-        <div className="review-stats-grid">
-          <div><strong>{diffs.length}</strong><span>files</span></div>
-          <div><strong>{commands.length}</strong><span>commands</span></div>
-          <div><strong>{props.approvals.length}</strong><span>approvals</span></div>
-          <div><strong>{failedCommands}</strong><span>failed</span></div>
-        </div>
-        <div className="review-git-strip">
-          <span>{props.gitStatus?.isRepo ? props.gitStatus.branch ?? 'git repo' : 'not a git repo'}</span>
-          <span>{props.gitStatus?.files.length ?? 0} changed</span>
-          {props.gitStatus?.ahead ? <span>{props.gitStatus.ahead} ahead</span> : null}
-          {props.gitStatus?.behind ? <span>{props.gitStatus.behind} behind</span> : null}
+        <div className="review-plain-list">
+          <div className="review-plain-row">
+            <span>Changes</span>
+            <strong>{changedFiles} {changedFiles === 1 ? 'file' : 'files'}</strong>
+          </div>
+          <div className="review-plain-row">
+            <span>Commands</span>
+            <strong>{commands.length}</strong>
+          </div>
+          {props.approvals.length > 0 ? (
+            <div className="review-plain-row">
+              <span>Approvals</span>
+              <strong>{props.approvals.length}</strong>
+            </div>
+          ) : null}
+          {failedCommands > 0 ? (
+            <div className="review-plain-row">
+              <span>Failed</span>
+              <strong>{failedCommands}</strong>
+            </div>
+          ) : null}
         </div>
         <div className="review-actions-row">
           <button className="small primary" disabled={!props.onStartReview} onClick={props.onStartReview}>Start review</button>
-          <button className="small ghost" disabled title="Requires Git stage integration">Stage all</button>
-          <button className="small ghost" disabled title="Requires Git revert integration">Revert all</button>
-          <button className="small ghost" disabled title="Requires PR integration">Create PR</button>
+          {changedFiles > 0 ? <button className="small ghost" disabled title="Requires Git stage integration">Stage</button> : null}
+          {changedFiles > 0 ? <button className="small ghost" disabled title="Requires PR integration">Commit</button> : null}
         </div>
       </section>
 
@@ -138,17 +151,22 @@ function ReviewTab(props: {
       {!props.relatedApproval && props.approvals.length > 0 ? <ApprovalPanel approval={props.approvals[0]} onDecision={props.onDecision} /> : null}
 
       <section className="panel context-panel">
-        <div className="section-title">Context</div>
-        <div className="kv"><span>Project</span><strong>{props.project?.name ?? '—'}</strong></div>
-        <div className="kv"><span>Thread</span><code>{props.thread?.id ?? '—'}</code></div>
-        <div className="kv"><span>CWD</span><code title={props.project?.cwd}>{props.project?.cwd ?? '—'}</code></div>
-        {props.account ? <div className="kv"><span>Account</span><strong>{props.account.email ?? props.account.mode ?? (props.account.authenticated ? 'authenticated' : 'unknown')}</strong></div> : null}
+        <div className="section-title">Environment</div>
+        <div className="context-list">
+          <div className="context-row"><span>Project</span><strong>{props.project?.name ?? '-'}</strong></div>
+          <div className="context-row"><span>Mode</span><strong>Local</strong></div>
+          <div className="context-row"><span>Branch</span><strong>{branch}</strong></div>
+          <div className="context-row"><span>CWD</span><code title={props.project?.cwd}>{props.project?.cwd ?? '-'}</code></div>
+          {account ? <div className="context-row"><span>Account</span><strong>{account}</strong></div> : null}
+        </div>
       </section>
 
-      <section className="panel grow focused-panel">
-        <div className="section-title">Focused item</div>
-        {!props.card ? <div className="empty">No timeline item selected.</div> : <FocusedCard card={props.card} />}
-      </section>
+      {props.card ? (
+        <section className="panel grow focused-panel">
+          <div className="section-title">Focused item</div>
+          <FocusedCard card={props.card} />
+        </section>
+      ) : null}
 
       {props.errors.length ? (
         <section className="panel error-panel">

@@ -183,22 +183,22 @@ export function Composer(props: {
             <button className="send-orb" onClick={submit} disabled={props.disabled || !text.trim()} title="Send">↑</button>
           </div>
         </div>
-      </div>
 
-      <div className="mode-row">
-        {(['Local', 'Worktree', 'Cloud'] as Mode[]).map((item) => (
-          <button
-            key={item}
-            className={`mode-option ${mode === item ? 'active' : ''}`}
-            onClick={() => setMode(item)}
-            disabled={item !== 'Local'}
-            title={item === 'Local' ? 'Run in the current project directory' : `${item} mode needs workspace orchestration`}
-          >
-            {item}
-          </button>
-        ))}
-        <span className="mode-spacer" />
-        <span className="branch-chip">{sandboxLabel(sandbox)} · {approvalLabel(approvalPolicy)}</span>
+        <div className="mode-row">
+          {(['Local', 'Worktree', 'Cloud'] as Mode[]).map((item) => (
+            <button
+              key={item}
+              className={`mode-option ${mode === item ? 'active' : ''}`}
+              onClick={() => setMode(item)}
+              disabled={item !== 'Local'}
+              title={item === 'Local' ? 'Run in the current project directory' : `${item} mode needs workspace orchestration`}
+            >
+              {item}
+            </button>
+          ))}
+          <span className="mode-spacer" />
+          <span className="branch-chip">{sandboxLabel(sandbox)} · {approvalLabel(approvalPolicy)}</span>
+        </div>
       </div>
 
       <div className="composer-hint codex-composer-hint" aria-hidden="true" />
