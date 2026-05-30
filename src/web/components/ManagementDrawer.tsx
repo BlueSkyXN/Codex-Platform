@@ -22,6 +22,8 @@ export function ManagementDrawer(props: {
   onClose: () => void;
   onTabChange: (tab: ManagementTab) => void;
   onRefreshSkills?: () => void;
+  onUseSkill?: (skill: SkillSummary) => void;
+  onUseAgent?: (agent: AgentSummary) => void;
   onToggleNotifications?: (enabled: boolean) => void;
 }) {
   if (!props.open) return null;
@@ -43,8 +45,8 @@ export function ManagementDrawer(props: {
           ))}
         </nav>
 
-        {props.tab === 'skills' ? <SkillsRegistry skills={props.skills} loading={Boolean(props.skillsLoading)} error={props.skillsError} onRefresh={props.onRefreshSkills} /> : null}
-        {props.tab === 'agents' ? <AgentsRegistry agents={props.agents} loading={Boolean(props.agentsLoading)} error={props.agentsError} onRefresh={props.onRefreshSkills} /> : null}
+        {props.tab === 'skills' ? <SkillsRegistry skills={props.skills} loading={Boolean(props.skillsLoading)} error={props.skillsError} onRefresh={props.onRefreshSkills} onUseSkill={props.onUseSkill} /> : null}
+        {props.tab === 'agents' ? <AgentsRegistry agents={props.agents} loading={Boolean(props.agentsLoading)} error={props.agentsError} onRefresh={props.onRefreshSkills} onUseAgent={props.onUseAgent} /> : null}
         {props.tab === 'settings' ? (
           <RuntimeSettings
             health={props.health}
@@ -62,7 +64,7 @@ export function ManagementDrawer(props: {
   );
 }
 
-function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; error?: string; onRefresh?: () => void }) {
+function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; error?: string; onRefresh?: () => void; onUseSkill?: (skill: SkillSummary) => void }) {
   const stats = skillStats(props.skills);
   return (
     <section className="management-panel skills-panel">
@@ -92,10 +94,11 @@ function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; error
               {skill.diagnostic ? <p className="capability-diagnostic">{skill.diagnostic}</p> : null}
               {skill.path ? <code className="agent-path" title={skill.path}>{skill.path}</code> : null}
             </div>
-            <span className="capability-state-stack">
+            <div className="capability-state-stack">
               <span className={`capability-state ${capabilityState(skill)}`}>{capabilityStateLabel(capabilityState(skill))}</span>
               <span className="skill-scope">{skillScopeLabel(skill)}</span>
-            </span>
+              <button className="mini-action capability-use" disabled={skill.enabled === false || !props.onUseSkill} onClick={() => props.onUseSkill?.(skill)}>Use</button>
+            </div>
           </article>
         ))}
       </div>
@@ -103,7 +106,7 @@ function SkillsRegistry(props: { skills: SkillSummary[]; loading: boolean; error
   );
 }
 
-function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; error?: string; onRefresh?: () => void }) {
+function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; error?: string; onRefresh?: () => void; onUseAgent?: (agent: AgentSummary) => void }) {
   const repoAgents = props.agents.filter((agent) => agent.scope === 'repo');
   const userAgents = props.agents.filter((agent) => agent.scope !== 'repo');
   const stats = agentStats(props.agents);
@@ -125,8 +128,8 @@ function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; error
       />
       {props.error ? <CapabilityError message={props.error} /> : null}
       {props.agents.length === 0 ? <div className="empty">No custom agents found. Built-in agents such as explorer and worker can still be requested in natural language.</div> : null}
-      <AgentGroup title="Project agents" agents={repoAgents} />
-      <AgentGroup title="User agents" agents={userAgents} />
+      <AgentGroup title="Project agents" agents={repoAgents} onUseAgent={props.onUseAgent} />
+      <AgentGroup title="User agents" agents={userAgents} onUseAgent={props.onUseAgent} />
       <div className="agent-help-card">
         <strong>Composer shortcut</strong>
         <p>Type <code>#</code> in the composer to pick one of these agents. Codex-Platform prefixes the next turn with a direct delegation request.</p>
@@ -135,7 +138,7 @@ function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; error
   );
 }
 
-function AgentGroup({ title, agents }: { title: string; agents: AgentSummary[] }) {
+function AgentGroup({ title, agents, onUseAgent }: { title: string; agents: AgentSummary[]; onUseAgent?: (agent: AgentSummary) => void }) {
   if (!agents.length) return null;
   return (
     <div className="agent-group">
@@ -148,10 +151,11 @@ function AgentGroup({ title, agents }: { title: string; agents: AgentSummary[] }
               <strong>{agent.name}</strong>
               {agent.aliases?.length ? <span className="agent-aliases">{agent.aliases.join(', ')}</span> : null}
             </div>
-            <span className="capability-state-stack">
+            <div className="capability-state-stack">
               <span className={`capability-state ${capabilityState(agent)}`}>{capabilityStateLabel(capabilityState(agent))}</span>
               <span className="skill-scope">{agent.scope ?? 'agent'}</span>
-            </span>
+              <button className="mini-action capability-use" disabled={!onUseAgent} onClick={() => onUseAgent?.(agent)}>Use</button>
+            </div>
           </div>
           {agent.description ? <p>{agent.description}</p> : null}
           {agent.diagnostic ? <p className="capability-diagnostic">{agent.diagnostic}</p> : null}

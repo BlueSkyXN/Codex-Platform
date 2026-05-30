@@ -6,7 +6,7 @@ import { normalizeAccount } from './lib/normalize.js';
 import { Sidebar } from './components/Sidebar.js';
 import { Timeline } from './components/Timeline.js';
 import { Inspector } from './components/Inspector.js';
-import { Composer } from './components/Composer.js';
+import { Composer, type ComposerCapabilitySelection } from './components/Composer.js';
 import { TopBar } from './components/TopBar.js';
 import { ApprovalRail } from './components/ApprovalRail.js';
 import { ThreadHeader } from './components/ThreadHeader.js';
@@ -37,6 +37,7 @@ export function App() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const [managementTab, setManagementTab] = useState<ManagementTab>('skills');
+  const [composerCapabilitySelection, setComposerCapabilitySelection] = useState<ComposerCapabilitySelection | undefined>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => window.localStorage.getItem('codex-platform-notifications') === 'true');
   const [fileTree, setFileTree] = useState<FileTreeNode | undefined>();
   const [fileContent, setFileContent] = useState<FileReadResult | undefined>();
@@ -149,6 +150,11 @@ export function App() {
   function openManagementTab(tab: ManagementTab) {
     setManagementTab(tab);
     setManagementOpen(true);
+  }
+
+  function useComposerCapability(kind: ComposerCapabilitySelection['kind'], name: string) {
+    setComposerCapabilitySelection({ requestId: Date.now(), kind, name });
+    setManagementOpen(false);
   }
 
   function focusCard(cardId: string, openInspector = true, knownCard?: TimelineCard) {
@@ -591,6 +597,7 @@ export function App() {
             agentsLoading={agentsLoading}
             skillsError={skillsError}
             agentsError={agentsError}
+            capabilitySelection={composerCapabilitySelection}
             codexWebConfig={codexWebConfig}
             onReloadSkills={() => reloadSkills(true)}
             onReadFileContext={readProjectFileForContext}
@@ -689,6 +696,8 @@ export function App() {
         onClose={() => setManagementOpen(false)}
         onTabChange={setManagementTab}
         onRefreshSkills={() => reloadSkills(true)}
+        onUseSkill={(skill) => useComposerCapability('skill', skill.name)}
+        onUseAgent={(agent) => useComposerCapability('agent', agent.name)}
         onToggleNotifications={(enabled) => void toggleNotifications(enabled)}
       />
       <MobileDock

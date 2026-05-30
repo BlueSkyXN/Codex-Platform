@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
   AgentSummary,
   FileReadResult,
@@ -22,6 +22,7 @@ type ComposerOptions = Pick<StartTurnRequest, 'model' | 'effort' | 'sandbox' | '
   context?: TurnContextAttachment[];
 };
 type ContextFileOption = { node: FileTreeNode; depth: number };
+export type ComposerCapabilitySelection = { requestId: number; kind: 'skill' | 'agent'; name: string };
 
 const MAX_CONTEXT_CONTENT_CHARS = 36_000;
 
@@ -39,6 +40,7 @@ export function Composer(props: {
   agentsLoading?: boolean;
   skillsError?: string;
   agentsError?: string;
+  capabilitySelection?: ComposerCapabilitySelection;
   codexWebConfig?: CodexWebConfig;
   onReloadSkills: () => void;
   onReadFileContext?: (path: string) => Promise<FileReadResult>;
@@ -67,6 +69,29 @@ export function Composer(props: {
   const lastTerminalCard = terminalCards.at(-1);
   const fileOptions = useMemo(() => flattenTree(props.fileTree).filter((item) => item.node.path !== '.').slice(0, 18), [props.fileTree]);
   const showStarterPrompts = !text.trim() && contextAttachments.length === 0 && (props.cards?.length ?? 0) === 0;
+
+  useEffect(() => {
+    const selection = props.capabilitySelection;
+    if (!selection) return;
+
+    if (selection.kind === 'skill') {
+      const skill = props.skills.find((item) => item.name === selection.name);
+      if (!skill || skill.enabled === false) return;
+      setSelectedSkillName(skill.name);
+      attachContext(skillAttachment(skill));
+      setText((current) => ensureCapabilityToken(current, `$${skill.name}`));
+    } else {
+      const agent = agents.find((item) => item.name === selection.name);
+      if (!agent) return;
+      setSelectedAgentName(agent.name);
+      attachContext(agentAttachment(agent));
+      setText((current) => ensureCapabilityToken(current, `#${agent.name}`));
+    }
+
+    setShowSuggestions(false);
+    setShowContextPicker(false);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [props.capabilitySelection?.requestId]);
 
   async function submit() {
     const trimmed = text.trim();
@@ -450,6 +475,12 @@ function replaceTrigger(text: string, replacement: string): string {
     }
   }
   return `${text}${text.endsWith(' ') || !text ? '' : ' '}${replacement}`;
+}
+
+function ensureCapabilityToken(text: string, token: string): string {
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (parts.includes(token)) return text;
+  return text.trim() ? `${token} ${text}` : `${token} `;
 }
 
 function buildSuggestions(text: string, skills: SkillSummary[], agents: AgentSummary[]): Suggestion[] {
