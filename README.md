@@ -88,6 +88,8 @@ Lightweight local checks:
 
 ```bash
 bash -n scripts/hf-entrypoint.sh scripts/hf-healthcheck.sh scripts/hf-space-smoke.sh cloud/hfs/export_space_bundle.sh
+scripts/validate-hfs-contract.sh
+scripts/static-check.sh
 bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space
 ```
 

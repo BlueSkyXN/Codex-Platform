@@ -76,12 +76,7 @@ jobs:
       - name: Live smoke
         env:
           CODEX_PLATFORM_AUTH_TOKEN: ${{ secrets.CODEX_PLATFORM_AUTH_TOKEN }}
+          SMOKE_RETRIES: "45"
+          SMOKE_DELAY: "20"
         run: |
-          for attempt in $(seq 1 45); do
-            if scripts/hf-space-smoke.sh "$HF_PUBLIC_URL"; then
-              exit 0
-            fi
-            echo "Space not ready yet: attempt ${attempt}/45"
-            sleep 20
-          done
-          exit 1
+          scripts/hf-space-smoke.sh "$HF_PUBLIC_URL"

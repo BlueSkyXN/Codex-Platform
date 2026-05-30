@@ -34,6 +34,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 const startedAt = Date.now();
+const buildSha = readBuildSha();
 const registry = new ProjectRegistry(config.workspaceRoot, config.allowedWorkspaceRoots, config.persistence.projectsFile);
 const store = new PersistentStore({
   demoMode: config.demoMode,
@@ -48,6 +49,22 @@ const bridge: (CodexBridge & NodeJS.EventEmitter) = config.demoMode ? new DemoCo
 function bridgeStatus(): ServerHealth['appServer'] {
   if (config.demoMode) return 'demo';
   return bridge.status ?? 'stopped';
+}
+
+function readBuildSha(): string | undefined {
+  const fromEnv = process.env.CODEX_PLATFORM_BUILD_SHA;
+  if (fromEnv && isGitSha(fromEnv)) return fromEnv;
+  try {
+    const value = fs.readFileSync(path.join(process.cwd(), 'BUILD_SHA'), 'utf8').trim();
+    if (isGitSha(value)) return value;
+  } catch {
+    // BUILD_SHA is only present in release images.
+  }
+  return undefined;
+}
+
+function isGitSha(value: string): boolean {
+  return /^[0-9a-f]{7,40}$/i.test(value);
 }
 
 function broadcast(event: UiEvent): void {
@@ -106,6 +123,7 @@ function health(): ServerHealth {
     dataDir: config.dataDir,
     appServer,
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
+    build: buildSha ? { sha: buildSha } : undefined,
     huggingFace: config.huggingFace,
     codexHome: config.codex.home
   };
