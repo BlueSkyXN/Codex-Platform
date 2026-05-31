@@ -168,6 +168,7 @@ export function Inspector(props: {
           onCommit={props.onGitCommit}
           onAddReviewFinding={(finding) => setReviewFindings((items) => [finding, ...items].slice(0, 12))}
           onRemoveReviewFinding={(id) => setReviewFindings((items) => items.filter((item) => item.id !== id))}
+          onUsePrompt={props.onUsePrompt}
         />
       ) : null}
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
@@ -754,6 +755,7 @@ function GitTab(props: {
   onCommit?: (message: string, paths?: string[]) => void;
   onAddReviewFinding: (finding: GitReviewFinding) => void;
   onRemoveReviewFinding: (id: string) => void;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
 }) {
   const [commitMessage, setCommitMessage] = useState('');
   const [copiedPush, setCopiedPush] = useState(false);
@@ -777,6 +779,15 @@ function GitTab(props: {
   const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage, reviewFindings, props.reviewEvidence) : undefined;
   const reviewPrompt = status?.isRepo ? gitReviewPrompt(status, reviewFindings, draftMessage) : undefined;
   const prBody = status?.isRepo ? gitPrBody(status, props.githubActions, props.health, draftMessage, reviewFindings, props.reviewEvidence, shipInfo?.prNote, releaseInfo?.detail) : undefined;
+  const closureSteps = status?.isRepo && shipInfo && releaseInfo ? gitClosureSteps({
+    status,
+    stageablePaths,
+    stagedPaths,
+    draftMessage,
+    reviewFindings,
+    shipInfo,
+    releaseInfo
+  }) : [];
 
   async function copyPushCommand(command?: string) {
     if (!command) return;
@@ -811,6 +822,14 @@ function GitTab(props: {
     await copyText(prBody);
     setCopiedPrBody(true);
     window.setTimeout(() => setCopiedPrBody(false), 1800);
+  }
+
+  function handOffReviewPackage() {
+    if (!reviewBrief) return;
+    props.onUsePrompt?.({
+      prompt: gitReviewHandoffPrompt(reviewBrief, prBody, reviewFindings.length),
+      agentName: reviewFindings.length > 0 ? 'worker' : 'explorer'
+    });
   }
 
   function requestGitApproval(next: PendingGitApproval) {
@@ -956,11 +975,17 @@ function GitTab(props: {
                 <span>Stage intentionally, draft the commit, then copy a PR handoff when ready.</span>
               </div>
               <div className="git-review-actions">
+                <button className="mini-action primary-mini" disabled={!reviewBrief || !props.onUsePrompt} onClick={handOffReviewPackage} aria-label="Hand off Git review package to composer">Hand off</button>
                 <button className="mini-action" disabled={!reviewBrief} onClick={() => void copyReviewBrief()}>{copiedReviewBrief ? 'Copied' : 'Copy brief'}</button>
                 <button className="mini-action" disabled={!prBody} onClick={() => void copyPrBody()}>{copiedPrBody ? 'Copied' : 'Copy PR body'}</button>
                 <button className="mini-action" disabled={reviewFindings.length === 0 || !reviewPrompt} onClick={() => void copyReviewPrompt()}>{copiedReviewPrompt ? 'Copied' : 'Copy follow-up'}</button>
               </div>
             </div>
+            {closureSteps.length > 0 ? (
+              <div className="git-closure-steps" aria-label="Review closure steps">
+                {closureSteps.map((step, index) => <GitClosureStep key={step.label} step={step} index={index + 1} />)}
+              </div>
+            ) : null}
             <div className="git-review-queues">
               <button disabled={stageablePaths.length === 0 || !props.onSelectFile} onClick={() => selectGitFileFromPanel(stageablePaths[0], false)}>
                 <span>Unstaged</span>
@@ -1149,6 +1174,63 @@ function ShipCheck(props: { label: string; value: string; detail?: string; state
   );
 }
 
+type GitClosureStepModel = {
+  label: string;
+  value: string;
+  state: 'ok' | 'warn' | 'idle';
+};
+
+function GitClosureStep({ step, index }: { step: GitClosureStepModel; index: number }) {
+  return (
+    <div className={`git-closure-step ${step.state}`}>
+      <span className="git-closure-index">{index}</span>
+      <span className="git-closure-copy">
+        <strong>{step.label}</strong>
+        <small>{step.value}</small>
+      </span>
+    </div>
+  );
+}
+
+function gitClosureSteps(input: {
+  status: GitStatusSummary;
+  stageablePaths: string[];
+  stagedPaths: string[];
+  draftMessage: string;
+  reviewFindings: GitReviewFinding[];
+  shipInfo: ReturnType<typeof gitShipInfo>;
+  releaseInfo: ReturnType<typeof gitReleaseInfo>;
+}): GitClosureStepModel[] {
+  const changedCount = input.status.files.length;
+  return [
+    {
+      label: 'Diff scope',
+      value: changedCount === 0 ? 'working tree clean' : `${input.stagedPaths.length} staged · ${input.stageablePaths.length} unstaged`,
+      state: changedCount === 0 || input.stagedPaths.length > 0 ? 'ok' : 'warn'
+    },
+    {
+      label: 'Review findings',
+      value: input.reviewFindings.length === 0 ? 'none captured' : `${input.reviewFindings.length} open`,
+      state: input.reviewFindings.length === 0 ? 'idle' : 'warn'
+    },
+    {
+      label: 'Commit draft',
+      value: input.draftMessage || 'stage files to draft',
+      state: input.draftMessage ? 'ok' : 'idle'
+    },
+    {
+      label: 'Push / PR',
+      value: input.shipInfo.label,
+      state: input.shipInfo.state === 'ready' ? 'ok' : 'warn'
+    },
+    {
+      label: 'Release verify',
+      value: input.releaseInfo.label,
+      state: input.releaseInfo.state === 'ready' ? 'ok' : input.releaseInfo.state === 'blocked' ? 'warn' : 'idle'
+    }
+  ];
+}
+
 function canStageFile(file: GitStatusSummary['files'][number]): boolean {
   return file.status === 'untracked' || file.workingTree.trim() !== '';
 }
@@ -1258,6 +1340,26 @@ function gitReviewPrompt(status: GitStatusSummary, findings: GitReviewFinding[],
     'Please inspect the referenced files and diff lines, implement the smallest complete fix, rerun focused validation, and update the Git review package before committing.'
   ];
   return lines.filter((line): line is string => line !== undefined).join('\n');
+}
+
+function gitReviewHandoffPrompt(reviewBrief: string, prBody: string | undefined, findingCount: number): string {
+  const owner = findingCount > 0 ? '#worker for fixing review findings' : '#explorer for release-readiness review';
+  return [
+    'Continue this Codex-Platform Git review and release closure.',
+    '',
+    `Recommended owner: ${owner}.`,
+    '',
+    reviewBrief,
+    '',
+    'PR body draft:',
+    prBody ?? '- not available',
+    '',
+    'Next steps:',
+    '- Inspect the live files and git diff before making changes.',
+    '- Keep the staged/unstaged boundary explicit.',
+    '- Rerun focused validation after changes.',
+    '- After push, verify GitHub Actions and Hugging Face /healthz build SHA.'
+  ].join('\n');
 }
 
 function gitPrBody(

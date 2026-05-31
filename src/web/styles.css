@@ -919,6 +919,14 @@ body { background: var(--codex-bg); color: var(--codex-text); }
 .git-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
 .mini-action { border: 1px solid var(--border); border-radius: 999px; background: var(--codex-surface); color: var(--codex-text); padding: 2px 7px; font-size: 11px; }
 .mini-action:hover { background: var(--codex-hover); }
+.mini-action.primary-mini {
+  border-color: var(--codex-text);
+  background: var(--codex-text);
+  color: var(--codex-surface);
+}
+.mini-action.primary-mini:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--codex-text), transparent 12%);
+}
 .git-diff-preview, .git-inline-review-card, .git-commit-box { display: grid; gap: 8px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
 .review-pane-header.compact { align-items: center; }
 .git-inline-review-card code {
@@ -935,11 +943,66 @@ body { background: var(--codex-bg); color: var(--codex-text); }
 }
 .git-commit-box textarea,
 .git-inline-review-card textarea { width: 100%; resize: vertical; min-height: 64px; border: 1px solid var(--border); border-radius: 8px; background: var(--codex-surface); color: var(--codex-text); padding: 8px 10px; font: inherit; font-size: 12px; }
+.git-closure-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+.git-closure-step {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--codex-surface);
+  padding: 7px;
+}
+.git-closure-index {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--codex-soft);
+  color: var(--codex-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.git-closure-step.ok .git-closure-index {
+  background: color-mix(in srgb, var(--codex-green), transparent 84%);
+  color: var(--codex-green);
+}
+.git-closure-step.warn .git-closure-index {
+  background: color-mix(in srgb, var(--codex-yellow), transparent 84%);
+  color: var(--codex-yellow);
+}
+.git-closure-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.git-closure-copy strong,
+.git-closure-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-closure-copy strong {
+  font-size: 11px;
+}
+.git-closure-copy small {
+  color: var(--codex-muted);
+  font-size: 10px;
+}
 @media (max-width: 820px) {
   .file-explorer-grid { grid-template-rows: auto auto; height: auto; }
   .file-tree-panel, .file-preview-panel { max-height: 42vh; }
   .git-branch-card { grid-template-columns: repeat(2, 1fr); }
   .git-ship-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .git-closure-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .git-review-head { display: grid; }
   .git-review-actions { justify-content: flex-start; }
   .git-review-queues { grid-template-columns: repeat(2, minmax(0, 1fr)); }
