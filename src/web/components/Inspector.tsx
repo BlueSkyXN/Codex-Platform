@@ -1299,7 +1299,7 @@ function GitTab(props: {
             </div>
             {closureSteps.length > 0 ? (
               <div className="git-closure-steps" aria-label="Review closure steps">
-                {closureSteps.map((step, index) => <GitClosureStep key={step.label} step={step} index={index + 1} />)}
+                {closureSteps.map((step) => <GitClosureStep key={step.label} step={step} />)}
               </div>
             ) : null}
             {nextReviewItem ? (
@@ -1505,6 +1505,7 @@ type GitClosureStepModel = {
   label: string;
   value: string;
   state: 'ok' | 'warn' | 'idle';
+  icon: IconName;
 };
 
 type GitPullRequestInfo = {
@@ -1531,10 +1532,10 @@ type GitReviewQueueItem = {
   openTarget?: { kind: 'file'; path: string; cached?: boolean } | { kind: 'draft' } | { kind: 'url'; url: string };
 };
 
-function GitClosureStep({ step, index }: { step: GitClosureStepModel; index: number }) {
+function GitClosureStep({ step }: { step: GitClosureStepModel }) {
   return (
     <div className={`git-closure-step ${step.state}`}>
-      <span className="git-closure-index">{index}</span>
+      <span className="git-closure-icon"><Icon name={step.icon} size={13} /></span>
       <span className="git-closure-copy">
         <strong>{step.label}</strong>
         <small>{step.value}</small>
@@ -1608,32 +1609,38 @@ function gitClosureSteps(input: {
     {
       label: 'Diff scope',
       value: changedCount === 0 ? 'working tree clean' : `${input.stagedPaths.length} staged · ${input.stageablePaths.length} unstaged`,
-      state: changedCount === 0 || input.stagedPaths.length > 0 ? 'ok' : 'warn'
+      state: changedCount === 0 || input.stagedPaths.length > 0 ? 'ok' : 'warn',
+      icon: 'file'
     },
     {
       label: 'Review findings',
       value: input.reviewFindings.length === 0 ? 'none captured' : `${input.reviewFindings.length} open`,
-      state: input.reviewFindings.length === 0 ? 'idle' : 'warn'
+      state: input.reviewFindings.length === 0 ? 'idle' : 'warn',
+      icon: input.reviewFindings.length === 0 ? 'check' : 'inbox'
     },
     {
       label: 'Commit draft',
       value: input.draftMessage || 'stage files to draft',
-      state: input.draftMessage ? 'ok' : 'idle'
+      state: input.draftMessage ? 'ok' : 'idle',
+      icon: 'chat'
     },
     {
       label: 'Push / PR',
       value: input.shipInfo.label,
-      state: input.shipInfo.state === 'ready' ? 'ok' : 'warn'
+      state: input.shipInfo.state === 'ready' ? 'ok' : 'warn',
+      icon: 'branch'
     },
     {
       label: 'PR evidence',
       value: input.prInfo.label,
-      state: input.prInfo.checkState
+      state: input.prInfo.checkState,
+      icon: 'inbox'
     },
     {
       label: 'Release verify',
       value: input.releaseInfo.label,
-      state: input.releaseInfo.state === 'ready' ? 'ok' : input.releaseInfo.state === 'blocked' ? 'warn' : 'idle'
+      state: input.releaseInfo.state === 'ready' ? 'ok' : input.releaseInfo.state === 'blocked' ? 'warn' : 'idle',
+      icon: 'panel'
     }
   ];
 }
