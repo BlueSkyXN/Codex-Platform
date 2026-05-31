@@ -593,6 +593,8 @@ export function App() {
             fileContent={fileContent}
             gitStatus={gitStatus}
             gitDiff={gitDiff}
+            githubActions={githubActions}
+            health={health}
             skillsLoading={skillsLoading}
             agentsLoading={agentsLoading}
             skillsError={skillsError}

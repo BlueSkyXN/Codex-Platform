@@ -4,7 +4,9 @@ import type {
   FileReadResult,
   FileTreeNode,
   GitDiffResult,
+  GitHubActionsSummary,
   GitStatusSummary,
+  ServerHealth,
   SkillSummary,
   StartTurnRequest,
   ThreadSummary,
@@ -36,6 +38,8 @@ export function Composer(props: {
   fileContent?: FileReadResult;
   gitStatus?: GitStatusSummary;
   gitDiff?: GitDiffResult;
+  githubActions?: GitHubActionsSummary;
+  health?: ServerHealth;
   skillsLoading: boolean;
   agentsLoading?: boolean;
   skillsError?: string;
@@ -253,6 +257,13 @@ export function Composer(props: {
                 subtitle={props.gitDiff?.diff ? diffSummary(props.gitDiff) : 'Open a changed file in Git first'}
                 disabled={!props.gitDiff?.diff}
                 onClick={() => props.gitDiff ? attachContext(gitDiffAttachment(props.gitDiff)) : undefined}
+              />
+              <ContextOption
+                icon="branch"
+                title="Release evidence"
+                subtitle={releaseEvidenceSummary(props.gitStatus, props.githubActions, props.health)}
+                disabled={!props.gitStatus?.isRepo && !props.githubActions && !props.health}
+                onClick={() => attachContext(releaseEvidenceAttachment(props.gitStatus, props.githubActions, props.health))}
               />
               <ContextOption
                 icon="terminal"
@@ -603,6 +614,59 @@ function gitDiffAttachment(diff: GitDiffResult): TurnContextAttachment {
   };
 }
 
+function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth): TurnContextAttachment {
+  const hfUrl = health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : undefined);
+  const runtimeBuild = health?.build?.sha;
+  const head = status?.head;
+  const upstreamHead = status?.upstreamHead;
+  const files = status?.isRepo ? status.files : [];
+  const runLines = actions?.runs.length
+    ? actions.runs.slice(0, 6).map((run) => `- ${run.name}: ${run.status ?? 'unknown'} / ${run.conclusion ?? 'pending'} · ${run.headSha ? shortSha(run.headSha) : 'unknown sha'}${run.htmlUrl ? ` · ${run.htmlUrl}` : ''}`)
+    : ['- no workflow runs loaded'];
+
+  return {
+    id: 'releaseEvidence:current',
+    kind: 'releaseEvidence',
+    title: 'Release evidence',
+    subtitle: releaseEvidenceSummary(status, actions, health),
+    content: [
+      'Release verification evidence:',
+      `Branch: ${status?.branch ?? 'unknown'}`,
+      `HEAD: ${head ?? 'unknown'}`,
+      `Upstream: ${status?.upstream ?? 'unknown'}`,
+      `Upstream HEAD: ${upstreamHead ?? 'unknown'}`,
+      `Remote: ${status?.remoteUrl ?? 'unknown'}`,
+      `Working tree: ${files.length} changed file${files.length === 1 ? '' : 's'}`,
+      `GitHub Actions: ${githubActionsLabel(actions)}`,
+      `Actions checked SHA: ${actions?.checkedSha ?? actions?.headSha ?? 'unknown'}`,
+      `Runtime build SHA: ${runtimeBuild ?? 'unknown'}`,
+      `HF enabled: ${health?.huggingFace?.enabled ? 'yes' : 'no'}`,
+      `HF target: ${health?.huggingFace?.spaceId ?? health?.huggingFace?.spaceHost ?? 'unknown'}`,
+      `HF URL: ${hfUrl ?? 'unknown'}`,
+      '',
+      'Recent GitHub Actions runs:',
+      ...runLines,
+      '',
+      'Release proof checklist:',
+      '- Confirm local review package contains only intended files.',
+      '- Confirm GitHub Actions passed for the commit being released.',
+      '- Confirm Hugging Face /healthz build.sha matches that GitHub commit.',
+      '- Run the Hugging Face smoke script against the Space URL before calling release complete.'
+    ].join('\n'),
+    metadata: {
+      branch: status?.branch ?? '',
+      head: head ?? '',
+      upstreamHead: upstreamHead ?? '',
+      changedFiles: files.length,
+      actionsState: actions?.state ?? 'unknown',
+      checkedSha: actions?.checkedSha ?? actions?.headSha ?? '',
+      runtimeBuild: runtimeBuild ?? '',
+      hfEnabled: Boolean(health?.huggingFace?.enabled),
+      hfUrl: hfUrl ?? ''
+    }
+  };
+}
+
 function terminalAttachment(card: TimelineCard): TurnContextAttachment {
   return {
     id: `terminal:${card.id}`,
@@ -700,6 +764,27 @@ function diffSummary(diff: GitDiffResult): string {
   return `${diff.path ?? 'all files'} · ${label} diff`;
 }
 
+function releaseEvidenceSummary(status?: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth): string {
+  const head = status?.head ? shortSha(status.head) : 'unknown HEAD';
+  const actionsLabel = githubActionsLabel(actions);
+  const runtime = health?.build?.sha ? shortSha(health.build.sha) : 'runtime unknown';
+  const hf = health?.huggingFace?.enabled ? (health.huggingFace.spaceHost ?? health.huggingFace.spaceId ?? 'HF configured') : 'self-hosted';
+  return `${head} · ${actionsLabel} · ${runtime} · ${hf}`;
+}
+
+function githubActionsLabel(actions?: GitHubActionsSummary): string {
+  if (!actions) return 'Actions loading';
+  if (actions.error) return 'Actions unavailable';
+  if (actions.state === 'success') return 'Actions passing';
+  if (actions.state === 'failure') return 'Actions failing';
+  if (actions.state === 'pending') return 'Actions pending';
+  return 'Actions unknown';
+}
+
+function shortSha(value: string): string {
+  return value.slice(0, 12);
+}
+
 function truncateContent(value: string): { value: string; truncated: boolean } {
   if (value.length <= MAX_CONTEXT_CONTENT_CHARS) return { value, truncated: false };
   return { value: `${value.slice(0, MAX_CONTEXT_CONTENT_CHARS)}\n...`, truncated: true };
@@ -710,6 +795,8 @@ function iconForContextKind(kind: TurnContextAttachmentKind): IconName {
     case 'folder':
       return 'folder';
     case 'gitStatus':
+      return 'branch';
+    case 'releaseEvidence':
       return 'branch';
     case 'terminal':
       return 'terminal';
