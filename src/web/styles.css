@@ -6114,6 +6114,249 @@ button,
   color: var(--codex-green, var(--ok));
 }
 
+.triage-lane-board {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 18%);
+  border-radius: var(--codex-radius-lg);
+  background: color-mix(in srgb, var(--codex-surface), transparent 20%);
+  padding: 9px;
+}
+
+.triage-lane-head {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.triage-lane-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.triage-lane-head strong {
+  color: var(--codex-text);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.triage-lane-head span {
+  color: var(--codex-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.triage-lane-head > span {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--codex-soft);
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.triage-lane-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+  gap: 6px;
+}
+
+.triage-lane-card {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 12%);
+  border-radius: var(--codex-radius-md);
+  background: var(--codex-surface);
+  padding: 7px;
+}
+
+.triage-lane-card.attention {
+  border-color: color-mix(in srgb, var(--codex-yellow, var(--warn)), var(--border) 58%);
+}
+
+.triage-lane-card.ready {
+  border-color: color-mix(in srgb, var(--codex-green, var(--ok)), var(--border) 70%);
+}
+
+.triage-lane-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.triage-lane-main:disabled {
+  cursor: default;
+  opacity: .54;
+}
+
+.triage-lane-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 18%);
+  border-radius: 999px;
+  background: var(--codex-soft);
+  color: var(--codex-muted);
+}
+
+.triage-lane-card.attention .triage-lane-icon,
+.triage-lane-card.attention .triage-lane-count {
+  color: var(--codex-yellow, var(--warn));
+  border-color: color-mix(in srgb, var(--codex-yellow, var(--warn)), var(--border) 58%);
+}
+
+.triage-lane-card.ready .triage-lane-icon,
+.triage-lane-card.ready .triage-lane-count {
+  color: var(--codex-green, var(--ok));
+}
+
+.triage-lane-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.triage-lane-copy strong,
+.triage-lane-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triage-lane-copy strong {
+  color: var(--codex-text);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.triage-lane-copy small {
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.triage-lane-count {
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 18%);
+  border-radius: 999px;
+  background: var(--codex-soft);
+  color: var(--codex-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.triage-lane-meta,
+.triage-lane-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.triage-lane-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.automation-runbook-grid {
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+}
+
+.automation-runbook-card {
+  align-content: start;
+}
+
+.automation-cadence-chip {
+  min-width: 0;
+  max-width: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 18%);
+  border-radius: 999px;
+  background: var(--codex-soft);
+  color: var(--codex-muted);
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.automation-runbook-card.attention .automation-cadence-chip,
+.automation-runbook-card.warn .automation-cadence-chip,
+.automation-runbook-card.waiting .automation-cadence-chip {
+  color: var(--codex-yellow, var(--warn));
+  border-color: color-mix(in srgb, var(--codex-yellow, var(--warn)), var(--border) 58%);
+}
+
+.automation-runbook-card.ready .automation-cadence-chip {
+  color: var(--codex-green, var(--ok));
+}
+
+.automation-runbook-card.running .automation-cadence-chip {
+  color: var(--accent);
+}
+
+.automation-runbook-facts {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 6px;
+}
+
+.automation-runbook-facts span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 20%);
+  border-radius: var(--codex-radius-md);
+  background: color-mix(in srgb, var(--codex-surface), transparent 10%);
+  padding: 6px 7px;
+}
+
+.automation-runbook-facts small,
+.automation-runbook-facts strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-runbook-facts small {
+  color: var(--codex-muted);
+  font-size: 10px;
+}
+
+.automation-runbook-facts strong {
+  color: var(--codex-text);
+  font-size: 11px;
+  font-weight: 620;
+}
+
 .management-tabs {
   gap: 4px;
   padding-bottom: 7px;
@@ -7516,6 +7759,23 @@ body {
 
   .agent-route-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .triage-lane-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .automation-runbook-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .triage-lane-head,
+  .triage-lane-actions {
+    align-items: flex-start;
+  }
+
+  .triage-lane-main {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
   }
 }
 

@@ -792,6 +792,8 @@ export function App() {
         threads={state.threads}
         cards={state.cards}
         errors={state.errors}
+        browserFeedback={browserFeedback}
+        artifactFeedback={artifactFeedback}
         notificationsEnabled={notificationsEnabled}
         notificationsSupported={typeof Notification !== 'undefined'}
         onClose={() => setManagementOpen(false)}

@@ -36,6 +36,49 @@ type AgentRouteCard = {
   prompt: string;
 };
 
+type TriageLaneId = 'approvals' | 'failures' | 'review' | 'evidence' | 'release';
+
+type TriageQueueItem = {
+  id: string;
+  lane: TriageLaneId;
+  icon: IconName;
+  title: string;
+  detail: string;
+  tone: 'attention' | 'warn' | 'ready';
+  prompt: string;
+  agentName?: string;
+  tab?: InspectorTab;
+  threadId?: string;
+};
+
+type TriageLaneCard = {
+  id: TriageLaneId;
+  icon: IconName;
+  label: string;
+  detail: string;
+  owner: string;
+  count: number;
+  attention: number;
+  state: WorkQueueState;
+  tab: InspectorTab;
+  prompt: string;
+  firstItem?: TriageQueueItem;
+};
+
+type AutomationLaneRow = {
+  id: 'release' | 'approvals' | 'threads' | 'git';
+  icon: IconName;
+  title: string;
+  detail: string;
+  trigger: string;
+  cadence: string;
+  outcome: string;
+  state: WorkQueueState;
+  prompt: string;
+  agentName: string;
+  action: () => void;
+};
+
 type PromptHandoff = {
   prompt: string;
   threadId?: string;
@@ -65,6 +108,8 @@ export function ManagementDrawer(props: {
   threads: ThreadSummary[];
   cards: TimelineCard[];
   errors: string[];
+  browserFeedback?: string;
+  artifactFeedback?: string;
   notificationsEnabled: boolean;
   notificationsSupported: boolean;
   onClose: () => void;
@@ -129,6 +174,8 @@ export function ManagementDrawer(props: {
             threads={props.threads}
             cards={props.cards}
             errors={props.errors}
+            browserFeedback={props.browserFeedback}
+            artifactFeedback={props.artifactFeedback}
             gitStatus={props.gitStatus}
             githubActions={props.githubActions}
             health={props.health}
@@ -369,12 +416,15 @@ function AutomationsPanel(props: {
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
   const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const automationAttention = props.approvals.length > 0 || failedGit > 0 || release.state === 'attention';
-  const rows: Array<{ id: string; icon: IconName; title: string; detail: string; state: WorkQueueState; prompt: string; agentName: string; action: () => void }> = [
+  const rows: AutomationLaneRow[] = [
     {
       id: 'release',
       icon: 'branch' as const,
       title: 'Release evidence packet',
       detail: release.detail,
+      trigger: release.state === 'ready' ? 'After push or deploy' : 'Before release handoff',
+      cadence: release.state === 'ready' ? 'readback' : 'gated',
+      outcome: 'GitHub, HF, runtime SHA proof',
       state: release.state,
       prompt: releasePrompt,
       agentName: 'worker',
@@ -385,6 +435,9 @@ function AutomationsPanel(props: {
       icon: 'check' as const,
       title: 'Approval sweep',
       detail: `${props.approvals.length} pending approval${props.approvals.length === 1 ? '' : 's'}`,
+      trigger: props.approvals.length ? 'Pending approval' : 'Approval request',
+      cadence: props.approvals.length ? 'now' : 'watch',
+      outcome: 'Decision with safety reason',
       state: props.approvals.length ? 'attention' : 'ready',
       prompt: approvalSweepPrompt(props.approvals),
       agentName: 'worker',
@@ -395,6 +448,9 @@ function AutomationsPanel(props: {
       icon: 'chat' as const,
       title: 'Thread supervision',
       detail: `${activeThreads} running or blocked thread${activeThreads === 1 ? '' : 's'}`,
+      trigger: activeThreads ? 'Active thread' : 'Thread event stream',
+      cadence: activeThreads ? 'live' : 'idle',
+      outcome: 'Next owner and concrete action',
       state: activeThreads ? 'running' : 'ready',
       prompt: threadSupervisionPrompt(props.threads),
       agentName: 'explorer',
@@ -405,6 +461,9 @@ function AutomationsPanel(props: {
       icon: 'terminal' as const,
       title: 'Git operation audit',
       detail: failedGit ? `${failedGit} failed Git action${failedGit === 1 ? '' : 's'}` : 'latest Git operations clear',
+      trigger: failedGit ? 'Failed Git operation' : 'After Git action',
+      cadence: failedGit ? 'now' : 'audit',
+      outcome: 'Recovery path or clean log',
       state: failedGit ? 'attention' : 'ready',
       prompt: gitOperationAuditPrompt(props.gitOperations, props.gitStatus),
       agentName: 'worker',
@@ -453,6 +512,7 @@ function AutomationsPanel(props: {
         handoffDisabled={!props.onUsePrompt}
         copyPrompt={automationQueueItem.prompt}
       />
+      <AutomationRunbook rows={rows} onUsePrompt={props.onUsePrompt} />
       <AgentRoutingStrip routes={automationRoutes} onUsePrompt={props.onUsePrompt} />
       <div className="automation-lanes">
         {rows.map((row) => (
@@ -493,6 +553,8 @@ function TriagePanel(props: {
   threads: ThreadSummary[];
   cards: TimelineCard[];
   errors: string[];
+  browserFeedback?: string;
+  artifactFeedback?: string;
   gitStatus?: GitStatusSummary;
   githubActions?: GitHubActionsSummary;
   health?: ServerHealth;
@@ -506,11 +568,15 @@ function TriagePanel(props: {
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
   const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const changedFiles = props.gitStatus?.isRepo ? props.gitStatus.files.length : 0;
-  const items: Array<{ id: string; icon: IconName; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; prompt: string; agentName?: string; tab?: InspectorTab; threadId?: string }> = [];
+  const browserFeedback = props.browserFeedback?.trim() ?? '';
+  const artifactFeedback = props.artifactFeedback?.trim() ?? '';
+  const evidenceFeedbackCount = [browserFeedback, artifactFeedback].filter(Boolean).length;
+  const items: TriageQueueItem[] = [];
 
   for (const approval of props.approvals.slice(0, 4)) {
     items.push({
       id: `approval-${approval.requestId}`,
+      lane: 'approvals',
       icon: 'check',
       title: approval.title,
       detail: approval.command ?? approval.reason ?? approval.kind,
@@ -524,6 +590,7 @@ function TriagePanel(props: {
   for (const thread of failedThreads.slice(0, 4)) {
     items.push({
       id: `thread-${thread.id}`,
+      lane: 'failures',
       icon: 'chat',
       title: thread.name || thread.preview || compactThreadId(thread.id),
       detail: `${thread.status ?? 'failed'} · ${compactThreadId(thread.id)}`,
@@ -537,6 +604,7 @@ function TriagePanel(props: {
   for (const operation of failedGit.slice(0, 3)) {
     items.push({
       id: `git-${operation.id}`,
+      lane: 'failures',
       icon: 'terminal',
       title: operation.title,
       detail: operation.error ?? operation.stderr ?? operation.detail ?? operation.kind,
@@ -549,6 +617,7 @@ function TriagePanel(props: {
   if (props.githubActions?.state === 'failure') {
     items.push({
       id: 'github-actions',
+      lane: 'release',
       icon: 'branch',
       title: 'GitHub Actions attention',
       detail: githubActionsDetail(props.githubActions, props.gitStatus?.head),
@@ -561,6 +630,7 @@ function TriagePanel(props: {
   if (changedFiles > 0) {
     items.push({
       id: 'git-review-package',
+      lane: 'review',
       icon: 'file',
       title: 'Review package changed',
       detail: `${changedFiles} changed file${changedFiles === 1 ? '' : 's'} before PR/release handoff`,
@@ -573,6 +643,7 @@ function TriagePanel(props: {
   if (release.state !== 'ready') {
     items.push({
       id: 'release-evidence',
+      lane: 'release',
       icon: 'branch',
       title: release.state === 'attention' ? 'Release evidence attention' : 'Release evidence partial',
       detail: release.detail,
@@ -582,9 +653,36 @@ function TriagePanel(props: {
       tab: 'git'
     });
   }
+  if (browserFeedback) {
+    items.push({
+      id: 'browser-feedback',
+      lane: 'evidence',
+      icon: 'panel',
+      title: 'Browser feedback waiting',
+      detail: compactText(browserFeedback, 180),
+      tone: 'warn',
+      prompt: browserFeedbackTriagePrompt(browserFeedback, props.health),
+      agentName: 'worker',
+      tab: 'browser'
+    });
+  }
+  if (artifactFeedback) {
+    items.push({
+      id: 'artifact-feedback',
+      lane: 'evidence',
+      icon: 'paperclip',
+      title: 'Artifact feedback waiting',
+      detail: compactText(artifactFeedback, 180),
+      tone: 'warn',
+      prompt: artifactFeedbackTriagePrompt(artifactFeedback),
+      agentName: 'worker',
+      tab: 'artifacts'
+    });
+  }
   for (const card of reviewCards) {
     items.push({
       id: `card-${card.id}`,
+      lane: card.kind === 'fileChange' ? 'review' : 'failures',
       icon: card.kind === 'fileChange' ? 'file' : 'inbox',
       title: card.title,
       detail: card.filePath ?? card.status ?? card.kind,
@@ -599,7 +697,14 @@ function TriagePanel(props: {
   const visibleItems = items.slice(0, 12);
   const nextTriageItem = visibleItems.find((item) => item.tone !== 'ready') ?? visibleItems[0];
   const attentionItems = visibleItems.filter((item) => item.tone !== 'ready').length;
+  const triageLanes = triageLaneCards(items, releasePrompt);
   const triageRoutes = agentRouteCards(visibleItems);
+
+  function openTriageLane(lane: TriageLaneCard) {
+    const item = lane.firstItem;
+    if (item?.threadId) void props.onSelectThread?.(item.threadId);
+    props.onOpenInspectorTab?.(item?.tab ?? lane.tab);
+  }
 
   return (
     <section className="management-panel triage-panel">
@@ -617,6 +722,7 @@ function TriagePanel(props: {
         items={[
           { label: 'Approvals', value: String(props.approvals.length), tone: props.approvals.length ? 'warn' : undefined },
           { label: 'Failures', value: String(failedThreads.length + failedGit.length + props.errors.length), tone: failedThreads.length + failedGit.length + props.errors.length ? 'warn' : undefined },
+          { label: 'Evidence', value: String(evidenceFeedbackCount), tone: evidenceFeedbackCount ? 'warn' : undefined },
           { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' },
           { label: 'Decisions', value: String(props.approvalHistory.length) }
         ]}
@@ -650,6 +756,12 @@ function TriagePanel(props: {
         handoffDisabled={!nextTriageItem || !props.onUsePrompt}
         copyPrompt={nextTriageItem?.prompt}
         copyDisabled={!nextTriageItem}
+      />
+      <TriageLaneBoard
+        lanes={triageLanes}
+        onOpenLane={openTriageLane}
+        openDisabled={!props.onOpenInspectorTab}
+        onUsePrompt={props.onUsePrompt}
       />
       <AgentRoutingStrip routes={triageRoutes} onUsePrompt={props.onUsePrompt} />
       {visibleItems.length === 0 ? <div className="empty">No triage items waiting.</div> : null}
@@ -719,6 +831,191 @@ function queueItemFromTriage(item: { icon: IconName; title: string; detail: stri
     detail: item.detail,
     state: item.tone
   };
+}
+
+function AutomationRunbook(props: { rows: AutomationLaneRow[]; onUsePrompt?: (handoff: PromptHandoff) => void }) {
+  const activeRows = props.rows.filter((row) => row.state !== 'ready').length;
+  return (
+    <div className="triage-lane-board automation-runbook-board" aria-label="Automation runbook">
+      <div className="triage-lane-head">
+        <div>
+          <strong>Automation runbook</strong>
+          <span>Each lane declares trigger, cadence, owner, and expected evidence.</span>
+        </div>
+        <span>{activeRows} active</span>
+      </div>
+      <div className="triage-lane-grid automation-runbook-grid">
+        {props.rows.map((row) => (
+          <div key={row.id} className={`triage-lane-card automation-runbook-card ${row.state}`}>
+            <button
+              type="button"
+              className="triage-lane-main"
+              onClick={row.action}
+              aria-label={`Open ${row.title}`}
+              title={`Open ${row.title}`}
+            >
+              <span className="triage-lane-icon"><Icon name={row.icon} size={14} /></span>
+              <span className="triage-lane-copy">
+                <strong>{row.title}</strong>
+                <small>{row.detail}</small>
+              </span>
+              <span className="automation-cadence-chip">{row.cadence}</span>
+            </button>
+            <div className="automation-runbook-facts">
+              <span><small>Trigger</small><strong title={row.trigger}>{row.trigger}</strong></span>
+              <span><small>Outcome</small><strong title={row.outcome}>{row.outcome}</strong></span>
+            </div>
+            <div className="triage-lane-meta">
+              <span className="lane-owner">
+                <Icon name={agentRouteIcon(row.agentName)} size={12} />
+                <span>#{row.agentName}</span>
+              </span>
+              <span className="lane-state">{row.state}</span>
+            </div>
+            <div className="triage-lane-actions">
+              <QueuePromptCopyButton prompt={row.prompt} label="Copy" title={`Copy ${row.title} automation prompt`} />
+              <button
+                type="button"
+                className="lane-handoff"
+                onClick={() => props.onUsePrompt?.({ prompt: row.prompt, agentName: row.agentName })}
+                disabled={!props.onUsePrompt}
+                title={`Hand off ${row.title} automation to composer`}
+                aria-label={`Hand off ${row.title} automation to composer`}
+              >
+                <Icon name="send" size={13} />
+                <span>Hand off</span>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TriageLaneBoard(props: {
+  lanes: TriageLaneCard[];
+  onOpenLane: (lane: TriageLaneCard) => void;
+  openDisabled?: boolean;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
+}) {
+  const activeLaneCount = props.lanes.filter((lane) => lane.count > 0).length;
+  return (
+    <div className="triage-lane-board" aria-label="Triage lanes">
+      <div className="triage-lane-head">
+        <div>
+          <strong>Lane routing</strong>
+          <span>Approvals, failures, review, evidence, and release are routed separately.</span>
+        </div>
+        <span>{activeLaneCount} active</span>
+      </div>
+      <div className="triage-lane-grid">
+        {props.lanes.map((lane) => (
+          <div key={lane.id} className={`triage-lane-card ${lane.state}`}>
+            <button
+              type="button"
+              className="triage-lane-main"
+              onClick={() => props.onOpenLane(lane)}
+              disabled={props.openDisabled}
+              aria-label={`Open ${lane.label} lane`}
+              title={`Open ${lane.label} lane`}
+            >
+              <span className="triage-lane-icon"><Icon name={lane.icon} size={14} /></span>
+              <span className="triage-lane-copy">
+                <strong>{lane.label}</strong>
+                <small>{lane.detail}</small>
+              </span>
+              <span className="triage-lane-count">{lane.count}</span>
+            </button>
+            <div className="triage-lane-meta">
+              <span className="lane-owner">
+                <Icon name={agentRouteIcon(lane.owner)} size={12} />
+                <span>#{lane.owner}</span>
+              </span>
+              <span className="lane-state">{lane.state}</span>
+            </div>
+            <div className="triage-lane-actions">
+              <QueuePromptCopyButton
+                prompt={lane.prompt}
+                label="Copy"
+                title={`Copy ${lane.label} lane prompt`}
+                disabled={lane.count === 0 && lane.id !== 'release'}
+              />
+              <button
+                type="button"
+                className="lane-handoff"
+                onClick={() => props.onUsePrompt?.({ prompt: lane.prompt, agentName: lane.owner })}
+                disabled={!props.onUsePrompt || (lane.count === 0 && lane.id !== 'release')}
+                title={`Hand off ${lane.label} lane to composer`}
+                aria-label={`Hand off ${lane.label} lane to composer`}
+              >
+                <Icon name="send" size={13} />
+                <span>Hand off</span>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function triageLaneCards(items: TriageQueueItem[], releasePrompt: string): TriageLaneCard[] {
+  return triageLaneDefinitions().map((definition) => {
+    const laneItems = items.filter((item) => item.lane === definition.id);
+    const attention = laneItems.filter((item) => item.tone !== 'ready').length;
+    const firstItem = laneItems.find((item) => item.tone !== 'ready') ?? laneItems[0];
+    const state: WorkQueueState = attention > 0 ? 'attention' : laneItems.length > 0 ? 'waiting' : 'ready';
+    const owner = firstItem?.agentName ?? definition.owner;
+    const prompt = definition.id === 'release' && laneItems.length === 0
+      ? releasePrompt
+      : triageLanePrompt(definition, laneItems, owner);
+    return {
+      id: definition.id,
+      icon: definition.icon,
+      label: definition.label,
+      detail: laneItems.length
+        ? `${laneItems.length} item${laneItems.length === 1 ? '' : 's'}${attention ? ` · ${attention} attention` : ' · queued'}`
+        : definition.empty,
+      owner,
+      count: laneItems.length,
+      attention,
+      state,
+      tab: firstItem?.tab ?? definition.tab,
+      prompt,
+      firstItem
+    };
+  });
+}
+
+function triageLaneDefinitions(): Array<{ id: TriageLaneId; icon: IconName; label: string; owner: string; tab: InspectorTab; empty: string }> {
+  return [
+    { id: 'approvals', icon: 'check', label: 'Approvals', owner: 'explorer', tab: 'review', empty: 'No approval decisions waiting.' },
+    { id: 'failures', icon: 'inbox', label: 'Failures', owner: 'explorer', tab: 'review', empty: 'No failed threads or Git operations.' },
+    { id: 'review', icon: 'file', label: 'Review', owner: 'explorer', tab: 'git', empty: 'No diff or review package waiting.' },
+    { id: 'evidence', icon: 'paperclip', label: 'Evidence', owner: 'worker', tab: 'browser', empty: 'No Browser or Artifact feedback waiting.' },
+    { id: 'release', icon: 'branch', label: 'Release', owner: 'worker', tab: 'git', empty: 'Release evidence lane is ready.' }
+  ];
+}
+
+function triageLanePrompt(definition: { id: TriageLaneId; label: string }, items: TriageQueueItem[], owner: string): string {
+  const lines = items.length
+    ? items.slice(0, 12).map((item) => `- ${item.title} · ${item.tone} · ${compactText(item.detail, 220)}${item.threadId ? ` · thread ${compactThreadId(item.threadId)}` : ''}`)
+    : ['- none loaded'];
+  return [
+    `Work the Codex-Platform ${definition.label} triage lane.`,
+    '',
+    `Recommended owner: #${owner}.`,
+    '',
+    'Lane items:',
+    ...lines,
+    '',
+    'Required next actions:',
+    '1. Open the relevant panel before editing or approving anything.',
+    '2. Group duplicate items and choose the first concrete next action.',
+    '3. Preserve thread context, workspace boundaries, review evidence, and release readback requirements.',
+    '4. Return a concise lane status update with validation evidence or the next owner.'
+  ].join('\n');
 }
 
 function agentRouteCards(items: RouteSourceItem[]): AgentRouteCard[] {
@@ -1059,6 +1356,45 @@ function reviewCardPrompt(card: TimelineCard): string {
     '2. Determine whether it is actionable for the active v2 objective.',
     '3. If actionable, propose the smallest implementation or validation step.',
     '4. If not actionable, explain why and what evidence would change the decision.'
+  ].join('\n');
+}
+
+function browserFeedbackTriagePrompt(feedback: string, health?: ServerHealth): string {
+  const readback = releaseReadbackCommands(health);
+  return [
+    'Triage the saved Browser feedback for Codex-Platform.',
+    '',
+    'Recommended owner: #worker after the preview target and source files are identified.',
+    '',
+    `Feedback: ${feedback}`,
+    `Runtime build SHA: ${health?.build?.sha ?? 'unknown'}`,
+    `HF URL: ${health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : 'unknown')}`,
+    '',
+    'Useful readback commands:',
+    `- ${readback.healthCommand}`,
+    `- ${readback.smokeCommand}`,
+    '',
+    'Required next actions:',
+    '1. Open the Browser panel and inspect the selected preview target or missing-target diagnostic.',
+    '2. Map the observation to the relevant component, CSS, or runtime source.',
+    '3. Implement the smallest complete fix and verify desktop plus mobile widths.',
+    '4. Update the Review package with browser evidence before commit or release handoff.'
+  ].join('\n');
+}
+
+function artifactFeedbackTriagePrompt(feedback: string): string {
+  return [
+    'Triage the saved Artifact feedback for Codex-Platform.',
+    '',
+    'Recommended owner: #worker after the artifact source and producer path are identified.',
+    '',
+    `Feedback: ${feedback}`,
+    '',
+    'Required next actions:',
+    '1. Open the Artifacts panel and inspect the selected artifact or missing-artifact diagnostic.',
+    '2. Map the artifact back to the timeline card, file path, command output, or generated summary that produced it.',
+    '3. Decide whether the artifact should drive a code fix, documentation update, review note, or validation step.',
+    '4. Preserve artifact evidence in the Review package before commit or release handoff.'
   ].join('\n');
 }
 
