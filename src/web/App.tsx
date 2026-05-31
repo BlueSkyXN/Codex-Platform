@@ -159,6 +159,17 @@ export function App() {
   }, [selectedProject?.id, selectedThread?.id]);
 
   useEffect(() => {
+    const media = window.matchMedia('(max-width: 820px)');
+    const onChange = (event: MediaQueryListEvent) => {
+      if (!event.matches) return;
+      setSidebarVisible(false);
+      setInspectorVisible(false);
+    };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
     if (selectedApprovals.length === 0 || isNarrowViewport()) return;
     setInspectorVisible(true);
     setInspectorTab('review');
@@ -699,6 +710,7 @@ export function App() {
             onRefreshProjectPanels={() => void reloadProjectPanels()}
             onStartReview={() => void startReview()}
             onFocusCard={(cardId) => focusCard(cardId, false)}
+            onUsePrompt={useComposerDraft}
             tab={inspectorTab}
             onTabChange={setInspectorTab}
             onDecision={approve}

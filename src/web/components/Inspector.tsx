@@ -37,6 +37,12 @@ type ReviewEvidencePacket = {
   artifactFeedback: string;
 };
 
+type PromptHandoff = {
+  prompt: string;
+  threadId?: string;
+  agentName?: string;
+};
+
 export function Inspector(props: {
   card?: TimelineCard;
   cards: TimelineCard[];
@@ -74,6 +80,7 @@ export function Inspector(props: {
   onGitCommit?: (message: string, paths?: string[]) => void;
   onStartReview?: () => void;
   onFocusCard?: (cardId: string) => void;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
   open?: boolean;
 }) {
   const [internalTab, setInternalTab] = useState<InspectorTab>('review');
@@ -164,8 +171,8 @@ export function Inspector(props: {
         />
       ) : null}
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} feedback={props.browserFeedback} onFeedbackChange={props.onBrowserFeedbackChange} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} feedback={props.artifactFeedback} onFeedbackChange={props.onArtifactFeedbackChange} onFocusCard={props.onFocusCard} /> : null}
+      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} feedback={props.browserFeedback} onFeedbackChange={props.onBrowserFeedbackChange} onFocusCard={props.onFocusCard} onUsePrompt={props.onUsePrompt} /> : null}
+      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} feedback={props.artifactFeedback} onFeedbackChange={props.onArtifactFeedbackChange} onFocusCard={props.onFocusCard} onUsePrompt={props.onUsePrompt} /> : null}
       {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} rawEvents={props.rawEvents ?? []} /> : null}
     </aside>
   );
@@ -449,7 +456,8 @@ function BrowserTab({
   health,
   feedback,
   onFeedbackChange,
-  onFocusCard
+  onFocusCard,
+  onUsePrompt
 }: {
   cards: TimelineCard[];
   project?: Project;
@@ -457,6 +465,7 @@ function BrowserTab({
   feedback: string;
   onFeedbackChange: (value: string) => void;
   onFocusCard?: (cardId: string) => void;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
 }) {
   const [selectedUrl, setSelectedUrl] = useState('');
   const [copiedFeedback, setCopiedFeedback] = useState(false);
@@ -470,6 +479,15 @@ function BrowserTab({
     await copyText(feedbackPrompt);
     setCopiedFeedback(true);
     window.setTimeout(() => setCopiedFeedback(false), 1800);
+  }
+
+  function handOffFeedbackPrompt() {
+    if (!feedbackPrompt) return;
+    onUsePrompt?.({
+      prompt: feedbackPrompt,
+      threadId: activeTarget?.cardId ? cards.find((card) => card.id === activeTarget.cardId)?.threadId : undefined,
+      agentName: 'worker'
+    });
   }
 
   return (
@@ -548,7 +566,15 @@ function BrowserTab({
           rows={3}
         />
         <div className="feedback-actions">
-          <button className="small primary" disabled={!activeTarget} onClick={() => void copyFeedbackPrompt()}>{copiedFeedback ? 'Copied prompt' : 'Copy follow-up prompt'}</button>
+          <button
+            className="small primary"
+            disabled={!activeTarget || !feedbackPrompt || !onUsePrompt}
+            onClick={handOffFeedbackPrompt}
+            aria-label="Hand off browser feedback to composer"
+          >
+            Hand off
+          </button>
+          <button className="small ghost" disabled={!activeTarget} onClick={() => void copyFeedbackPrompt()}>{copiedFeedback ? 'Copied prompt' : 'Copy follow-up prompt'}</button>
           <span>{activeTarget ? 'Includes target URL, runtime evidence, and observation notes.' : 'Select or capture a browser target first.'}</span>
         </div>
       </div>
@@ -600,6 +626,8 @@ function browserFeedbackPrompt(input: { target?: BrowserTarget; project?: Projec
   if (!input.target) return undefined;
   const lines = [
     'Review this browser preview and improve the implementation.',
+    '',
+    'Recommended owner: #worker for implementation follow-up after inspecting the preview evidence.',
     '',
     `Project: ${input.project?.name ?? 'current project'}`,
     `Target: ${input.target.url}`,
@@ -1585,13 +1613,15 @@ function ArtifactsTab({
   project,
   feedback,
   onFeedbackChange,
-  onFocusCard
+  onFocusCard,
+  onUsePrompt
 }: {
   cards: TimelineCard[];
   project?: Project;
   feedback: string;
   onFeedbackChange: (value: string) => void;
   onFocusCard?: (cardId: string) => void;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
 }) {
   const artifacts = artifactCards(cards);
   const [selectedId, setSelectedId] = useState('');
@@ -1604,6 +1634,15 @@ function ArtifactsTab({
     await copyText(artifactPrompt);
     setCopiedArtifact(true);
     window.setTimeout(() => setCopiedArtifact(false), 1800);
+  }
+
+  function handOffArtifactPrompt() {
+    if (!artifactPrompt || !selected) return;
+    onUsePrompt?.({
+      prompt: artifactPrompt,
+      threadId: selected.threadId,
+      agentName: selected.kind === 'error' ? 'explorer' : 'worker'
+    });
   }
 
   return (
@@ -1647,7 +1686,8 @@ function ArtifactsTab({
                 </div>
                 <div className="artifact-detail-actions">
                   <button className="small ghost" onClick={() => onFocusCard?.(selected.id)}>Focus</button>
-                  <button className="small primary" onClick={() => void copyArtifactPrompt()}>{copiedArtifact ? 'Copied' : 'Copy prompt'}</button>
+                  <button className="small primary" disabled={!artifactPrompt || !onUsePrompt} onClick={handOffArtifactPrompt} aria-label="Hand off artifact feedback to composer">Hand off</button>
+                  <button className="small ghost" onClick={() => void copyArtifactPrompt()}>{copiedArtifact ? 'Copied' : 'Copy prompt'}</button>
                 </div>
               </div>
               <FocusedCard card={selected} />
@@ -1916,8 +1956,11 @@ function artifactSubtitle(card: TimelineCard): string {
 }
 
 function artifactFeedbackPrompt(card: TimelineCard, project: Project | undefined, feedback: string): string {
+  const owner = card.kind === 'error' ? '#explorer for diagnosis' : '#worker for scoped follow-up';
   const lines = [
     'Use this thread artifact as context for the next Codex task.',
+    '',
+    `Recommended owner: ${owner}.`,
     '',
     `Project: ${project?.name ?? 'current project'}`,
     `Artifact: ${card.filePath ?? card.title}`,
