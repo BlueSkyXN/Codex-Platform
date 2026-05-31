@@ -5798,3 +5798,56 @@ body {
     height: 34px;
   }
 }
+
+/* Codex App empty-state pass: context reads as a quiet line, not dashboard pills. */
+.empty-command-state {
+  gap: 0;
+  margin-top: 12px;
+}
+
+.state-pill {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.state-pill + .state-pill::before {
+  content: "·";
+  margin: 0 10px;
+  color: #c8c8c8;
+}
+
+.state-pill span {
+  color: var(--codex-muted);
+  font-size: 12px;
+}
+
+.state-pill strong {
+  max-width: 128px;
+  color: var(--codex-muted);
+  font-size: 12px;
+  font-weight: 520;
+}
+
+.state-pill.warn strong {
+  color: var(--codex-text);
+}
+
+@media (max-width: 540px) {
+  .empty-command-state {
+    justify-content: flex-start;
+  }
+
+  .state-pill + .state-pill::before {
+    margin: 0 7px;
+  }
+
+  .state-pill strong {
+    max-width: 96px;
+  }
+}
