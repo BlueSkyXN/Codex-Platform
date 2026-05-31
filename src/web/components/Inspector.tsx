@@ -49,6 +49,17 @@ type EvidenceLoopStep = {
   tone?: 'ok' | 'warn' | 'idle';
 };
 
+type FeedbackRoute = {
+  id: string;
+  icon: IconName;
+  title: string;
+  detail: string;
+  agentName: string;
+  prompt?: string;
+  threadId?: string;
+  disabled?: boolean;
+};
+
 export function Inspector(props: {
   card?: TimelineCard;
   cards: TimelineCard[];
@@ -483,6 +494,8 @@ function BrowserTab({
   const evidence = browserEvidence(activeTarget, health);
   const feedbackPrompt = browserFeedbackPrompt({ target: activeTarget, project, health, feedback });
   const loopSteps = browserLoopSteps(activeTarget, feedback, health);
+  const activeTargetThreadId = activeTarget?.cardId ? cards.find((card) => card.id === activeTarget.cardId)?.threadId : undefined;
+  const routes = browserFeedbackRoutes({ target: activeTarget, project, health, feedback, threadId: activeTargetThreadId });
 
   async function copyFeedbackPrompt() {
     if (!feedbackPrompt) return;
@@ -585,6 +598,7 @@ function BrowserTab({
           copyDisabled={!activeTarget || !feedbackPrompt}
           copied={copiedFeedback}
         />
+        <FeedbackRouteStrip routes={routes} onUsePrompt={onUsePrompt} />
       </div>
 
       {activeTarget ? (
@@ -656,6 +670,37 @@ function EvidenceLoopStrip(props: {
   );
 }
 
+function FeedbackRouteStrip(props: { routes: FeedbackRoute[]; onUsePrompt?: (handoff: PromptHandoff) => void }) {
+  return (
+    <div className="feedback-route-strip" aria-label="Feedback routing options">
+      {props.routes.map((route) => {
+        const disabled = route.disabled || !route.prompt || !props.onUsePrompt;
+        return (
+          <button
+            type="button"
+            key={route.id}
+            className="feedback-route-card"
+            disabled={disabled}
+            onClick={() => {
+              if (!route.prompt || disabled) return;
+              props.onUsePrompt?.({ prompt: route.prompt, threadId: route.threadId, agentName: route.agentName });
+            }}
+            title={route.detail}
+            aria-label={`Route feedback to ${route.agentName}: ${route.title}`}
+          >
+            <span className="feedback-route-icon"><Icon name={route.icon} size={14} /></span>
+            <span className="feedback-route-copy">
+              <strong>{route.title}</strong>
+              <small>{route.detail}</small>
+            </span>
+            <code className="feedback-route-agent">#{route.agentName}</code>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function browserLoopSteps(activeTarget: BrowserTarget | undefined, feedback: string, health?: ServerHealth): EvidenceLoopStep[] {
   const notesReady = feedback.trim().length > 0;
   const runtimeState = health ? (health.ready ? 'ready' : health.ok ? 'starting' : 'unhealthy') : 'unknown';
@@ -713,15 +758,66 @@ function browserEvidence(activeTarget: BrowserTarget | undefined, health?: Serve
   ];
 }
 
-function browserFeedbackPrompt(input: { target?: BrowserTarget; project?: Project; health?: ServerHealth; feedback: string }): string | undefined {
+function browserFeedbackRoutes(input: { target?: BrowserTarget; project?: Project; health?: ServerHealth; feedback: string; threadId?: string }): FeedbackRoute[] {
+  const disabled = !input.target;
+  return [
+    {
+      id: 'fix-preview',
+      icon: 'tool',
+      title: 'Fix preview',
+      detail: 'Implement the visible issue and verify the same target.',
+      agentName: 'worker',
+      threadId: input.threadId,
+      disabled,
+      prompt: browserFeedbackPrompt({
+        ...input,
+        task: 'Fix this browser preview issue with the smallest complete implementation change.',
+        owner: '#worker for implementation follow-up after inspecting the preview evidence.',
+        request: 'Please inspect the relevant code, implement the smallest complete fix, and verify the result against this same browser target.'
+      })
+    },
+    {
+      id: 'trace-target',
+      icon: 'search',
+      title: 'Trace target',
+      detail: 'Find the source, route, or runtime evidence before editing.',
+      agentName: 'explorer',
+      threadId: input.threadId,
+      disabled,
+      prompt: browserFeedbackPrompt({
+        ...input,
+        task: 'Trace this browser preview target before implementation.',
+        owner: '#explorer for source and runtime diagnosis before code changes.',
+        request: 'Please map the target URL back to the owning route, component, command output, and runtime evidence. Identify the likely source files and the smallest safe fix path before implementation.'
+      })
+    },
+    {
+      id: 'responsive-pass',
+      icon: 'panel',
+      title: 'Verify responsive',
+      detail: 'Run a desktop/mobile pass and report exact breakpoints.',
+      agentName: 'worker',
+      threadId: input.threadId,
+      disabled,
+      prompt: browserFeedbackPrompt({
+        ...input,
+        task: 'Run a focused responsive verification pass for this browser preview.',
+        owner: '#worker for UI verification and any small responsive fix.',
+        request: 'Please verify the target at desktop and mobile widths, especially 390px wide. Fix overflow, clipping, or overlapping UI only where reproduced, then report the checked viewports.'
+      })
+    }
+  ];
+}
+
+function browserFeedbackPrompt(input: { target?: BrowserTarget; project?: Project; health?: ServerHealth; feedback: string; task?: string; owner?: string; request?: string }): string | undefined {
   if (!input.target) return undefined;
   const lines = [
-    'Review this browser preview and improve the implementation.',
+    input.task ?? 'Review this browser preview and improve the implementation.',
     '',
-    'Recommended owner: #worker for implementation follow-up after inspecting the preview evidence.',
+    `Recommended owner: ${input.owner ?? '#worker for implementation follow-up after inspecting the preview evidence.'}`,
     '',
     `Project: ${input.project?.name ?? 'current project'}`,
-    `Target: ${input.target.url}`,
+    `Target: ${redactUrlForPrompt(input.target.url)}`,
     `Target kind: ${targetKindLabel(input.target.kind)}`,
     `Source: ${input.target.source}`,
     input.target.capturedAt ? `Captured: ${formatTime(input.target.capturedAt)}` : undefined,
@@ -730,7 +826,7 @@ function browserFeedbackPrompt(input: { target?: BrowserTarget; project?: Projec
     'Observed feedback:',
     input.feedback.trim() || '- Describe the visible issue, missing state, or expected behavior here.',
     '',
-    'Please inspect the relevant code, implement the smallest complete fix, and verify the result in the browser preview across desktop and mobile widths.'
+    input.request ?? 'Please inspect the relevant code, implement the smallest complete fix, and verify the result in the browser preview across desktop and mobile widths.'
   ];
   return lines.filter(Boolean).join('\n');
 }
@@ -2286,6 +2382,7 @@ function ArtifactsTab({
   const artifactPrompt = selected ? artifactFeedbackPrompt(selected, project, feedback) : missingArtifactFeedbackPrompt(project, feedback);
   const loopSteps = artifactLoopSteps(selected, feedback);
   const hasArtifactFeedbackPrompt = Boolean(artifactPrompt);
+  const routes = artifactFeedbackRoutes(selected, project, feedback);
 
   async function copyArtifactPrompt() {
     if (!artifactPrompt) return;
@@ -2373,6 +2470,7 @@ function ArtifactsTab({
           copyDisabled={!hasArtifactFeedbackPrompt}
           copied={copiedArtifact}
         />
+        <FeedbackRouteStrip routes={routes} onUsePrompt={onUsePrompt} />
       </div>
     </section>
   );
@@ -2409,6 +2507,56 @@ function artifactLoopSteps(card: TimelineCard | undefined, feedback: string): Ev
       label: 'Verify',
       value: verify,
       tone: card ? 'ok' : notesReady ? 'warn' : 'idle'
+    }
+  ];
+}
+
+function artifactFeedbackRoutes(card: TimelineCard | undefined, project: Project | undefined, feedback: string): FeedbackRoute[] {
+  if (!card) {
+    const prompt = missingArtifactFeedbackPrompt(project, feedback, {
+      owner: '#explorer for missing artifact diagnosis before implementation.',
+      request: 'Please inspect the thread event stream, artifact extraction rules, and source files before editing. Identify whether the artifact was never produced, was filtered out, or is not represented in the Artifacts pane, then implement the smallest complete fix and verify the artifact appears in the pane.'
+    });
+    return [
+      {
+        id: 'trace-missing-artifact',
+        icon: 'search',
+        title: 'Trace missing',
+        detail: 'Diagnose why the expected output is absent.',
+        agentName: 'explorer',
+        disabled: !feedback.trim(),
+        prompt
+      }
+    ];
+  }
+
+  const implementationOwner = card.kind === 'error' ? 'explorer' : 'worker';
+  return [
+    {
+      id: 'apply-artifact-follow-up',
+      icon: card.kind === 'error' ? 'search' : 'tool',
+      title: card.kind === 'error' ? 'Diagnose error' : 'Apply follow-up',
+      detail: card.kind === 'error' ? 'Reproduce and trace the error source.' : 'Use this output as scoped fix context.',
+      agentName: implementationOwner,
+      threadId: card.threadId,
+      prompt: artifactFeedbackPrompt(card, project, feedback, {
+        owner: card.kind === 'error' ? '#explorer for diagnosis before implementation.' : '#worker for scoped follow-up.',
+        request: card.kind === 'error'
+          ? 'Please reproduce or trace the error from the artifact context, identify the source files, and propose the smallest safe implementation path.'
+          : 'Please inspect the source files before editing, keep the change scoped to this artifact context, and verify the affected UI or workflow.'
+      })
+    },
+    {
+      id: 'trace-artifact-source',
+      icon: 'search',
+      title: 'Trace source',
+      detail: 'Map the artifact back to producer and event path.',
+      agentName: 'explorer',
+      threadId: card.threadId,
+      prompt: artifactFeedbackPrompt(card, project, feedback, {
+        owner: '#explorer for source readback and event-path diagnosis.',
+        request: 'Please map this artifact back to the producer command, event payload, source files, and UI rendering path. Report what should be preserved before any implementation changes.'
+      })
     }
   ];
 }
@@ -2659,12 +2807,12 @@ function artifactVerificationLabel(card: TimelineCard): string {
   return 'source check';
 }
 
-function artifactFeedbackPrompt(card: TimelineCard, project: Project | undefined, feedback: string): string {
+function artifactFeedbackPrompt(card: TimelineCard, project: Project | undefined, feedback: string, options?: { owner?: string; opener?: string; request?: string }): string {
   const owner = card.kind === 'error' ? '#explorer for diagnosis' : '#worker for scoped follow-up';
   const lines = [
-    'Use this thread artifact as context for the next Codex task.',
+    options?.opener ?? 'Use this thread artifact as context for the next Codex task.',
     '',
-    `Recommended owner: ${owner}.`,
+    `Recommended owner: ${options?.owner ?? `${owner}.`}`,
     '',
     `Project: ${project?.name ?? 'current project'}`,
     `Artifact: ${card.filePath ?? card.title}`,
@@ -2678,18 +2826,18 @@ function artifactFeedbackPrompt(card: TimelineCard, project: Project | undefined
     'Artifact excerpt:',
     artifactExcerpt(card),
     '',
-    'Please inspect the source files before editing, keep the change scoped, and verify the affected UI or workflow.'
+    options?.request ?? 'Please inspect the source files before editing, keep the change scoped, and verify the affected UI or workflow.'
   ];
   return lines.join('\n');
 }
 
-function missingArtifactFeedbackPrompt(project: Project | undefined, feedback: string): string | undefined {
+function missingArtifactFeedbackPrompt(project: Project | undefined, feedback: string, options?: { owner?: string; request?: string }): string | undefined {
   const feedbackText = feedback.trim();
   if (!feedbackText) return undefined;
   const lines = [
     'Investigate a missing or expected thread artifact.',
     '',
-    'Recommended owner: #explorer for diagnosis before implementation.',
+    `Recommended owner: ${options?.owner ?? '#explorer for diagnosis before implementation.'}`,
     '',
     `Project: ${project?.name ?? 'current project'}`,
     'Artifact: none selected or none produced',
@@ -2697,7 +2845,7 @@ function missingArtifactFeedbackPrompt(project: Project | undefined, feedback: s
     'Expected artifact feedback:',
     feedbackText,
     '',
-    'Please inspect the thread event stream, artifact extraction rules, and source files before editing. Identify whether the artifact was never produced, was filtered out, or is not represented in the Artifacts pane, then implement the smallest complete fix and verify the artifact appears in the pane.'
+    options?.request ?? 'Please inspect the thread event stream, artifact extraction rules, and source files before editing. Identify whether the artifact was never produced, was filtered out, or is not represented in the Artifacts pane, then implement the smallest complete fix and verify the artifact appears in the pane.'
   ];
   return lines.join('\n');
 }
@@ -2705,4 +2853,18 @@ function missingArtifactFeedbackPrompt(project: Project | undefined, feedback: s
 function artifactExcerpt(card: TimelineCard): string {
   const value = card.diff || card.stdout || card.stderr || card.text || safeJson(card.payload ?? card);
   return compactText(value, 1800);
+}
+
+function redactUrlForPrompt(value: string): string {
+  try {
+    const url = new URL(value);
+    for (const key of [...url.searchParams.keys()]) {
+      if (/(token|secret|password|key|auth|session|cookie)/i.test(key)) {
+        url.searchParams.set(key, 'REDACTED');
+      }
+    }
+    return url.toString();
+  } catch {
+    return value.replace(/([?&][^=\s]*(?:token|secret|password|key|auth|session|cookie)[^=\s]*=)[^&\s]+/gi, '$1REDACTED');
+  }
 }
