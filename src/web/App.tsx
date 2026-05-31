@@ -627,6 +627,7 @@ export function App() {
           <Sidebar
             projects={state.projects}
             threads={state.threads}
+            approvals={state.approvals}
             selectedProjectId={selectedProject?.id}
             selectedThreadId={selectedThread?.id}
             onSelectProject={(projectId) => dispatch({ type: 'raw', method: 'selectProject', params: { projectId } })}

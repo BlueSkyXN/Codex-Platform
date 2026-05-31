@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import type { ManagementTab, Project, ThreadSummary } from '../../shared/types.js';
+import type { ApprovalRequest, ManagementTab, Project, ThreadSummary } from '../../shared/types.js';
 import { Icon } from './Icon.js';
 
 export function Sidebar(props: {
   projects: Project[];
   threads: ThreadSummary[];
+  approvals?: ApprovalRequest[];
   selectedProjectId?: string;
   selectedThreadId?: string;
   onSelectProject: (projectId: string) => void;
@@ -22,6 +23,7 @@ export function Sidebar(props: {
   const [savingProject, setSavingProject] = useState(false);
 
   const lower = query.trim().toLowerCase();
+  const projectNameById = useMemo(() => new Map(props.projects.map((project) => [project.id, project.name])), [props.projects]);
   const projectsWithThreads = useMemo(() => props.projects.map((project) => ({
     project,
     threads: props.threads
@@ -29,6 +31,9 @@ export function Sidebar(props: {
       .filter((thread) => !lower || `${project.name} ${thread.name ?? ''} ${thread.preview ?? ''} ${thread.id} ${thread.status ?? ''}`.toLowerCase().includes(lower))
       .sort((a, b) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
   })), [props.projects, props.threads, lower]);
+  const agentStackRows = useMemo(() => buildAgentStack(props.threads, props.approvals ?? [], props.selectedThreadId, projectNameById), [props.threads, props.approvals, props.selectedThreadId, projectNameById]);
+  const agentStack = agentStackRows.slice(0, 4);
+  const hiddenAgentRuns = Math.max(0, agentStackRows.length - agentStack.length);
 
   async function submitProject() {
     const trimmed = cwd.trim();
@@ -87,6 +92,35 @@ export function Sidebar(props: {
           </button>
         </div>
       </nav>
+
+      <section className="agent-stack-section" aria-label="Agent run stack">
+        <div className="sidebar-nav-label agent-stack-label" aria-label={`Agent stack: ${agentStackRows.length ? `${agentStackRows.length} live` : 'idle'}`}>
+          <span>Agent stack</span>
+          <span>{agentStackRows.length ? `${agentStackRows.length} live` : 'idle'}</span>
+        </div>
+        <div className="active-thread-strip agent-stack-list">
+          {agentStack.length === 0 ? (
+            <div className="agent-stack-empty">No active runs</div>
+          ) : null}
+          {agentStack.map((row) => (
+            <button
+              key={row.thread.id}
+              className={`queue-row agent-stack-row ${row.thread.id === props.selectedThreadId ? 'active' : ''}`}
+              onClick={() => props.onSelectThread(row.thread.id)}
+              title={`${row.title} · ${row.projectName}`}
+              aria-label={`${row.title}, ${row.projectName}, ${row.statusLabel}`}
+            >
+              <span className={`queue-indicator ${row.statusClass}`} />
+              <span className="agent-stack-copy">
+                <span className="queue-title">{row.title}</span>
+                <span className="queue-detail">{row.projectName} · {row.statusLabel}</span>
+              </span>
+              <span className={`queue-status ${row.statusClass}`}>{row.badge}</span>
+            </button>
+          ))}
+          {hiddenAgentRuns > 0 ? <div className="agent-stack-more">{hiddenAgentRuns} more active</div> : null}
+        </div>
+      </section>
 
       <section className="sidebar-search-block sidebar-search-shell">
         <Icon name="search" size={14} />
@@ -168,6 +202,46 @@ function compactThreadId(id: string): string {
 
 function statusClass(status?: string): string {
   return (status ?? 'idle').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+type AgentStackRow = {
+  thread: ThreadSummary;
+  title: string;
+  projectName: string;
+  statusClass: string;
+  statusLabel: string;
+  badge: string;
+  priority: number;
+  updatedAt: number;
+};
+
+function buildAgentStack(threads: ThreadSummary[], approvals: ApprovalRequest[], selectedThreadId: string | undefined, projectNameById: Map<string, string>): AgentStackRow[] {
+  return threads
+    .map((thread) => {
+      const approvalCount = approvals.filter((approval) => approval.threadId === thread.id || (!approval.threadId && thread.id === selectedThreadId)).length;
+      const rawStatus = statusClass(thread.status);
+      const status = approvalCount > 0 ? 'waiting_approval' : rawStatus;
+      const active = isAgentActiveStatus(status);
+      const priority = approvalCount > 0 ? 4 : active ? 3 : 0;
+      const title = thread.name || thread.preview || compactThreadId(thread.id);
+      return {
+        thread,
+        title,
+        projectName: projectNameById.get(thread.projectId) ?? 'Default project',
+        statusClass: status,
+        statusLabel: approvalCount > 0 ? `${approvalCount} approval${approvalCount === 1 ? '' : 's'}` : shortStatus(status),
+        badge: approvalCount > 0 ? String(approvalCount) : shortStatus(status),
+        priority,
+        updatedAt: thread.updatedAt ?? thread.createdAt ?? 0
+      };
+    })
+    .filter((row) => row.priority > 0)
+    .sort((a, b) => b.priority - a.priority || b.updatedAt - a.updatedAt);
+}
+
+function isAgentActiveStatus(status?: string): boolean {
+  const raw = String(status ?? '').toLowerCase();
+  return raw.includes('approval') || raw.includes('running') || raw.includes('active') || raw.includes('progress');
 }
 
 function shortStatus(status?: string): string {
