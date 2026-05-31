@@ -12,3 +12,5 @@ dist/
 coverage/
 local/
 cloud/hfs/.bundle/
+.playwright-cli/
+output/

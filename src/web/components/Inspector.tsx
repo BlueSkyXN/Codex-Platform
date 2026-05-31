@@ -669,6 +669,7 @@ function GitTab(props: {
   const [copiedPr, setCopiedPr] = useState(false);
   const [copiedReviewBrief, setCopiedReviewBrief] = useState(false);
   const [copiedReviewPrompt, setCopiedReviewPrompt] = useState(false);
+  const [copiedPrBody, setCopiedPrBody] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
   const [selectedReviewLine, setSelectedReviewLine] = useState<DiffLineSelection | undefined>();
   const [reviewNote, setReviewNote] = useState('');
@@ -684,6 +685,7 @@ function GitTab(props: {
   const draftMessage = draftCommitMessage(files);
   const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage, reviewFindings) : undefined;
   const reviewPrompt = status?.isRepo ? gitReviewPrompt(status, reviewFindings, draftMessage) : undefined;
+  const prBody = status?.isRepo ? gitPrBody(status, props.githubActions, props.health, draftMessage, reviewFindings, shipInfo?.prNote, releaseInfo?.detail) : undefined;
 
   async function copyPushCommand(command?: string) {
     if (!command) return;
@@ -711,6 +713,13 @@ function GitTab(props: {
     await copyText(reviewPrompt);
     setCopiedReviewPrompt(true);
     window.setTimeout(() => setCopiedReviewPrompt(false), 1800);
+  }
+
+  async function copyPrBody() {
+    if (!prBody) return;
+    await copyText(prBody);
+    setCopiedPrBody(true);
+    window.setTimeout(() => setCopiedPrBody(false), 1800);
   }
 
   function requestGitApproval(next: PendingGitApproval) {
@@ -859,6 +868,7 @@ function GitTab(props: {
               </div>
               <div className="git-review-actions">
                 <button className="mini-action" disabled={!reviewBrief} onClick={() => void copyReviewBrief()}>{copiedReviewBrief ? 'Copied' : 'Copy brief'}</button>
+                <button className="mini-action" disabled={!prBody} onClick={() => void copyPrBody()}>{copiedPrBody ? 'Copied' : 'Copy PR body'}</button>
                 <button className="mini-action" disabled={reviewFindings.length === 0 || !reviewPrompt} onClick={() => void copyReviewPrompt()}>{copiedReviewPrompt ? 'Copied' : 'Copy follow-up'}</button>
               </div>
             </div>
@@ -1150,12 +1160,69 @@ function gitReviewPrompt(status: GitStatusSummary, findings: GitReviewFinding[],
   return lines.filter((line): line is string => line !== undefined).join('\n');
 }
 
+function gitPrBody(
+  status: GitStatusSummary,
+  actions?: GitHubActionsSummary,
+  health?: ServerHealth,
+  draftMessage?: string,
+  findings: GitReviewFinding[] = [],
+  shipNote?: string,
+  releaseDetail?: string
+): string {
+  const staged = status.files.filter(canUnstageFile).map((file) => file.path);
+  const unstaged = status.files.filter(canStageFile).map((file) => file.path);
+  const changed = status.files.map((file) => file.path);
+  const buildSha = health?.build?.sha;
+  const lines = [
+    '## Summary',
+    `- ${draftMessage || 'Codex-Platform update'}`,
+    `- Branch: ${status.branch ?? 'HEAD'}`,
+    `- HEAD: ${status.head ?? 'unknown'}`,
+    shipNote ? `- Release path: ${shipNote}` : undefined,
+    releaseDetail ? `- Deployment evidence: ${releaseDetail}` : undefined,
+    '',
+    '## Review Scope',
+    `- Changed files: ${changed.length}`,
+    `- Staged files: ${staged.length}`,
+    `- Unstaged files: ${unstaged.length}`,
+    '',
+    'Changed files:',
+    ...listPaths(changed),
+    '',
+    '## Inline Review Findings',
+    ...reviewFindingLines(findings),
+    '',
+    '## Validation',
+    `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
+    `- Runtime build SHA: ${buildSha ?? 'unknown'}`,
+    `- HF target: ${health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local/unknown'}`,
+    ...githubActionsRunLines(actions),
+    '',
+    '## Release Checklist',
+    '- [ ] Review staged and unstaged diffs separately.',
+    '- [ ] Confirm the commit message matches the staged scope.',
+    '- [ ] Push the branch or default branch intentionally.',
+    '- [ ] Confirm GitHub Actions completed successfully for this commit.',
+    '- [ ] Confirm Hugging Face /healthz build.sha matches the GitHub commit.',
+    '- [ ] Run the HF smoke check before calling the release complete.'
+  ];
+  return lines.filter((line): line is string => line !== undefined).join('\n');
+}
+
 function reviewFindingLines(findings: GitReviewFinding[]): string[] {
   if (findings.length === 0) return ['- none'];
   return findings.slice(0, 12).flatMap((finding) => [
     `- ${finding.path}:${finding.lineNumber} (${finding.kind}) ${finding.note}`,
     `  ${finding.lineText || ' '}`
   ]);
+}
+
+function githubActionsRunLines(actions?: GitHubActionsSummary): string[] {
+  if (!actions?.runs.length) return ['- GitHub Actions runs: none loaded'];
+  return [
+    '- GitHub Actions runs:',
+    ...actions.runs.slice(0, 4).map((run) => `  - ${run.name}: ${run.conclusion ?? run.status ?? 'unknown'}${run.headSha ? ` (${shortSha(run.headSha)})` : ''}`)
+  ];
 }
 
 function listPaths(paths: string[]): string[] {
