@@ -5781,6 +5781,9 @@ button,
 .queue-primer-owner,
 .queue-primer-state {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border: 1px solid var(--codex-workbench-card-border, var(--border));
   border-radius: 999px;
   background: var(--codex-workbench-chip-bg, var(--codex-surface));
@@ -7257,6 +7260,38 @@ body {
   white-space: nowrap;
 }
 
+.lane-meta {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.lane-owner {
+  position: relative;
+  min-width: 0;
+  max-width: 92px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 12%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--codex-surface), transparent 8%);
+  color: var(--codex-muted);
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.lane-owner span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .lane-actions {
   min-width: 0;
   display: inline-flex;
@@ -7336,6 +7371,11 @@ body {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
+  .lane-main .lane-meta {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
   .lane-main .lane-state {
     grid-column: 2;
     width: fit-content;
@@ -7370,6 +7410,21 @@ body {
   .lane-handoff span,
   .lane-prompt-copy span {
     display: none;
+  }
+
+  .lane-owner span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .lane-owner {
+    width: 28px;
+    justify-content: center;
+    padding: 0;
   }
 }
 

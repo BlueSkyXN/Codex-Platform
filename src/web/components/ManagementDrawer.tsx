@@ -462,7 +462,7 @@ function AutomationsPanel(props: {
                 <strong>{row.title}</strong>
                 <small>{row.detail}</small>
               </span>
-              <span className="lane-state">{row.state}</span>
+              <LaneBadges agentName={row.agentName} state={row.state} />
             </button>
             <div className="lane-actions">
               <QueuePromptCopyButton prompt={row.prompt} label="Copy" title={`Copy ${row.title} prompt`} />
@@ -671,7 +671,7 @@ function TriagePanel(props: {
                 <strong>{item.title}</strong>
                 <small>{item.detail}</small>
               </span>
-              <span className="lane-state">{item.tone}</span>
+              <LaneBadges agentName={item.agentName} state={item.tone} />
             </button>
             <div className="lane-actions">
               <QueuePromptCopyButton prompt={item.prompt} label="Copy" title={`Copy ${item.title} prompt`} />
@@ -766,7 +766,7 @@ function AgentRoutingStrip(props: { routes: AgentRouteCard[]; onUsePrompt?: (han
             disabled={!props.onUsePrompt}
             aria-label={`Hand off ${route.agentName} route to composer`}
           >
-            <span className="agent-route-icon"><Icon name={route.agentName === 'worker' ? 'tool' : 'agent'} size={14} /></span>
+            <span className="agent-route-icon"><Icon name={agentRouteIcon(route.agentName)} size={14} /></span>
             <span className="agent-route-copy">
               <strong>#{route.agentName}</strong>
               <small>{route.detail}</small>
@@ -777,6 +777,25 @@ function AgentRoutingStrip(props: { routes: AgentRouteCard[]; onUsePrompt?: (han
       </div>
     </div>
   );
+}
+
+function LaneBadges(props: { agentName?: string; state: WorkQueueState }) {
+  const agentName = props.agentName ?? 'explorer';
+  return (
+    <span className="lane-meta">
+      <span className="lane-owner">
+        <Icon name={agentRouteIcon(agentName)} size={12} />
+        <span>#{agentName}</span>
+      </span>
+      <span className="lane-state">{props.state}</span>
+    </span>
+  );
+}
+
+function agentRouteIcon(agentName?: string): IconName {
+  if (agentName === 'worker') return 'tool';
+  if (agentName === 'standby') return 'clock';
+  return 'agent';
 }
 
 function QueuePrimer(props: {
@@ -799,7 +818,10 @@ function QueuePrimer(props: {
           <strong>{props.title}</strong>
           <span>{props.subtitle}</span>
         </div>
-        <span className="queue-primer-owner">{props.owner}</span>
+        <span className="queue-primer-owner">
+          <Icon name={agentRouteIcon(props.owner.replace(/^#/, ''))} size={12} />
+          {props.owner}
+        </span>
       </div>
       <div className="queue-primer-main">
         <span className="queue-primer-icon"><Icon name={props.item.icon} size={15} /></span>
