@@ -172,6 +172,8 @@ export function Inspector(props: {
           errors={props.errors}
           onDecision={props.onDecision}
           onFocusCard={props.onFocusCard}
+          reviewEvidence={reviewEvidence}
+          onOpenTab={setActiveTab}
         />
       ) : null}
       {activeTab === 'plan' ? <PlanTab plans={plans} /> : null}
@@ -262,10 +264,12 @@ function ReviewTab(props: {
   approvals: ApprovalRequest[];
   approvalHistory: ApprovalRecord[];
   relatedApproval?: ApprovalRequest;
+  reviewEvidence: ReviewEvidencePacket;
   errors: string[];
   onDecision: (requestId: string | number, decision: ApprovalDecision) => void;
   onStartReview?: () => void;
   onFocusCard?: (cardId: string) => void;
+  onOpenTab?: (tab: InspectorTab) => void;
 }) {
   const commands = props.cards.filter((card) => card.kind === 'command');
   const diffs = props.cards.filter((card) => card.kind === 'fileChange');
@@ -314,8 +318,10 @@ function ReviewTab(props: {
           <ReviewSignal label="Review" value={changedFiles === 0 ? 'clean' : `${changedFiles} changed`} tone={changedFiles ? 'warn' : 'ok'} />
           <ReviewSignal label="Ship" value={shipInfo?.label ?? 'not ready'} tone={shipInfo?.state === 'blocked' ? 'warn' : shipInfo?.state === 'ready' ? 'ok' : undefined} />
         </div>
+        <ReviewEvidencePacketCard evidence={props.reviewEvidence} onOpenTab={props.onOpenTab} />
         <div className="review-actions-row">
           <button className="small primary" disabled={!props.onStartReview} onClick={props.onStartReview}>Start review</button>
+          <button className="small ghost" disabled={!props.onOpenTab} onClick={() => props.onOpenTab?.('git')}>Open Git</button>
         </div>
       </section>
 
@@ -375,6 +381,58 @@ function ReviewSignal(props: { label: string; value: string; tone?: 'ok' | 'warn
     <div className={`review-signal ${props.tone ?? ''}`}>
       <span>{props.label}</span>
       <strong>{props.value}</strong>
+    </div>
+  );
+}
+
+function ReviewEvidencePacketCard(props: { evidence: ReviewEvidencePacket; onOpenTab?: (tab: InspectorTab) => void }) {
+  const browserNotes = props.evidence.browserFeedback.trim();
+  const artifactNotes = props.evidence.artifactFeedback.trim();
+  const firstTarget = props.evidence.browserTargets[0];
+  const firstArtifact = props.evidence.artifacts[0];
+  const totalSignals = props.evidence.browserTargets.length + props.evidence.artifacts.length + (browserNotes ? 1 : 0) + (artifactNotes ? 1 : 0);
+  const items = [
+    {
+      id: 'browser',
+      icon: 'panel' as IconName,
+      label: 'Browser',
+      value: props.evidence.browserTargets.length === 0 ? 'no target' : pluralCount(props.evidence.browserTargets.length, 'target'),
+      detail: browserNotes || firstTarget?.title || 'Capture a preview target before visual review.',
+      tab: 'browser' as InspectorTab,
+      tone: props.evidence.browserTargets.length > 0 || Boolean(browserNotes) ? 'ok' : undefined
+    },
+    {
+      id: 'artifacts',
+      icon: 'paperclip' as IconName,
+      label: 'Artifacts',
+      value: props.evidence.artifacts.length === 0 ? 'no output' : pluralCount(props.evidence.artifacts.length, 'item'),
+      detail: artifactNotes || firstArtifact?.filePath || firstArtifact?.title || 'No thread artifact has been captured yet.',
+      tab: 'artifacts' as InspectorTab,
+      tone: props.evidence.artifacts.length > 0 || Boolean(artifactNotes) ? 'ok' : undefined
+    }
+  ];
+
+  return (
+    <div className="review-evidence-card" aria-label="Browser and artifact evidence packet">
+      <div className="review-evidence-head">
+        <span className="review-evidence-icon"><Icon name="spark" size={13} /></span>
+        <span>
+          <strong>Evidence packet</strong>
+          <small>{totalSignals === 0 ? 'No browser or artifact evidence captured yet.' : `${totalSignals} review signal${totalSignals === 1 ? '' : 's'} ready for handoff.`}</small>
+        </span>
+      </div>
+      <div className="review-evidence-list">
+        {items.map((item) => (
+          <button key={item.id} className={`review-evidence-row ${item.tone ?? ''}`} disabled={!props.onOpenTab} onClick={() => props.onOpenTab?.(item.tab)}>
+            <span className="review-evidence-row-icon"><Icon name={item.icon} size={13} /></span>
+            <span className="review-evidence-copy">
+              <strong>{item.label}</strong>
+              <small title={item.detail}>{item.detail}</small>
+            </span>
+            <code>{item.value}</code>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

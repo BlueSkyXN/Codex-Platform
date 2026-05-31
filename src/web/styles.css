@@ -7800,3 +7800,107 @@ body {
     max-width: 100%;
   }
 }
+
+/* Review-first evidence packet: Browser and Artifacts signals belong in review, not only in their tabs. */
+.review-evidence-card {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border), transparent 18%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 18%);
+  padding: 9px 0;
+}
+
+.review-evidence-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.review-evidence-icon,
+.review-evidence-row-icon {
+  display: inline-grid;
+  place-items: center;
+  color: var(--codex-muted);
+}
+
+.review-evidence-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--codex-soft);
+}
+
+.review-evidence-head span:last-child,
+.review-evidence-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.review-evidence-head strong,
+.review-evidence-head small,
+.review-evidence-copy strong,
+.review-evidence-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-evidence-head strong,
+.review-evidence-copy strong {
+  color: var(--codex-text);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.review-evidence-head small,
+.review-evidence-copy small {
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.review-evidence-list {
+  display: grid;
+  gap: 3px;
+}
+
+.review-evidence-row {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 0;
+  border-radius: var(--codex-radius-md, 8px);
+  background: transparent;
+  color: inherit;
+  padding: 5px 6px;
+  text-align: left;
+}
+
+.review-evidence-row:hover:not(:disabled) {
+  background: var(--codex-hover);
+}
+
+.review-evidence-row:disabled {
+  cursor: default;
+}
+
+.review-evidence-row code {
+  max-width: 86px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--codex-muted);
+  font-size: 11px;
+}
+
+.review-evidence-row.ok .review-evidence-row-icon,
+.review-evidence-row.ok code {
+  color: var(--codex-green, var(--ok));
+}
