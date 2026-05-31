@@ -7,6 +7,7 @@ import { assertSafeRuntimeConfig, config } from './config.js';
 import { ProjectRegistry } from './api/projectRegistry.js';
 import { listCustomAgents } from './api/agentRegistry.js';
 import { readGitHubActionsSummary } from './api/githubActions.js';
+import { readGitHubPullRequestSummary } from './api/githubPullRequests.js';
 import { PersistentStore } from './store/PersistentStore.js';
 import { createRateLimiter } from './security/rateLimit.js';
 import { isAuthorizedToken, loginRoute, logoutRoute, requireAuth, tokenFromUpgrade } from './security/auth.js';
@@ -453,6 +454,14 @@ app.get('/api/projects/:projectId/github/actions', asyncRoute(async (req, res) =
   const status = await readGitStatus(project.cwd, config.limits.gitCommandTimeoutMs);
   const actions = await readGitHubActionsSummary(status, config.github.actionsTimeoutMs, config.github.token);
   res.json(actions);
+}));
+
+app.get('/api/projects/:projectId/github/pulls', asyncRoute(async (req, res) => {
+  const project = registry.get(String(req.params.projectId));
+  if (!project) return res.status(404).json({ error: `Unknown project: ${req.params.projectId}` });
+  const status = await readGitStatus(project.cwd, config.limits.gitCommandTimeoutMs);
+  const pulls = await readGitHubPullRequestSummary(status, config.github.actionsTimeoutMs, config.github.token);
+  res.json(pulls);
 }));
 
 app.get('/api/projects/:projectId/git/diff', asyncRoute(async (req, res) => {

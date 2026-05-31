@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DiffBlock, type DiffLineSelection } from './DiffBlock.js';
 import { Icon, type IconName } from './Icon.js';
-import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitHubPullRequestSummary, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 
 const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', 'terminal', 'browser', 'artifacts', 'raw'];
@@ -63,6 +63,7 @@ export function Inspector(props: {
   gitDiff?: GitDiffResult;
   gitOperations?: GitOperationRecord[];
   githubActions?: GitHubActionsSummary;
+  githubPullRequests?: GitHubPullRequestSummary;
   rawEvents?: RawEventRecord[];
   selectedGitPath?: string;
   gitActionBusy?: boolean;
@@ -159,6 +160,7 @@ export function Inspector(props: {
           diff={props.gitDiff}
           operations={props.gitOperations ?? []}
           githubActions={props.githubActions}
+          githubPullRequests={props.githubPullRequests}
           health={props.health}
           reviewEvidence={reviewEvidence}
           reviewFindings={reviewFindings}
@@ -830,6 +832,7 @@ function GitTab(props: {
   diff?: GitDiffResult;
   operations: GitOperationRecord[];
   githubActions?: GitHubActionsSummary;
+  githubPullRequests?: GitHubPullRequestSummary;
   health?: ServerHealth;
   reviewEvidence: ReviewEvidencePacket;
   reviewFindings: GitReviewFinding[];
@@ -865,27 +868,30 @@ function GitTab(props: {
   const stagedPaths = files.filter(canUnstageFile).map((file) => file.path);
   const hasStagedChanges = stagedPaths.length > 0;
   const shipInfo = status?.isRepo ? gitShipInfo(status) : undefined;
+  const prInfo = status?.isRepo && shipInfo ? gitPullRequestInfo(status, shipInfo, props.githubPullRequests) : undefined;
   const releaseInfo = status?.isRepo ? gitReleaseInfo(status, props.health, props.githubActions) : undefined;
   const draftMessage = draftCommitMessage(files);
-  const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage, reviewFindings, props.reviewEvidence) : undefined;
+  const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.githubPullRequests, props.health, draftMessage, reviewFindings, props.reviewEvidence) : undefined;
   const reviewPrompt = status?.isRepo ? gitReviewPrompt(status, reviewFindings, draftMessage) : undefined;
-  const prBody = status?.isRepo ? gitPrBody(status, props.githubActions, props.health, draftMessage, reviewFindings, props.reviewEvidence, shipInfo?.prNote, releaseInfo?.detail) : undefined;
-  const closureSteps = status?.isRepo && shipInfo && releaseInfo ? gitClosureSteps({
+  const prBody = status?.isRepo ? gitPrBody(status, props.githubActions, props.githubPullRequests, props.health, draftMessage, reviewFindings, props.reviewEvidence, shipInfo?.prNote, releaseInfo?.detail) : undefined;
+  const closureSteps = status?.isRepo && shipInfo && prInfo && releaseInfo ? gitClosureSteps({
     status,
     stageablePaths,
     stagedPaths,
     draftMessage,
     reviewFindings,
     shipInfo,
+    prInfo,
     releaseInfo
   }) : [];
-  const nextReviewItem = status?.isRepo && shipInfo && releaseInfo && reviewBrief ? gitReviewQueueItem({
+  const nextReviewItem = status?.isRepo && shipInfo && prInfo && releaseInfo && reviewBrief ? gitReviewQueueItem({
     status,
     stageablePaths,
     stagedPaths,
     draftMessage,
     reviewFindings,
     shipInfo,
+    prInfo,
     releaseInfo,
     reviewBrief,
     prBody,
@@ -1059,6 +1065,7 @@ function GitTab(props: {
                 <ShipCheck label="Behind" value={String(status.behind ?? 0)} state={(status.behind ?? 0) > 0 ? 'warn' : 'ok'} />
                 <ShipCheck label="Remote" value={shipInfo.remoteLabel} state={status.remoteUrl ? 'ok' : 'warn'} />
                 <ShipCheck label="PR base" value={shipInfo.prMode === 'unavailable' ? 'unavailable' : `${shipInfo.prBaseBranch ?? 'main'} · ${baseBranchCheckLabel(shipInfo.prBaseSource)}`} detail={shipInfo.prMode === 'unavailable' ? undefined : baseBranchSourceLabel(shipInfo.prBaseSource)} state={shipInfo.prMode === 'unavailable' ? 'idle' : 'ok'} />
+                {prInfo ? <ShipCheck label="PR" value={prInfo.label} detail={prInfo.detail} state={prInfo.checkState} /> : null}
               </div>
               {shipInfo.pushCommand ? (
                 <div className="git-push-command">
@@ -1079,6 +1086,16 @@ function GitTab(props: {
                 </div>
               ) : null}
               <div className="git-pr-note">{shipInfo.prNote}</div>
+              {prInfo ? (
+                <div className={`git-pr-summary ${prInfo.state}`}>
+                  <span className="git-pr-summary-icon"><Icon name={prInfo.state === 'open' || prInfo.state === 'draft' ? 'branch' : 'inbox'} size={14} /></span>
+                  <span>
+                    <strong>{prInfo.title}</strong>
+                    <small>{prInfo.detail}</small>
+                  </span>
+                  {prInfo.href ? <a href={prInfo.href} target="_blank" rel="noreferrer">{prInfo.actionLabel}</a> : null}
+                </div>
+              ) : null}
               <div className="git-ship-links">
                 {shipInfo.compareUrl && !shipInfo.prUrl ? <a href={shipInfo.compareUrl} target="_blank" rel="noreferrer">{shipInfo.prMode === 'direct' ? 'Open commits' : 'Open compare'}</a> : null}
                 {shipInfo.prUrl ? <a href={shipInfo.prUrl} target="_blank" rel="noreferrer">Open PR draft</a> : null}
@@ -1339,6 +1356,16 @@ type GitClosureStepModel = {
   state: 'ok' | 'warn' | 'idle';
 };
 
+type GitPullRequestInfo = {
+  state: GitHubPullRequestSummary['state'];
+  label: string;
+  title: string;
+  detail: string;
+  checkState: 'ok' | 'warn' | 'idle';
+  actionLabel: string;
+  href?: string;
+};
+
 type GitReviewQueueItem = {
   id: 'sync' | 'findings' | 'unstaged' | 'staged' | 'push' | 'release' | 'synced';
   title: string;
@@ -1422,6 +1449,7 @@ function gitClosureSteps(input: {
   draftMessage: string;
   reviewFindings: GitReviewFinding[];
   shipInfo: ReturnType<typeof gitShipInfo>;
+  prInfo: GitPullRequestInfo;
   releaseInfo: ReturnType<typeof gitReleaseInfo>;
 }): GitClosureStepModel[] {
   const changedCount = input.status.files.length;
@@ -1447,6 +1475,11 @@ function gitClosureSteps(input: {
       state: input.shipInfo.state === 'ready' ? 'ok' : 'warn'
     },
     {
+      label: 'PR evidence',
+      value: input.prInfo.label,
+      state: input.prInfo.checkState
+    },
+    {
       label: 'Release verify',
       value: input.releaseInfo.label,
       state: input.releaseInfo.state === 'ready' ? 'ok' : input.releaseInfo.state === 'blocked' ? 'warn' : 'idle'
@@ -1461,6 +1494,7 @@ function gitReviewQueueItem(input: {
   draftMessage: string;
   reviewFindings: GitReviewFinding[];
   shipInfo: ReturnType<typeof gitShipInfo>;
+  prInfo: GitPullRequestInfo;
   releaseInfo: ReturnType<typeof gitReleaseInfo>;
   reviewBrief: string;
   prBody?: string;
@@ -1542,15 +1576,21 @@ function gitReviewQueueItem(input: {
   if ((input.status.ahead ?? 0) > 0) {
     return gitReviewQueueModel({
       id: 'push',
-      title: 'Push and PR verification',
-      detail: input.shipInfo.prNote,
+      title: input.prInfo.state === 'open' || input.prInfo.state === 'draft' ? 'Push and update PR' : 'Push and open PR',
+      detail: input.prInfo.detail,
       owner: '#worker',
       state: 'ready',
       metricLabel: 'Ahead',
       metricValue: String(input.status.ahead ?? 0),
       agentName: 'worker',
-      openLabel: input.shipInfo.compareUrl ? 'Open compare' : 'Open repo',
-      openTarget: input.shipInfo.compareUrl ? { kind: 'url', url: input.shipInfo.compareUrl } : input.shipInfo.repoUrl ? { kind: 'url', url: input.shipInfo.repoUrl } : undefined,
+      openLabel: input.prInfo.href ? input.prInfo.actionLabel : input.shipInfo.compareUrl ? 'Open compare' : 'Open repo',
+      openTarget: input.prInfo.href
+        ? { kind: 'url', url: input.prInfo.href }
+        : input.shipInfo.compareUrl
+          ? { kind: 'url', url: input.shipInfo.compareUrl }
+          : input.shipInfo.repoUrl
+            ? { kind: 'url', url: input.shipInfo.repoUrl }
+            : undefined,
       ...base
     });
   }
@@ -1698,7 +1738,7 @@ function commitScope(paths: string[]): 'docs' | 'styles' | 'server' | 'release' 
   return 'mixed';
 }
 
-function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth, draftMessage?: string, findings: GitReviewFinding[] = [], evidence?: ReviewEvidencePacket): string {
+function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, pulls?: GitHubPullRequestSummary, health?: ServerHealth, draftMessage?: string, findings: GitReviewFinding[] = [], evidence?: ReviewEvidencePacket): string {
   const staged = status.files.filter(canUnstageFile).map((file) => file.path);
   const unstaged = status.files.filter(canStageFile).map((file) => file.path);
   const shipInfo = gitShipInfo(status);
@@ -1726,7 +1766,11 @@ function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary
     'Browser and artifact evidence:',
     ...reviewEvidenceSummaryLines(evidence),
     '',
+    'PR evidence:',
+    ...githubPullRequestLines(pulls),
+    '',
     'Verification evidence:',
+    `- GitHub PR: ${githubPullRequestShipLabel(pulls)}`,
     `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
     `- Runtime build: ${health?.build?.sha ?? 'unknown'}`,
     `- HF target: ${health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local/unknown'}`,
@@ -1779,6 +1823,7 @@ function gitReviewHandoffPrompt(reviewBrief: string, prBody: string | undefined,
 function gitPrBody(
   status: GitStatusSummary,
   actions?: GitHubActionsSummary,
+  pulls?: GitHubPullRequestSummary,
   health?: ServerHealth,
   draftMessage?: string,
   findings: GitReviewFinding[] = [],
@@ -1816,7 +1861,11 @@ function gitPrBody(
     '## Artifact Evidence',
     ...artifactEvidenceLines(evidence),
     '',
+    '## PR Evidence',
+    ...githubPullRequestLines(pulls),
+    '',
     '## Validation',
+    `- GitHub PR: ${githubPullRequestShipLabel(pulls)}`,
     `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
     `- Runtime build SHA: ${buildSha ?? 'unknown'}`,
     `- HF target: ${health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local/unknown'}`,
@@ -1875,6 +1924,17 @@ function githubActionsRunLines(actions?: GitHubActionsSummary): string[] {
     '- GitHub Actions runs:',
     ...actions.runs.slice(0, 4).map((run) => `  - ${run.name}: ${run.conclusion ?? run.status ?? 'unknown'}${run.headSha ? ` (${shortSha(run.headSha)})` : ''}`)
   ];
+}
+
+function githubPullRequestLines(pulls?: GitHubPullRequestSummary): string[] {
+  if (!pulls) return ['- GitHub PR: loading'];
+  if (pulls.state === 'direct') return [`- Direct default-branch flow: ${pulls.branch ?? 'current branch'}${pulls.base ? ` -> ${pulls.base}` : ''}`];
+  if (pulls.state === 'none') return [`- No open PR for ${pulls.branch ?? 'current branch'} into ${pulls.base ?? 'default branch'}.`];
+  if (pulls.state === 'unavailable') return [`- GitHub PR unavailable: ${pulls.error ?? 'no PR evidence loaded'}`];
+  if (pulls.state === 'unknown') return ['- GitHub PR state unknown.'];
+  const visible = pulls.pulls.slice(0, 4).map((pull) => `- #${pull.number}${pull.draft ? ' draft' : ''}: ${pull.title}${pull.base && pull.head ? ` (${pull.head} -> ${pull.base})` : ''}`);
+  if (pulls.pulls.length > visible.length) visible.push(`- ${pulls.pulls.length - visible.length} more open PRs`);
+  return visible.length ? visible : ['- GitHub PR: none loaded'];
 }
 
 function listPaths(paths: string[]): string[] {
@@ -2003,6 +2063,71 @@ function gitShipInfo(status: GitStatusSummary): {
   };
 }
 
+function gitPullRequestInfo(status: GitStatusSummary, shipInfo: ReturnType<typeof gitShipInfo>, pulls?: GitHubPullRequestSummary): GitPullRequestInfo {
+  const fallbackHref = shipInfo.prUrl ?? shipInfo.compareUrl ?? shipInfo.repoUrl;
+  if (!pulls) {
+    return {
+      state: 'unknown',
+      label: 'loading',
+      title: 'PR evidence loading',
+      detail: 'Checking GitHub for an open pull request.',
+      checkState: 'idle',
+      actionLabel: shipInfo.prMode === 'branch' ? 'Open compare' : 'Open repo',
+      href: fallbackHref
+    };
+  }
+
+  if (pulls.state === 'direct') {
+    return {
+      state: 'direct',
+      label: 'direct',
+      title: 'Default branch flow',
+      detail: `${pulls.branch ?? status.branch ?? 'Current branch'} matches ${pulls.base ?? shipInfo.prBaseBranch ?? 'the default branch'}; verify Actions and HF after push.`,
+      checkState: 'ok',
+      actionLabel: 'Open commits',
+      href: pulls.htmlUrl ?? fallbackHref
+    };
+  }
+
+  if (pulls.state === 'open' || pulls.state === 'draft') {
+    const pull = pulls.pulls[0];
+    const label = pull ? `#${pull.number}${pulls.state === 'draft' ? ' draft' : ''}` : pulls.state;
+    return {
+      state: pulls.state,
+      label,
+      title: pull ? `#${pull.number} ${pull.title}` : pulls.state === 'draft' ? 'Draft PR found' : 'Open PR found',
+      detail: pull?.base && pull.head ? `${pull.head} -> ${pull.base}${pull.updatedAt ? ` · updated ${formatShortDate(pull.updatedAt)}` : ''}` : `Open PR evidence for ${pulls.branch ?? status.branch ?? 'current branch'}.`,
+      checkState: pulls.state === 'draft' ? 'warn' : 'ok',
+      actionLabel: 'Open PR',
+      href: pull?.htmlUrl ?? pulls.htmlUrl ?? fallbackHref
+    };
+  }
+
+  if (pulls.state === 'none') {
+    return {
+      state: 'none',
+      label: 'none',
+      title: 'No open PR',
+      detail: shipInfo.prMode === 'branch'
+        ? `No open PR from ${pulls.branch ?? status.branch ?? 'this branch'} into ${pulls.base ?? shipInfo.prBaseBranch ?? 'the default branch'}.`
+        : 'No branch PR is expected for direct default-branch flow.',
+      checkState: shipInfo.prMode === 'branch' ? 'warn' : 'idle',
+      actionLabel: shipInfo.prMode === 'branch' ? 'Open compare' : 'Open repo',
+      href: pulls.htmlUrl ?? fallbackHref
+    };
+  }
+
+  return {
+    state: pulls.state,
+    label: pulls.state === 'unavailable' ? 'unavailable' : 'unknown',
+    title: pulls.state === 'unavailable' ? 'PR evidence unavailable' : 'PR evidence unknown',
+    detail: pulls.error ?? 'GitHub PR evidence could not be resolved.',
+    checkState: 'idle',
+    actionLabel: 'Open GitHub',
+    href: pulls.htmlUrl ?? fallbackHref
+  };
+}
+
 type BaseBranchSource = 'remote-head' | 'upstream' | 'current' | 'assumed';
 
 function defaultBaseBranch(status: GitStatusSummary, branch?: string): { branch: string; source: BaseBranchSource } {
@@ -2105,6 +2230,15 @@ function githubActionsShipLabel(actions?: GitHubActionsSummary): string {
   return 'unknown';
 }
 
+function githubPullRequestShipLabel(pulls?: GitHubPullRequestSummary): string {
+  if (!pulls) return 'loading';
+  if (pulls.state === 'direct') return 'direct';
+  if (pulls.state === 'open') return pulls.pulls[0] ? `open #${pulls.pulls[0].number}` : 'open';
+  if (pulls.state === 'draft') return pulls.pulls[0] ? `draft #${pulls.pulls[0].number}` : 'draft';
+  if (pulls.state === 'none') return 'none';
+  return pulls.state === 'unavailable' ? 'unavailable' : 'unknown';
+}
+
 function githubRemoteUrl(remote?: string): string | undefined {
   if (!remote) return undefined;
   const httpsMatch = remote.match(/^https:\/\/github\.com\/([^/]+\/[^/.]+)(?:\.git)?$/i);
@@ -2122,6 +2256,12 @@ function formatBytes(size: number): string {
 
 function shortSha(value: string): string {
   return value.slice(0, 12);
+}
+
+function formatShortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toISOString().slice(0, 10);
 }
 
 function ArtifactsTab({

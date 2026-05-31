@@ -9,6 +9,7 @@ import type {
   GitActionResult,
   GitDiffResult,
   GitHubActionsSummary,
+  GitHubPullRequestSummary,
   GitStatusSummary,
   Project,
   ServerHealth,
@@ -90,6 +91,7 @@ export const api = {
   fileRead: (projectId: string, path: string) => request<FileReadResult>(`/api/projects/${encodeURIComponent(projectId)}/files/read?path=${encodeURIComponent(path)}`),
   gitStatus: (projectId: string) => request<GitStatusSummary>(`/api/projects/${encodeURIComponent(projectId)}/git/status`),
   githubActions: (projectId: string) => request<GitHubActionsSummary>(`/api/projects/${encodeURIComponent(projectId)}/github/actions`),
+  githubPullRequests: (projectId: string) => request<GitHubPullRequestSummary>(`/api/projects/${encodeURIComponent(projectId)}/github/pulls`),
   gitDiff: (projectId: string, path?: string, cached = false) => {
     const params = new URLSearchParams();
     if (path) params.set('path', path);

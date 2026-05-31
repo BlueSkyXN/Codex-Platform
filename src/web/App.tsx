@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react';
-import type { AccountSummary, AgentSummary, AdminStatus, ApprovalRecord, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { AccountSummary, AgentSummary, AdminStatus, ApprovalRecord, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitHubPullRequestSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
 import { api, eventStreamUrl, getStoredToken, setStoredToken } from './lib/api.js';
 import { initialState, reduce } from './lib/reducer.js';
 import { normalizeAccount } from './lib/normalize.js';
@@ -48,6 +48,7 @@ export function App() {
   const [gitStatus, setGitStatus] = useState<GitStatusSummary | undefined>();
   const [gitDiff, setGitDiff] = useState<GitDiffResult | undefined>();
   const [githubActions, setGithubActions] = useState<GitHubActionsSummary | undefined>();
+  const [githubPullRequests, setGithubPullRequests] = useState<GitHubPullRequestSummary | undefined>();
   const [selectedGitPath, setSelectedGitPath] = useState<string | undefined>();
   const [gitActionBusy, setGitActionBusy] = useState(false);
   const [gitActionMessage, setGitActionMessage] = useState<string | undefined>();
@@ -370,7 +371,7 @@ export function App() {
     setProjectPanelLoading(true);
     setProjectPanelError(undefined);
     try {
-      const [treeResult, gitResult, actionsResult] = await Promise.all([
+      const [treeResult, gitResult, actionsResult, pullRequestResult] = await Promise.all([
         api.fileTree(selectedProject.id, '', 3),
         api.gitStatus(selectedProject.id),
         api.githubActions(selectedProject.id).catch((error): GitHubActionsSummary => ({
@@ -378,11 +379,18 @@ export function App() {
           runs: [],
           error: errorMessage(error),
           fetchedAt: Date.now()
+        })),
+        api.githubPullRequests(selectedProject.id).catch((error): GitHubPullRequestSummary => ({
+          state: 'unavailable',
+          pulls: [],
+          error: errorMessage(error),
+          fetchedAt: Date.now()
         }))
       ]);
       setFileTree(treeResult.tree);
       setGitStatus(gitResult);
       setGithubActions(actionsResult);
+      setGithubPullRequests(pullRequestResult);
       setFileContent(undefined);
       const nextGitFile = gitResult.files.find((file) => file.path === selectedGitPath) ?? gitResult.files[0];
       setSelectedGitPath(nextGitFile?.path);
@@ -395,6 +403,7 @@ export function App() {
     } catch (error) {
       setProjectPanelError(error instanceof Error ? error.message : String(error));
       setGithubActions(undefined);
+      setGithubPullRequests(undefined);
     } finally {
       setProjectPanelLoading(false);
     }
@@ -692,6 +701,7 @@ export function App() {
             gitDiff={gitDiff}
             gitOperations={selectedGitOperations}
             githubActions={githubActions}
+            githubPullRequests={githubPullRequests}
             rawEvents={state.rawEvents}
             selectedGitPath={selectedGitPath}
             gitActionBusy={gitActionBusy}

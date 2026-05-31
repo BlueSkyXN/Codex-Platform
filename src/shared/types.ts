@@ -199,6 +199,33 @@ export type GitHubActionsSummary = {
   fetchedAt: number;
 };
 
+export type GitHubPullRequest = {
+  id: number;
+  number: number;
+  title: string;
+  state: 'open' | 'closed' | string;
+  draft?: boolean;
+  htmlUrl?: string;
+  base?: string;
+  head?: string;
+  headSha?: string;
+  user?: string;
+  updatedAt?: string;
+};
+
+export type GitHubPullRequestSummary = {
+  state: 'open' | 'draft' | 'none' | 'direct' | 'unknown' | 'unavailable';
+  repo?: string;
+  branch?: string;
+  base?: string;
+  headSha?: string;
+  htmlUrl?: string;
+  totalOpen?: number;
+  pulls: GitHubPullRequest[];
+  error?: string;
+  fetchedAt: number;
+};
+
 
 export type AgentSummary = {
   id: string;
