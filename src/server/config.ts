@@ -46,6 +46,11 @@ function intAny(names: string[], fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function boundedIntAny(names: string[], fallback: number, minimum: number, maximum: number): number {
+  const value = intAny(names, fallback);
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
 function csvAny(names: string[], fallback: string[]): string[] {
   const value = firstEnv(...names);
   if (!value) return fallback;
@@ -73,6 +78,9 @@ const defaultDataDir = isHuggingFaceSpace ? path.join(hfStorageRoot, 'codex-plat
 const dataDir = path.resolve(firstEnv('CODEX_PLATFORM_DATA_DIR', 'CODEX_WEB_DATA_DIR') ?? defaultDataDir);
 const codexHome = path.resolve(firstEnv('CODEX_HOME') ?? (isHuggingFaceSpace ? path.join(hfStorageRoot, 'codex-home') : path.join(env.HOME ?? process.cwd(), '.codex')));
 const authToken = firstEnv('CODEX_PLATFORM_AUTH_TOKEN', 'CODEX_WEB_AUTH_TOKEN');
+const opsToken = firstEnv('CODEX_PLATFORM_OPS_TOKEN');
+const adminEnabled = boolAny(['CODEX_PLATFORM_ADMIN_ENABLED'], false);
+const adminToken = firstEnv('CODEX_PLATFORM_ADMIN_TOKEN');
 const codeBin = firstEnv('CODEX_BIN') ?? 'codex';
 
 function resolveDemoMode(): boolean {
@@ -120,6 +128,25 @@ export const config = {
     allowUnauthenticated,
     cookieName: firstEnv('CODEX_PLATFORM_AUTH_COOKIE', 'CODEX_WEB_AUTH_COOKIE') ?? 'codex_platform_auth',
     headerName: firstEnv('CODEX_PLATFORM_AUTH_HEADER', 'CODEX_WEB_AUTH_HEADER') ?? 'x-codex-platform-token'
+  },
+  ops: {
+    token: opsToken,
+    enabled: Boolean(opsToken),
+    cookieName: firstEnv('CODEX_PLATFORM_OPS_COOKIE') ?? 'codex_platform_ops',
+    headerName: firstEnv('CODEX_PLATFORM_OPS_HEADER') ?? 'x-codex-platform-ops-token',
+    sessionTtlSeconds: boundedIntAny(['CODEX_PLATFORM_OPS_SESSION_TTL_SECONDS'], 3600, 60, 86_400),
+    cookieSecure: firstEnv('CODEX_PLATFORM_OPS_COOKIE_SECURE') ?? 'auto'
+  },
+  admin: {
+    enabled: adminEnabled,
+    token: adminToken,
+    cookieName: firstEnv('CODEX_PLATFORM_ADMIN_COOKIE') ?? 'codex_platform_admin',
+    headerName: firstEnv('CODEX_PLATFORM_ADMIN_HEADER') ?? 'x-codex-platform-admin-token',
+    csrfHeaderName: firstEnv('CODEX_PLATFORM_ADMIN_CSRF_HEADER') ?? 'x-codex-platform-admin-csrf',
+    csrfKey: firstEnv('CODEX_PLATFORM_ADMIN_CSRF_KEY'),
+    sessionTtlSeconds: boundedIntAny(['CODEX_PLATFORM_ADMIN_SESSION_TTL_SECONDS'], 3600, 60, 86_400),
+    cookieSecure: firstEnv('CODEX_PLATFORM_ADMIN_COOKIE_SECURE') ?? 'auto',
+    auditLogFile: path.resolve(firstEnv('CODEX_PLATFORM_ADMIN_AUDIT_LOG') ?? path.join(dataDir, 'admin-audit.jsonl'))
   },
   limits: {
     bodyLimit: firstEnv('CODEX_PLATFORM_BODY_LIMIT', 'CODEX_WEB_BODY_LIMIT') ?? '2mb',

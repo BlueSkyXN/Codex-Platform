@@ -73,6 +73,10 @@ export function Sidebar(props: {
             <span className="nav-icon"><Icon name="agent" size={15} /></span>
             <span>Agents</span>
           </button>
+          <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('admin')}>
+            <span className="nav-icon"><Icon name="sliders" size={15} /></span>
+            <span>Runtime</span>
+          </button>
           <button className="primary-nav" onClick={() => props.onOpenManagementTab?.('automations')}>
             <span className="nav-icon"><Icon name="automation" size={15} /></span>
             <span>Automations</span>

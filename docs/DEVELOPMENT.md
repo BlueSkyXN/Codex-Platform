@@ -15,6 +15,13 @@ scripts/static-check.sh
 bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space
 ```
 
+When ops/admin behavior changes, also check the relevant smoke script against a running local or remote instance:
+
+```bash
+CODEX_PLATFORM_OPS_TOKEN=<ops-token> scripts/hf-space-smoke.sh <base-url>
+ADMIN_EXPECTED_ENABLED=true CODEX_PLATFORM_ADMIN_TOKEN=<admin-token> scripts/admin-smoke.sh <base-url>
+```
+
 Demo backend:
 
 ```bash

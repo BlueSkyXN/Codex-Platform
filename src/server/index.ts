@@ -10,10 +10,11 @@ import { readGitHubActionsSummary } from './api/githubActions.js';
 import { PersistentStore } from './store/PersistentStore.js';
 import { createRateLimiter } from './security/rateLimit.js';
 import { isAuthorizedToken, loginRoute, logoutRoute, requireAuth, tokenFromUpgrade } from './security/auth.js';
-import type { ApprovalDecision, CreateThreadRequest, GitActionResult, GitOperationKind, GitOperationRecord, ServerHealth, StartTurnRequest, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { AdminCheck, AdminStatus, ApprovalDecision, CreateThreadRequest, GitActionResult, GitOperationKind, GitOperationRecord, ServerHealth, StartTurnRequest, UiEvent, CodexWebConfig } from '../shared/types.js';
 import type { CodexBridge } from './codex/Bridge.js';
 import { DemoCodexBridge } from './codex/DemoCodexBridge.js';
 import { RealCodexBridge } from './codex/RealCodexBridge.js';
+import { registerControlPlaneRoutes } from './controlPlane.js';
 import { readProjectFile, readProjectTree } from './workspace/files.js';
 import { commitGitChanges, readGitDiff, readGitStatus, stageGitPaths, unstageGitPaths } from './workspace/git.js';
 
@@ -130,9 +131,161 @@ function health(): ServerHealth {
   };
 }
 
+function pathExists(file: string): boolean {
+  try {
+    return fs.existsSync(file);
+  } catch {
+    return false;
+  }
+}
+
+function fileSize(file: string): number | undefined {
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return undefined;
+  }
+}
+
+function adminStatus(): AdminStatus {
+  const currentHealth = health();
+  const snapshot = store.snapshot();
+  const workspaceRootExists = pathExists(config.workspaceRoot);
+  const dataDirExists = pathExists(config.dataDir);
+  const codexHomeExists = pathExists(config.codex.home);
+  const checks: AdminCheck[] = [
+    {
+      id: 'runtime-ready',
+      label: 'Runtime readiness',
+      state: currentHealth.ready ? 'ok' : currentHealth.ok ? 'warn' : 'error',
+      detail: currentHealth.ready ? 'Codex runtime is ready.' : `Runtime state is ${currentHealth.appServer}.`
+    },
+    {
+      id: 'auth-gate',
+      label: 'Auth gate',
+      state: config.auth.required ? 'ok' : config.auth.allowUnauthenticated ? 'warn' : 'error',
+      detail: config.auth.required
+        ? 'CODEX_PLATFORM_AUTH_TOKEN is configured.'
+        : config.auth.allowUnauthenticated
+          ? 'Unauthenticated access is allowed by current runtime policy.'
+          : 'Authentication is not configured and unauthenticated access is not allowed.'
+    },
+    {
+      id: 'workspace-root',
+      label: 'Workspace root',
+      state: workspaceRootExists ? 'ok' : 'error',
+      detail: config.workspaceRoot
+    },
+    {
+      id: 'data-dir',
+      label: 'Data directory',
+      state: dataDirExists ? 'ok' : 'error',
+      detail: config.dataDir
+    },
+    {
+      id: 'codex-home',
+      label: 'Codex home',
+      state: codexHomeExists ? 'ok' : 'warn',
+      detail: config.codex.home
+    },
+    {
+      id: 'ops-token',
+      label: 'Ops diagnostics',
+      state: config.ops.enabled ? 'ok' : 'warn',
+      detail: config.ops.enabled ? '/_ops/* is token gated.' : 'CODEX_PLATFORM_OPS_TOKEN is not configured; /_ops/* is disabled.'
+    },
+    {
+      id: 'admin-control',
+      label: 'Admin control',
+      state: !config.admin.enabled ? 'ok' : config.admin.token ? 'warn' : 'error',
+      detail: !config.admin.enabled
+        ? '/_admin/* is disabled.'
+        : config.admin.token
+          ? '/_admin/* is enabled with a separate admin token.'
+          : 'CODEX_PLATFORM_ADMIN_ENABLED=true but CODEX_PLATFORM_ADMIN_TOKEN is not configured.'
+    }
+  ];
+
+  if (config.huggingFace.enabled) {
+    checks.push({
+      id: 'hf-auth-posture',
+      label: 'HF auth posture',
+      state: config.demoMode || config.auth.required ? 'ok' : 'error',
+      detail: config.demoMode ? 'HF is running in demo mode.' : 'Real Codex mode on HF is token gated.'
+    });
+  }
+
+  return {
+    generatedAt: Date.now(),
+    readOnly: true,
+    server: {
+      appName: config.appName,
+      mode: config.demoMode ? 'demo' : 'real',
+      ready: currentHealth.ready,
+      appServer: currentHealth.appServer,
+      uptimeSeconds: currentHealth.uptimeSeconds,
+      buildSha: currentHealth.build?.sha
+    },
+    auth: {
+      required: config.auth.required,
+      allowUnauthenticated: config.auth.allowUnauthenticated,
+      cookieName: config.auth.cookieName,
+      headerName: config.auth.headerName
+    },
+    runtime: {
+      host: config.host,
+      port: config.port,
+      codexBin: config.codex.bin,
+      codexArgs: config.codex.args,
+      codexHome: config.codex.home,
+      clientName: config.codex.clientName,
+      approvalPolicy: config.codex.approvalPolicy,
+      sandbox: config.codex.sandbox,
+      effort: config.codex.effort,
+      summary: config.codex.summary,
+      defaultModel: config.codex.defaultModel
+    },
+    workspace: {
+      root: config.workspaceRoot,
+      allowedRoots: config.allowedWorkspaceRoots,
+      dataDir: config.dataDir,
+      workspaceRootExists,
+      dataDirExists,
+      codexHomeExists
+    },
+    storage: {
+      projectsFile: config.persistence.projectsFile,
+      snapshotFile: config.persistence.snapshotFile,
+      eventLogFile: config.persistence.eventLogFile,
+      eventLogBytes: fileSize(config.persistence.eventLogFile)
+    },
+    limits: {
+      activeWsClients: wss.clients.size,
+      maxWsClients: config.limits.maxWsClients,
+      rateLimitWindowMs: config.limits.rateLimitWindowMs,
+      rateLimitMax: config.limits.rateLimitMax,
+      maxFileTreeEntries: config.limits.maxFileTreeEntries,
+      maxFileReadBytes: config.limits.maxFileReadBytes,
+      gitCommandTimeoutMs: config.limits.gitCommandTimeoutMs
+    },
+    huggingFace: currentHealth.huggingFace,
+    counts: {
+      projects: snapshot.projects.length,
+      threads: snapshot.threads.length,
+      cards: snapshot.cards.length,
+      approvals: snapshot.approvals.length,
+      approvalHistory: snapshot.approvalHistory?.length ?? 0,
+      gitOperations: snapshot.gitOperations?.length ?? 0,
+      errors: snapshot.errors?.length ?? 0
+    },
+    checks
+  };
+}
+
+registerControlPlaneRoutes(app, { health, store, bridge, startedAt, buildSha });
+
 app.get('/api/health', (_req, res) => res.json(health()));
 app.get('/healthz', (_req, res) => res.status(health().ok ? 200 : 503).json(health()));
-app.get('/_ops/health', (_req, res) => res.status(health().ok ? 200 : 503).json(health()));
 app.get('/api/config', (_req, res) => {
   const payload: CodexWebConfig = {
     authRequired: config.auth.required,
@@ -150,6 +303,7 @@ app.post('/api/logout', logoutRoute);
 
 app.use('/api', requireAuth);
 
+app.get('/api/admin/status', (_req, res) => res.json(adminStatus()));
 app.get('/api/state', (_req, res) => res.json(store.snapshot()));
 app.get('/api/projects', (_req, res) => res.json({ data: registry.all() }));
 

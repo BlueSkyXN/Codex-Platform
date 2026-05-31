@@ -241,7 +241,7 @@ export type AccountSummary = {
 
 export type InspectorTab = 'review' | 'plan' | 'diff' | 'files' | 'git' | 'terminal' | 'browser' | 'artifacts' | 'raw';
 
-export type ManagementTab = 'skills' | 'agents' | 'automations' | 'triage' | 'settings';
+export type ManagementTab = 'skills' | 'agents' | 'admin' | 'automations' | 'triage' | 'settings';
 
 export type UiEvent =
   | { type: 'connected'; serverTime: number; demoMode: boolean }
@@ -321,6 +321,81 @@ export type ServerHealth = {
     storageRoot: string;
     autoCreateWorkspace: boolean;
   };
+};
+
+export type AdminCheckState = 'ok' | 'warn' | 'error' | 'unknown';
+
+export type AdminCheck = {
+  id: string;
+  label: string;
+  state: AdminCheckState;
+  detail?: string;
+};
+
+export type AdminStatus = {
+  generatedAt: number;
+  readOnly: true;
+  server: {
+    appName: string;
+    mode: 'demo' | 'real';
+    ready: boolean;
+    appServer: ServerHealth['appServer'];
+    uptimeSeconds: number;
+    buildSha?: string;
+  };
+  auth: {
+    required: boolean;
+    allowUnauthenticated: boolean;
+    cookieName: string;
+    headerName: string;
+  };
+  runtime: {
+    host: string;
+    port: number;
+    codexBin: string;
+    codexArgs: string[];
+    codexHome: string;
+    clientName: string;
+    approvalPolicy: string;
+    sandbox: string;
+    effort: string;
+    summary: string;
+    defaultModel?: string;
+  };
+  workspace: {
+    root: string;
+    allowedRoots: string[];
+    dataDir: string;
+    workspaceRootExists: boolean;
+    dataDirExists: boolean;
+    codexHomeExists: boolean;
+  };
+  storage: {
+    projectsFile: string;
+    snapshotFile: string;
+    eventLogFile: string;
+    eventLogBytes?: number;
+  };
+  limits: {
+    activeWsClients: number;
+    maxWsClients: number;
+    rateLimitWindowMs: number;
+    rateLimitMax: number;
+    maxFileTreeEntries: number;
+    maxFileReadBytes: number;
+    gitCommandTimeoutMs: number;
+  };
+  huggingFace: ServerHealth['huggingFace'];
+  counts: {
+    projects: number;
+    threads: number;
+    cards: number;
+    approvals: number;
+    approvalHistory: number;
+    gitOperations: number;
+    errors: number;
+  };
+  checks: AdminCheck[];
 };
 
 export type CodexWebConfig = {

@@ -92,6 +92,38 @@ Then provide Codex auth through `CODEX_HOME/auth.json`, `CODEX_AUTH_TOKEN`, or `
 
 Real mode on HF refuses to start without `CODEX_PLATFORM_AUTH_TOKEN`.
 
+## Ops And Admin
+
+Codex-Platform follows the DIFY HFS split between read-only diagnostics and controlled management:
+
+```text
+/_ops/       read-only diagnostics dashboard
+/_admin/     default-off management dashboard
+```
+
+Recommended real-mode HF secrets:
+
+```env
+CODEX_PLATFORM_OPS_TOKEN=<long-random-ops-token>
+CODEX_PLATFORM_ADMIN_ENABLED=false
+```
+
+`/_ops/*` stays disabled until `CODEX_PLATFORM_OPS_TOKEN` is set. CLI and automation should use:
+
+```bash
+curl -H "x-codex-platform-ops-token: $CODEX_PLATFORM_OPS_TOKEN" \
+  https://blueskyxn-codex-platform-hfs.hf.space/_ops/health
+```
+
+Only enable `/_admin/` in a Private or Protected Space:
+
+```env
+CODEX_PLATFORM_ADMIN_ENABLED=true
+CODEX_PLATFORM_ADMIN_TOKEN=<long-random-admin-token>
+```
+
+The admin surface uses an independent token, signed HttpOnly browser session cookies, CSRF for browser write actions, `confirm=true`, a JSONL audit log, and a small action catalog. It does not expose a shell or arbitrary command execution.
+
 ## Smoke
 
 After HF reports the Space as running:
@@ -100,7 +132,7 @@ After HF reports the Space as running:
 scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
 ```
 
-The smoke checks `/healthz`, `/api/config`, `/`, and `/api/state`. It retries during cold starts and accepts either public demo state access or an auth-required `401` when no token is supplied.
+The smoke checks `/healthz`, `/readyz`, `/api/config`, `/`, `/api/state`, `/api/admin/status`, `/_ops/*`, and the default-disabled `/_admin/` posture. It retries during cold starts and accepts either public demo state access or an auth-required `401` when no token is supplied. Without `CODEX_PLATFORM_OPS_TOKEN`, `/_ops/*` must return `401` or `503`.
 
 For real-mode Spaces, pass the configured token:
 
@@ -108,4 +140,19 @@ For real-mode Spaces, pass the configured token:
 CODEX_PLATFORM_AUTH_TOKEN=<token> scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
 ```
 
+For ops and explicitly enabled admin checks:
+
+```bash
+CODEX_PLATFORM_OPS_TOKEN=<ops-token> \
+  scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
+
+SMOKE_ADMIN_ENABLED=true \
+  CODEX_PLATFORM_ADMIN_TOKEN=<admin-token> \
+  scripts/admin-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
+```
+
 `/healthz` includes the image build SHA when `BUILD_SHA` is present in the runtime image. Use that value with `BUILD_SOURCE.txt` and Hugging Face runtime metadata to confirm takeover.
+
+## In-App Runtime Panel
+
+The browser management drawer includes a Runtime tab backed by `/api/admin/status`. It uses the same Codex-Platform token as the rest of the app and stays read-only: no restart, shell, file manager, secret rotation, or config write actions are exposed.

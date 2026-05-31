@@ -43,6 +43,7 @@ bash -n \
   scripts/hf-entrypoint.sh \
   scripts/hf-healthcheck.sh \
   scripts/hf-space-smoke.sh \
+  scripts/admin-smoke.sh \
   scripts/validate-hfs-contract.sh \
   scripts/static-check.sh \
   cloud/hfs/export_space_bundle.sh

@@ -388,6 +388,17 @@ export function Composer(props: {
             ))}
           </div>
         ) : null}
+        {selectedAgent ? (
+          <div className="composer-route-strip" title={selectedAgent.path ?? selectedAgent.description ?? selectedAgent.name}>
+            <span className="composer-route-icon"><Icon name="agent" size={14} /></span>
+            <span>Next turn owner</span>
+            <strong>#{selectedAgent.name}</strong>
+            {selectedAgent.description ? <small>{selectedAgent.description}</small> : selectedAgent.path ? <small>{selectedAgent.path}</small> : null}
+            <button type="button" className="composer-route-clear" onClick={() => setSelectedAgentName('')} aria-label={`Clear agent ${selectedAgent.name}`}>
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        ) : null}
         <textarea
           ref={textareaRef}
           value={text}

@@ -5,6 +5,7 @@ Browser
   -> HTTP/WebSocket
 Codex-Platform Node backend
   -> auth, rate limits, project policy
+  -> /_ops diagnostics and /_admin management boundaries
   -> project registry and persistent event snapshot
   -> normalized UI event stream
   -> JSON-RPC stdio bridge
@@ -13,6 +14,13 @@ codex app-server
 ```
 
 The browser never talks to `codex app-server` directly. Codex-Platform owns authentication, path boundaries, event normalization, persistence, and WebSocket fanout.
+
+## Control Surfaces
+
+- `/api/health`, `/healthz`, and `/readyz` expose runtime health/readiness for local and HFS probes.
+- `/api/admin/status` is the browser Runtime tab data source. It is read-only and uses the same Codex-Platform auth gate as the rest of `/api/*`.
+- `/_ops/*` is a separate read-only diagnostics surface. It is disabled until `CODEX_PLATFORM_OPS_TOKEN` is configured and reports health, readiness, runtime status, sanitized config, version/build metadata, recent app errors, system summary, and Prometheus-style metrics.
+- `/_admin/*` is a separate default-off management surface with an independent token, signed HttpOnly browser session cookies, CSRF for cookie-backed write actions, `confirm=true`, audit logging, and a small allowlisted action catalog. The current whitelist supports health checks, snapshot flush, and Codex bridge restart. It must not expose shell access, arbitrary file access, config mutation, or secret rotation.
 
 ## Runtime Modes
 

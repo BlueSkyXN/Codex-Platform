@@ -58,6 +58,7 @@ export function CommandPalette(props: {
       { id: 'raw', group: 'Navigation', title: 'Open raw debug pane', subtitle: 'Focused card, thread, and project payloads', run: () => props.onOpenInspectorTab('raw') },
       { id: 'skills', group: 'Management', title: 'Open skills registry', subtitle: 'Available project/user/admin skills', run: () => props.onOpenManagementTab('skills') },
       { id: 'agents', group: 'Management', title: 'Open agent registry', subtitle: 'Project and user .codex/agents TOML presets', run: () => props.onOpenManagementTab('agents') },
+      { id: 'admin', group: 'Management', title: 'Open runtime status', subtitle: 'Runtime posture, auth gate, storage, and HFS checks', run: () => props.onOpenManagementTab('admin') },
       { id: 'automations', group: 'Management', title: 'Open automations', subtitle: 'Release checks, recurring sweeps, and capability refreshes', run: () => props.onOpenManagementTab('automations') },
       { id: 'triage', group: 'Management', title: 'Open triage inbox', subtitle: 'Approvals, failures, review work, and release risks', run: () => props.onOpenManagementTab('triage') },
       { id: 'settings', group: 'Management', title: 'Open runtime settings', subtitle: 'Runtime, workspace, auth, notification settings', run: () => props.onOpenManagementTab('settings') },

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { AccountSummary, AgentSummary, ApprovalRecord, ApprovalRequest, CodexWebConfig, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { AccountSummary, AgentSummary, AdminStatus, ApprovalRecord, ApprovalRequest, CodexWebConfig, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { Icon } from './Icon.js';
 
-const managementTabs: ManagementTab[] = ['skills', 'agents', 'automations', 'triage', 'settings'];
+const managementTabs: ManagementTab[] = ['skills', 'agents', 'admin', 'automations', 'triage', 'settings'];
 
 type ReleaseEvidenceSummary = {
   state: 'ready' | 'waiting' | 'attention';
@@ -21,6 +21,9 @@ export function ManagementDrawer(props: {
   agentsError?: string;
   account?: AccountSummary;
   health?: ServerHealth;
+  adminStatus?: AdminStatus;
+  adminLoading?: boolean;
+  adminError?: string;
   githubActions?: GitHubActionsSummary;
   gitStatus?: GitStatusSummary;
   codexWebConfig?: CodexWebConfig;
@@ -35,6 +38,7 @@ export function ManagementDrawer(props: {
   onClose: () => void;
   onTabChange: (tab: ManagementTab) => void;
   onRefreshSkills?: () => void;
+  onRefreshAdmin?: () => void;
   onUseSkill?: (skill: SkillSummary) => void;
   onUseAgent?: (agent: AgentSummary) => void;
   onToggleNotifications?: (enabled: boolean) => void;
@@ -62,6 +66,7 @@ export function ManagementDrawer(props: {
 
         {props.tab === 'skills' ? <SkillsRegistry skills={props.skills} loading={Boolean(props.skillsLoading)} error={props.skillsError} onRefresh={props.onRefreshSkills} onUseSkill={props.onUseSkill} /> : null}
         {props.tab === 'agents' ? <AgentsRegistry agents={props.agents} loading={Boolean(props.agentsLoading)} error={props.agentsError} onRefresh={props.onRefreshSkills} onUseAgent={props.onUseAgent} /> : null}
+        {props.tab === 'admin' ? <AdminControlPanel status={props.adminStatus} loading={Boolean(props.adminLoading)} error={props.adminError} onRefresh={props.onRefreshAdmin} /> : null}
         {props.tab === 'automations' ? (
           <AutomationsPanel
             threads={props.threads}
@@ -210,6 +215,98 @@ function AgentGroup({ title, agents, onUseAgent }: { title: string; agents: Agen
         </article>
       ))}
     </div>
+  );
+}
+
+function AdminControlPanel(props: { status?: AdminStatus; loading: boolean; error?: string; onRefresh?: () => void }) {
+  const status = props.status;
+  const checkSummary = status ? adminCheckSummary(status) : { ok: 0, attention: 0, total: 0 };
+  return (
+    <section className="management-panel admin-panel">
+      <div className="pane-header">
+        <div>
+          <div className="section-title">Runtime status</div>
+          <div className="subtle">Read-only control-plane posture, auth, storage, and HFS deployment evidence.</div>
+        </div>
+        <button className="small ghost" onClick={props.onRefresh} disabled={props.loading || !props.onRefresh}>{props.loading ? 'Loading...' : 'Refresh'}</button>
+      </div>
+      <CapabilitySummary
+        items={[
+          { label: 'Mode', value: status?.server.mode ?? 'unknown', tone: status?.server.mode === 'real' ? 'ok' : undefined },
+          { label: 'Checks', value: status ? `${checkSummary.ok}/${checkSummary.total}` : 'loading', tone: status ? (checkSummary.attention ? 'warn' : 'ok') : undefined },
+          { label: 'Auth', value: status ? (status.auth.required ? 'required' : 'open') : 'unknown', tone: status ? (status.auth.required ? 'ok' : 'warn') : undefined }
+        ]}
+      />
+      {props.error ? <CapabilityError title="Runtime status failed" message={props.error} /> : null}
+      {!status && !props.error ? <div className="empty">{props.loading ? 'Loading runtime status...' : 'No runtime status loaded.'}</div> : null}
+      {status ? (
+        <>
+          <div className="admin-section">
+            <div className="section-title">Control plane</div>
+            <div className="kv"><span>Runtime</span><strong>{status.server.appServer}</strong></div>
+            <div className="kv"><span>Ready</span><strong>{status.server.ready ? 'ready' : 'not ready'}</strong></div>
+            <div className="kv"><span>Uptime</span><code>{formatDuration(status.server.uptimeSeconds)}</code></div>
+            <div className="kv"><span>Build</span><code>{status.server.buildSha ? shortSha(status.server.buildSha) : 'not pinned'}</code></div>
+          </div>
+
+          <div className="admin-check-list">
+            {status.checks.map((check) => (
+              <div key={check.id} className={`admin-check ${check.state}`}>
+                <span className="admin-check-dot" />
+                <div>
+                  <strong>{check.label}</strong>
+                  {check.detail ? <small title={check.detail}>{check.detail}</small> : null}
+                </div>
+                <span className="lane-state">{check.state}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="admin-section">
+            <div className="section-title">Security boundary</div>
+            <div className="kv"><span>Auth</span><strong>{status.auth.required ? 'required' : 'not required'}</strong></div>
+            <div className="kv"><span>Header</span><code>{status.auth.headerName}</code></div>
+            <div className="kv"><span>Cookie</span><code>{status.auth.cookieName}</code></div>
+            <div className="kv"><span>Mode</span><code>{status.auth.allowUnauthenticated ? 'allow unauthenticated' : 'token gated'}</code></div>
+          </div>
+
+          <div className="admin-section">
+            <div className="section-title">Runtime configuration</div>
+            <div className="kv"><span>Listen</span><code>{status.runtime.host}:{status.runtime.port}</code></div>
+            <div className="kv"><span>Codex</span><code>{[status.runtime.codexBin, ...status.runtime.codexArgs].join(' ')}</code></div>
+            <div className="kv"><span>Client</span><code>{status.runtime.clientName}</code></div>
+            <div className="kv"><span>Policy</span><code>{status.runtime.approvalPolicy} / {status.runtime.sandbox}</code></div>
+            <div className="kv"><span>Model</span><code>{status.runtime.defaultModel ?? 'Codex default'}</code></div>
+          </div>
+
+          <div className="admin-section">
+            <div className="section-title">Storage and limits</div>
+            <div className="kv"><span>Workspace</span><code title={status.workspace.root}>{status.workspace.root}</code></div>
+            <div className="kv"><span>Data dir</span><code title={status.workspace.dataDir}>{status.workspace.dataDir}</code></div>
+            <div className="kv"><span>Event log</span><code title={status.storage.eventLogFile}>{status.storage.eventLogBytes === undefined ? 'not created' : formatBytes(status.storage.eventLogBytes)}</code></div>
+            <div className="kv"><span>WebSocket</span><code>{status.limits.activeWsClients}/{status.limits.maxWsClients} clients</code></div>
+          </div>
+
+          <div className="capability-summary-grid admin-counts">
+            <div className="capability-summary-card"><span>Projects</span><strong>{status.counts.projects}</strong></div>
+            <div className="capability-summary-card"><span>Threads</span><strong>{status.counts.threads}</strong></div>
+            <div className="capability-summary-card"><span>Approvals</span><strong>{status.counts.approvals}</strong></div>
+            <div className="capability-summary-card"><span>Cards</span><strong>{status.counts.cards}</strong></div>
+            <div className="capability-summary-card"><span>Git ops</span><strong>{status.counts.gitOperations}</strong></div>
+            <div className="capability-summary-card"><span>Errors</span><strong>{status.counts.errors}</strong></div>
+          </div>
+
+          {status.huggingFace?.enabled ? (
+            <div className="admin-section">
+              <div className="section-title">Hugging Face Space</div>
+              <div className="kv"><span>Space</span><code>{status.huggingFace.spaceId ?? status.huggingFace.spaceHost ?? 'configured'}</code></div>
+              <div className="kv"><span>URL</span><code>{status.huggingFace.publicUrl ?? '-'}</code></div>
+              <div className="kv"><span>Storage</span><code>{status.huggingFace.storageRoot}</code></div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -474,10 +571,10 @@ function CapabilitySummary(props: { items: Array<{ label: string; value: string;
   );
 }
 
-function CapabilityError(props: { message: string }) {
+function CapabilityError(props: { message: string; title?: string }) {
   return (
     <div className="capability-error">
-      <strong>Discovery failed</strong>
+      <strong>{props.title ?? 'Discovery failed'}</strong>
       <code>{props.message}</code>
     </div>
   );
@@ -680,6 +777,31 @@ function shortSha(value: string): string {
   return value.slice(0, 12);
 }
 
+function formatDuration(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${seconds % 60}s`;
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function adminCheckSummary(status: AdminStatus): { ok: number; attention: number; total: number } {
+  let ok = 0;
+  let attention = 0;
+  for (const check of status.checks) {
+    if (check.state === 'ok') ok += 1;
+    else attention += 1;
+  }
+  return { ok, attention, total: status.checks.length };
+}
+
 function releaseState(sourceSynced?: boolean, buildMatchesGit?: boolean, actionsState?: boolean): string {
   if (sourceSynced === false || buildMatchesGit === false || actionsState === false) return 'warn';
   if (sourceSynced === true && buildMatchesGit === true && actionsState === true) return 'ok';
@@ -769,6 +891,7 @@ function tabLabel(tab: ManagementTab): string {
   switch (tab) {
     case 'skills': return 'Skills';
     case 'agents': return 'Agents';
+    case 'admin': return 'Runtime';
     case 'automations': return 'Automations';
     case 'triage': return 'Triage';
     case 'settings': return 'Settings';
@@ -778,6 +901,7 @@ function tabLabel(tab: ManagementTab): string {
 function tabTitle(tab: ManagementTab): string {
   if (tab === 'skills') return 'Skills registry';
   if (tab === 'agents') return 'Codex agents';
+  if (tab === 'admin') return 'Runtime status';
   if (tab === 'automations') return 'Automations';
   if (tab === 'triage') return 'Triage inbox';
   return 'Runtime settings';

@@ -10,6 +10,7 @@ The repository root is the product source of truth. Hugging Face Space files liv
 - Node/Express backend with token auth, rate limiting, project-root policy, state persistence, and WebSocket fanout.
 - Demo mode for public previews without Codex credentials.
 - Real Codex mode through `codex app-server` when credentials and a private/protected runtime are configured.
+- Read-only `/_ops/` diagnostics and default-off `/_admin/` management surfaces for HFS operations.
 - HFS adapter that fetches the GitHub source by commit during the Space build.
 
 ## Repository Shape
@@ -79,15 +80,18 @@ Real mode on HF requires:
 
 ```env
 CODEX_PLATFORM_AUTH_TOKEN=<long-random-token>
+CODEX_PLATFORM_OPS_TOKEN=<long-random-ops-token>
 OPENAI_API_KEY=<optional-if-api-key-auth-is-used>
 ```
+
+`/_ops/*` is disabled until `CODEX_PLATFORM_OPS_TOKEN` is set. `/_admin/*` is disabled by default; only enable it in a controlled Private/Protected Space with `CODEX_PLATFORM_ADMIN_ENABLED=true` and a separate `CODEX_PLATFORM_ADMIN_TOKEN`.
 
 ## Validation
 
 Lightweight local checks:
 
 ```bash
-bash -n scripts/hf-entrypoint.sh scripts/hf-healthcheck.sh scripts/hf-space-smoke.sh cloud/hfs/export_space_bundle.sh
+bash -n scripts/hf-entrypoint.sh scripts/hf-healthcheck.sh scripts/hf-space-smoke.sh scripts/admin-smoke.sh cloud/hfs/export_space_bundle.sh
 scripts/validate-hfs-contract.sh
 scripts/static-check.sh
 bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space

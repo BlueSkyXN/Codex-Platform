@@ -88,12 +88,14 @@ Release exports must replace `CODEX_PLATFORM_COMMIT=HEAD` with the Git commit SH
 | Alignment manifest | `cloud/hfs/hfs-dev.toml` declares Pattern B, `source-fetch`, and `flat-remap` |
 | Single public port | `cloud/hfs/README.md app_port`, Dockerfile `EXPOSE`, and runtime `PORT` are `7860` |
 | Canonical health | `/healthz` returns JSON server health |
+| Ops diagnostics | `/_ops/*` is read-only and gated by `CODEX_PLATFORM_OPS_TOKEN` |
+| Admin control | `/_admin/*` is default-off, uses a separate admin token, CSRF, confirm, and audit log |
 | Release takeover evidence | Runtime image includes `BUILD_SHA`; `/healthz` exposes the build SHA when present |
 | Secrets boundary | `.env.local` is ignored and only used as a local ledger |
 | Local reference boundary | `local/` is reference-only and not part of the Space bundle |
 | Static gate | `.github/workflows/ci.yml` calls `scripts/static-check.sh` |
 | Contract gate | `scripts/validate-hfs-contract.sh` validates the Pattern B structure |
-| Smoke | `scripts/hf-space-smoke.sh` checks `/healthz`, `/api/config`, `/`, and `/api/state` |
+| Smoke | `scripts/hf-space-smoke.sh` checks `/healthz`, `/readyz`, `/api/config`, `/`, `/api/state`, `/api/admin/status`, `/_ops/*`, and default-disabled `/_admin/`; `scripts/admin-smoke.sh` covers enabled admin |
 
 ## Migration Rule
 

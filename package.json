@@ -15,6 +15,7 @@
     "smoke:demo": "npm run build && DEMO_MODE=true PORT=18787 CODEX_PLATFORM_DATA_DIR=/tmp/codex-platform-smoke node dist/server/server/index.js",
     "start:hf": "scripts/hf-entrypoint.sh",
     "smoke:hf": "scripts/hf-space-smoke.sh",
+    "smoke:admin": "scripts/admin-smoke.sh",
     "static-check": "scripts/static-check.sh",
     "build:web": "node --max-old-space-size=384 ./node_modules/vite/bin/vite.js build",
     "check": "npm run typecheck"

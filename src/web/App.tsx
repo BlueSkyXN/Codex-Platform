@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react';
-import type { AccountSummary, AgentSummary, ApprovalRecord, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
+import type { AccountSummary, AgentSummary, AdminStatus, ApprovalRecord, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, StartTurnRequest, TimelineCard, UiEvent, CodexWebConfig } from '../shared/types.js';
 import { api, eventStreamUrl, getStoredToken, setStoredToken } from './lib/api.js';
 import { initialState, reduce } from './lib/reducer.js';
 import { normalizeAccount } from './lib/normalize.js';
@@ -30,6 +30,9 @@ export function App() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('review');
   const [codexWebConfig, setCodexWebConfig] = useState<CodexWebConfig | undefined>();
   const [health, setHealth] = useState<ServerHealth | undefined>();
+  const [adminStatus, setAdminStatus] = useState<AdminStatus | undefined>();
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | undefined>();
   const [authReady, setAuthReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | undefined>();
@@ -214,6 +217,11 @@ export function App() {
   }, [authReady, selectedProject?.id]);
 
   useEffect(() => {
+    if (!authReady) return;
+    void reloadAdminStatus();
+  }, [authReady]);
+
+  useEffect(() => {
     if (!authReady || !selectedProject?.id) return;
     void reloadProjectPanels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,6 +286,19 @@ export function App() {
       setAccount(normalizeAccount(await api.account()));
     } catch {
       setAccount(undefined);
+    }
+  }
+
+  async function reloadAdminStatus() {
+    setAdminLoading(true);
+    setAdminError(undefined);
+    try {
+      setAdminStatus(await api.adminStatus());
+    } catch (error) {
+      setAdminStatus(undefined);
+      setAdminError(errorMessage(error));
+    } finally {
+      setAdminLoading(false);
     }
   }
 
@@ -710,6 +731,9 @@ export function App() {
         agentsError={agentsError}
         account={account}
         health={health}
+        adminStatus={adminStatus}
+        adminLoading={adminLoading}
+        adminError={adminError}
         githubActions={githubActions}
         gitStatus={gitStatus}
         codexWebConfig={codexWebConfig}
@@ -724,6 +748,7 @@ export function App() {
         onClose={() => setManagementOpen(false)}
         onTabChange={setManagementTab}
         onRefreshSkills={() => reloadSkills(true)}
+        onRefreshAdmin={() => void reloadAdminStatus()}
         onUseSkill={(skill) => useComposerCapability('skill', skill.name)}
         onUseAgent={(agent) => useComposerCapability('agent', agent.name)}
         onToggleNotifications={(enabled) => void toggleNotifications(enabled)}

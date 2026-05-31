@@ -6,7 +6,8 @@
 - [ ] `cloud/hfs/export_space_bundle.sh` produces a bundle whose `BUILD_SOURCE.txt` commit matches the GitHub commit being deployed.
 - [ ] HF Space repo receives the exported bundle.
 - [ ] HF Space build reaches a running state.
-- [ ] Live smoke passes against `https://blueskyxn-codex-platform-hfs.hf.space/healthz`, `/api/config`, `/`, and `/api/state`.
+- [ ] Live smoke passes against `https://blueskyxn-codex-platform-hfs.hf.space/healthz`, `/readyz`, `/api/config`, `/`, `/api/state`, `/api/admin/status`, `/_ops/*`, and the expected `/_admin/` posture.
+- [ ] If `CODEX_PLATFORM_ADMIN_ENABLED=true`, `scripts/admin-smoke.sh` passes with the configured admin token.
 - [ ] `/healthz` build SHA, `BUILD_SOURCE.txt`, HF repo SHA, and HF runtime SHA are consistent for the deployed revision.
 - [ ] Real-mode deployments have `CODEX_PLATFORM_AUTH_TOKEN` set as a Secret and are Private or Protected.
 - [ ] `.env.local` remains untracked and contains only local ledger values.

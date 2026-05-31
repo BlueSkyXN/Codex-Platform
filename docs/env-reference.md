@@ -52,6 +52,7 @@ When uploading to Hugging Face, copy only the keys that should actually take eff
 | `CODEX_HOME` | `/data/codex-home` | Codex auth/config home. |
 | `CODEX_BIN` | `codex` | Codex CLI binary. |
 | `CODEX_ARGS` | `app-server` | Codex app-server arguments. |
+| `CODEX_PLATFORM_ADMIN_ENABLED` | `false` | Enables the separate `/_admin/*` management surface only when intentionally needed. |
 
 Do not upload these values unless you intentionally need to override the HF defaults already set by the Docker image:
 
@@ -69,10 +70,66 @@ CODEX_ARGS=app-server
 | Key | Required | Purpose |
 | --- | --- | --- |
 | `CODEX_PLATFORM_AUTH_TOKEN` | Real mode | Access token for browser/API/WebSocket use. |
+| `CODEX_PLATFORM_OPS_TOKEN` | Recommended | Access token for `/_ops/*` read-only diagnostics. |
+| `CODEX_PLATFORM_ADMIN_TOKEN` | Admin enabled | Independent access token for `/_admin/*`. |
 | `OPENAI_API_KEY` | Optional | API-key based Codex/OpenAI auth when not using `CODEX_HOME/auth.json`. |
 | `CODEX_AUTH_TOKEN` | Optional | Alternate Codex auth token if supported by the installed Codex runtime. |
 
 Public demo mode should not set Codex/OpenAI credentials. Real mode should use a Private or Protected Space, persistent storage, `DEMO_MODE=false`, and a strong `CODEX_PLATFORM_AUTH_TOKEN`.
+
+## Ops Control Plane
+
+`/_ops/*` is a read-only diagnostics surface inspired by the DIFY HFS integration pattern. It is disabled until an ops token is configured.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `CODEX_PLATFORM_OPS_TOKEN` | empty | Enables `/_ops/` dashboard and JSON endpoints. |
+| `CODEX_PLATFORM_OPS_HEADER` | `x-codex-platform-ops-token` | Primary CLI/API header. `X-Ops-Token` and `Authorization: Bearer` are also accepted. |
+| `CODEX_PLATFORM_OPS_COOKIE` | `codex_platform_ops` | Signed HttpOnly browser session cookie for `/_ops/`. |
+| `CODEX_PLATFORM_OPS_SESSION_TTL_SECONDS` | `3600` | Ops browser session TTL. |
+| `CODEX_PLATFORM_OPS_COOKIE_SECURE` | `auto` | `auto` sets `Secure` behind HTTPS or `X-Forwarded-Proto=https`. |
+
+Endpoints:
+
+```text
+/_ops/               browser dashboard
+/_ops/health         app health plus diagnostics checks
+/_ops/readyz         readiness detail
+/_ops/status         runtime entity counts and bridge state
+/_ops/system         process, host, path, and disk summary
+/_ops/config         sanitized config summary
+/_ops/version        package/build/source summary
+/_ops/errors         recent in-memory app errors
+/_ops/metrics        Prometheus-style text metrics
+```
+
+`/_ops/` supports browser login without storing the token in page JavaScript. The temporary `?token=` path is accepted only to migrate into a signed HttpOnly cookie and redirect back to `/_ops/`.
+
+## Admin Control Plane
+
+`/_admin/*` is a separate management surface. It is default-off and must not reuse the ops token.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `CODEX_PLATFORM_ADMIN_ENABLED` | `false` | Enables `/_admin/`; disabled mode returns `404`. |
+| `CODEX_PLATFORM_ADMIN_TOKEN` | empty | Independent admin token; required when admin is enabled. |
+| `CODEX_PLATFORM_ADMIN_HEADER` | `x-codex-platform-admin-token` | Primary CLI/API header. `X-Admin-Token` and `Authorization: Bearer` are also accepted. |
+| `CODEX_PLATFORM_ADMIN_COOKIE` | `codex_platform_admin` | Signed HttpOnly browser session cookie for `/_admin/`. |
+| `CODEX_PLATFORM_ADMIN_CSRF_HEADER` | `x-codex-platform-admin-csrf` | Required for cookie-session write actions. |
+| `CODEX_PLATFORM_ADMIN_CSRF_KEY` | empty | Optional dedicated CSRF HMAC key; otherwise derives from admin token. |
+| `CODEX_PLATFORM_ADMIN_SESSION_TTL_SECONDS` | `3600` | Admin browser session TTL. |
+| `CODEX_PLATFORM_ADMIN_COOKIE_SECURE` | `auto` | `auto` sets `Secure` behind HTTPS or `X-Forwarded-Proto=https`. |
+| `CODEX_PLATFORM_ADMIN_AUDIT_LOG` | `${CODEX_PLATFORM_DATA_DIR}/admin-audit.jsonl` | JSONL audit log for admin login and whitelisted actions. |
+
+Current admin actions are deliberately small and whitelisted:
+
+```text
+run-health-checks
+flush-store
+restart-codex
+```
+
+All admin actions require `confirm=true`. Browser cookie sessions also require the CSRF header; CLI header-token auth skips CSRF because the header is not automatically attached by browsers.
 
 ## GitHub Actions
 
@@ -82,6 +139,10 @@ Public demo mode should not set Codex/OpenAI credentials. Real mode should use a
 | `HF_SPACE_ID` | Variable | Optional override; defaults to `BlueSkyXN/Codex-Platform-HFS`. |
 | `HF_PUBLIC_URL` | Variable | Optional live smoke URL override; defaults to the public Space URL. |
 | `CODEX_PLATFORM_AUTH_TOKEN` | Secret | Optional smoke token for real-mode Spaces. |
+| `CODEX_PLATFORM_OPS_TOKEN` | Secret | Optional smoke token for `/_ops/*` checks. |
+| `CODEX_PLATFORM_ADMIN_TOKEN` | Secret | Optional smoke token when `SMOKE_ADMIN_ENABLED=true`. |
+| `SMOKE_ADMIN_ENABLED` | Variable | Set `true` only when live smoke should expect `/_admin/*` to be enabled. |
+| `SMOKE_ADMIN_ACTIONS` | Variable | Set `true` only when live smoke may execute the safe `run-health-checks` admin action. |
 
 GitHub Actions values are deployment and verification inputs. They are separate from HF runtime Variables and Secrets.
 
@@ -91,6 +152,12 @@ GitHub Actions values are deployment and verification inputs. They are separate 
 | --- | --- | --- |
 | `GITHUB_TOKEN` or `GH_TOKEN` | Optional | Server-side token for reading GitHub Actions status in the Release verification panel. Public repositories can often use unauthenticated reads; private repositories or tighter rate limits should use a token. |
 | `CODEX_PLATFORM_GITHUB_ACTIONS_TIMEOUT_MS` | Optional | Timeout for the GitHub Actions status request; defaults to `8000`. |
+
+## In-App Runtime Tab
+
+The browser Runtime tab is backed by `/api/admin/status` and uses the existing Codex-Platform auth settings. It is separate from `/_ops/*` and `/_admin/*`: it does not use the ops/admin tokens, expose restart actions, provide shell access, provide a file manager, or write config.
+
+The endpoint reports read-only runtime posture, auth mode, workspace boundaries, storage paths, HFS metadata, aggregate counts, and health checks. It must not return secret values.
 
 ## Compatibility Aliases
 

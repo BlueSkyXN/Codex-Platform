@@ -58,6 +58,7 @@ require_file package-lock.json
 require_file scripts/hf-entrypoint.sh
 require_file scripts/hf-healthcheck.sh
 require_file scripts/hf-space-smoke.sh
+require_file scripts/admin-smoke.sh
 require_file cloud/hfs/README.md
 require_file cloud/hfs/Dockerfile
 require_file cloud/hfs/.dockerignore
@@ -222,6 +223,14 @@ require_grep 'SMOKE_RETRIES' scripts/hf-space-smoke.sh \
   "scripts/hf-space-smoke.sh must support retry configuration"
 require_grep '/api/state' scripts/hf-space-smoke.sh \
   "scripts/hf-space-smoke.sh must check /api/state"
+require_grep '/api/admin/status' scripts/hf-space-smoke.sh \
+  "scripts/hf-space-smoke.sh must check /api/admin/status"
+require_grep '/_ops/health' scripts/hf-space-smoke.sh \
+  "scripts/hf-space-smoke.sh must check /_ops/health"
+require_grep '/_admin/api/status' scripts/hf-space-smoke.sh \
+  "scripts/hf-space-smoke.sh must check optional /_admin status"
+require_grep 'ADMIN_EXPECTED_ENABLED' scripts/admin-smoke.sh \
+  "scripts/admin-smoke.sh must support disabled/admin-enabled modes"
 require_grep 'x-codex-platform-token' scripts/hf-space-smoke.sh \
   "scripts/hf-space-smoke.sh must support authenticated smoke"
 

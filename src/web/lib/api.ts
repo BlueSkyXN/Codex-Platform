@@ -1,5 +1,6 @@
 import type {
   AgentSummary,
+  AdminStatus,
   ApprovalDecision,
   AppStateSnapshot,
   CreateThreadRequest,
@@ -70,6 +71,7 @@ export const api = {
     }
   },
   health: () => request<ServerHealth>('/api/health', { skipAuth: true }),
+  adminStatus: () => request<AdminStatus>('/api/admin/status'),
   state: () => request<AppStateSnapshot>('/api/state'),
   projects: () => request<{ data: Project[] }>('/api/projects'),
   addProject: (body: { name?: string; cwd: string }) => request<{ project: Project }>('/api/projects', { method: 'POST', body: JSON.stringify(body) }),

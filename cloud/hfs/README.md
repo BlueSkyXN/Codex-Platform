@@ -13,7 +13,7 @@ pinned: false
 
 This Space runs Codex-Platform as a Hugging Face Docker Space.
 
-Codex-Platform is a single-user/private-team web control plane for `codex app-server`. It provides a browser UI, token-gated HTTP API, WebSocket event stream, project-root restrictions, demo mode, and a real Codex bridge when credentials are supplied.
+Codex-Platform is a single-user/private-team web control plane for `codex app-server`. It provides a browser UI, token-gated HTTP API, WebSocket event stream, project-root restrictions, demo mode, read-only `/_ops/` diagnostics, default-off `/_admin/` management, and a real Codex bridge when credentials are supplied.
 
 ## Modes
 
@@ -32,8 +32,11 @@ Codex-Platform is a single-user/private-team web control plane for `codex app-se
 
 ```env
 CODEX_PLATFORM_AUTH_TOKEN=<long-random-token>
+CODEX_PLATFORM_OPS_TOKEN=<long-random-ops-token>
 OPENAI_API_KEY=<optional-if-api-key-auth-is-used>
 ```
+
+Keep `CODEX_PLATFORM_ADMIN_ENABLED=false` unless the Space is Private or Protected and you have a separate `CODEX_PLATFORM_ADMIN_TOKEN`.
 
 ## Recommended Variables
 
