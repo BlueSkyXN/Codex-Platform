@@ -75,6 +75,7 @@ export function Inspector(props: {
   const [internalTab, setInternalTab] = useState<InspectorTab>('review');
   const [browserFeedback, setBrowserFeedback] = useState('');
   const [artifactFeedback, setArtifactFeedback] = useState('');
+  const [reviewFindings, setReviewFindings] = useState<GitReviewFinding[]>([]);
   const activeTab = props.tab ?? internalTab;
   const setActiveTab = props.onTabChange ?? setInternalTab;
   const relatedApproval = props.card?.id ? props.approvals.find((a) => a.itemId === props.card?.id) : undefined;
@@ -91,6 +92,7 @@ export function Inspector(props: {
   useEffect(() => {
     setBrowserFeedback('');
     setArtifactFeedback('');
+    setReviewFindings([]);
   }, [props.project?.id, props.thread?.id]);
 
   return (
@@ -137,6 +139,7 @@ export function Inspector(props: {
           githubActions={props.githubActions}
           health={props.health}
           reviewEvidence={reviewEvidence}
+          reviewFindings={reviewFindings}
           selectedPath={props.selectedGitPath}
           loading={Boolean(props.projectPanelLoading)}
           actionBusy={Boolean(props.gitActionBusy)}
@@ -147,6 +150,8 @@ export function Inspector(props: {
           onStage={props.onGitStage}
           onUnstage={props.onGitUnstage}
           onCommit={props.onGitCommit}
+          onAddReviewFinding={(finding) => setReviewFindings((items) => [finding, ...items].slice(0, 12))}
+          onRemoveReviewFinding={(id) => setReviewFindings((items) => items.filter((item) => item.id !== id))}
         />
       ) : null}
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
@@ -699,6 +704,7 @@ function GitTab(props: {
   githubActions?: GitHubActionsSummary;
   health?: ServerHealth;
   reviewEvidence: ReviewEvidencePacket;
+  reviewFindings: GitReviewFinding[];
   selectedPath?: string;
   loading: boolean;
   actionBusy: boolean;
@@ -709,6 +715,8 @@ function GitTab(props: {
   onStage?: (paths: string[]) => void;
   onUnstage?: (paths: string[]) => void;
   onCommit?: (message: string, paths?: string[]) => void;
+  onAddReviewFinding: (finding: GitReviewFinding) => void;
+  onRemoveReviewFinding: (id: string) => void;
 }) {
   const [commitMessage, setCommitMessage] = useState('');
   const [copiedPush, setCopiedPush] = useState(false);
@@ -719,7 +727,7 @@ function GitTab(props: {
   const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
   const [selectedReviewLine, setSelectedReviewLine] = useState<DiffLineSelection | undefined>();
   const [reviewNote, setReviewNote] = useState('');
-  const [reviewFindings, setReviewFindings] = useState<GitReviewFinding[]>([]);
+  const reviewFindings = props.reviewFindings;
   const status = props.status;
   const grouped = groupGitFiles(status?.files ?? []);
   const files = status?.files ?? [];
@@ -804,23 +812,20 @@ function GitTab(props: {
     if (!selectedReviewLine) return;
     const path = props.diff?.path ?? props.selectedPath ?? 'selected diff';
     const note = reviewNote.trim() || 'Review this line before committing.';
-    setReviewFindings((items) => [
-      {
-        id: `finding_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        path,
-        lineNumber: selectedReviewLine.lineNumber,
-        lineText: selectedReviewLine.text,
-        note,
-        kind: selectedReviewLine.kind
-      },
-      ...items
-    ].slice(0, 12));
+    props.onAddReviewFinding({
+      id: `finding_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      path,
+      lineNumber: selectedReviewLine.lineNumber,
+      lineText: selectedReviewLine.text,
+      note,
+      kind: selectedReviewLine.kind
+    });
     setSelectedReviewLine(undefined);
     setReviewNote('');
   }
 
   function removeReviewFinding(id: string) {
-    setReviewFindings((items) => items.filter((item) => item.id !== id));
+    props.onRemoveReviewFinding(id);
   }
 
   return (
