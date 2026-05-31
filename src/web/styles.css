@@ -3220,7 +3220,9 @@ button.icon-only {
 
 .composer-context-chip.gitStatus,
 .composer-context-chip.gitDiff,
-.composer-context-chip.releaseEvidence {
+.composer-context-chip.releaseEvidence,
+.composer-context-chip.browserEvidence,
+.composer-context-chip.artifactEvidence {
   border-color: color-mix(in srgb, var(--codex-green), var(--border) 60%);
 }
 

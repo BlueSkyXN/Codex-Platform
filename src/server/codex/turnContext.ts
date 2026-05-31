@@ -61,6 +61,10 @@ function kindLabel(kind: TurnContextAttachment['kind']): string {
       return 'Git diff';
     case 'releaseEvidence':
       return 'Release evidence';
+    case 'browserEvidence':
+      return 'Browser evidence';
+    case 'artifactEvidence':
+      return 'Artifact evidence';
     default:
       return kind;
   }

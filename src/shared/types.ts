@@ -215,7 +215,7 @@ export type AgentSummary = {
   raw?: unknown;
 };
 
-export type TurnContextAttachmentKind = 'file' | 'folder' | 'gitStatus' | 'gitDiff' | 'releaseEvidence' | 'terminal' | 'skill' | 'agent';
+export type TurnContextAttachmentKind = 'file' | 'folder' | 'gitStatus' | 'gitDiff' | 'releaseEvidence' | 'browserEvidence' | 'artifactEvidence' | 'terminal' | 'skill' | 'agent';
 
 export type TurnContextAttachment = {
   id: string;

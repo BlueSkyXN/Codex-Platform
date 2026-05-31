@@ -24,6 +24,16 @@ type ComposerOptions = Pick<StartTurnRequest, 'model' | 'effort' | 'sandbox' | '
   context?: TurnContextAttachment[];
 };
 type ContextFileOption = { node: FileTreeNode; depth: number };
+type BrowserContextTarget = {
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
+  source: string;
+  cardId?: string;
+  capturedAt?: number;
+  kind: 'local' | 'remote' | 'space';
+};
 export type ComposerCapabilitySelection = { requestId: number; kind: 'skill' | 'agent'; name: string };
 
 const MAX_CONTEXT_CONTENT_CHARS = 36_000;
@@ -71,6 +81,8 @@ export function Composer(props: {
   const suggestions = useMemo(() => buildSuggestions(text, props.skills, agents), [text, props.skills, agents]);
   const terminalCards = useMemo(() => (props.cards ?? []).filter((card) => card.kind === 'command'), [props.cards]);
   const lastTerminalCard = terminalCards.at(-1);
+  const browserTargets = useMemo(() => contextBrowserTargets(props.cards ?? [], props.health), [props.cards, props.health]);
+  const artifacts = useMemo(() => contextArtifactCards(props.cards ?? []), [props.cards]);
   const fileOptions = useMemo(() => flattenTree(props.fileTree).filter((item) => item.node.path !== '.').slice(0, 18), [props.fileTree]);
   const showStarterPrompts = !text.trim() && contextAttachments.length === 0 && (props.cards?.length ?? 0) === 0;
 
@@ -271,6 +283,24 @@ export function Composer(props: {
                 subtitle={lastTerminalCard?.command ?? 'No command output in this thread'}
                 disabled={!lastTerminalCard}
                 onClick={() => lastTerminalCard ? attachContext(terminalAttachment(lastTerminalCard)) : undefined}
+              />
+            </section>
+
+            <section className="context-picker-section">
+              <div className="context-picker-label">Evidence</div>
+              <ContextOption
+                icon="panel"
+                title="Browser evidence"
+                subtitle={browserEvidenceSummary(browserTargets, props.health)}
+                disabled={browserTargets.length === 0 && !props.health}
+                onClick={() => attachContext(browserEvidenceAttachment(browserTargets, props.health))}
+              />
+              <ContextOption
+                icon="file"
+                title="Artifact evidence"
+                subtitle={artifacts.length ? `${artifacts.length} thread artifact${artifacts.length === 1 ? '' : 's'} ready for follow-up` : 'No artifacts captured in this thread'}
+                disabled={artifacts.length === 0}
+                onClick={() => attachContext(artifactEvidenceAttachment(artifacts))}
               />
             </section>
 
@@ -667,6 +697,80 @@ function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubAc
   };
 }
 
+function browserEvidenceAttachment(targets: BrowserContextTarget[], health?: ServerHealth): TurnContextAttachment {
+  const active = targets[0];
+  const targetLines = targets.length
+    ? targets.slice(0, 8).map((target) => `- ${target.title}: ${target.url} · ${targetKindLabel(target.kind)} · ${target.source}${target.capturedAt ? ` · captured ${formatTime(target.capturedAt)}` : ''}`)
+    : ['- no browser preview URL captured'];
+
+  return {
+    id: 'browserEvidence:current',
+    kind: 'browserEvidence',
+    title: 'Browser evidence',
+    subtitle: browserEvidenceSummary(targets, health),
+    content: [
+      'Browser and runtime evidence:',
+      `Active target: ${active ? active.url : 'none'}`,
+      `Active target kind: ${active ? targetKindLabel(active.kind) : 'none'}`,
+      `Runtime: ${health?.appServer ?? 'unknown'}`,
+      `Ready: ${health ? (health.ready ? 'yes' : 'no') : 'unknown'}`,
+      `Build SHA: ${health?.build?.sha ?? 'unknown'}`,
+      `HF enabled: ${health?.huggingFace?.enabled ? 'yes' : 'no'}`,
+      `HF target: ${health?.huggingFace?.publicUrl ?? health?.huggingFace?.spaceHost ?? health?.huggingFace?.spaceId ?? 'unknown'}`,
+      '',
+      'Targets:',
+      ...targetLines,
+      '',
+      'Follow-up instructions:',
+      '- Inspect the referenced preview target or runtime evidence before making UI changes.',
+      '- Verify the affected view in a browser at desktop and mobile widths.',
+      '- If a target is a Hugging Face Space, compare /healthz build.sha with the Git commit before calling the preview current.'
+    ].join('\n'),
+    metadata: {
+      targets: targets.length,
+      activeUrl: active?.url ?? '',
+      runtime: health?.appServer ?? '',
+      ready: Boolean(health?.ready),
+      buildSha: health?.build?.sha ?? '',
+      hfEnabled: Boolean(health?.huggingFace?.enabled)
+    }
+  };
+}
+
+function artifactEvidenceAttachment(artifacts: TimelineCard[]): TurnContextAttachment {
+  const selected = artifacts[0];
+  const artifactLines = artifacts.slice(0, 10).map((artifact) => `- ${artifact.filePath ?? artifact.title}: ${artifactKind(artifact)} · ${artifactSubtitle(artifact)} · ${formatTime(artifact.createdAt)}`);
+  return {
+    id: 'artifactEvidence:current',
+    kind: 'artifactEvidence',
+    title: 'Artifact evidence',
+    subtitle: artifacts.length ? `${artifacts.length} thread artifact${artifacts.length === 1 ? '' : 's'}` : 'No artifacts captured',
+    content: [
+      'Thread artifact evidence:',
+      `Selected artifact: ${selected ? selected.filePath ?? selected.title : 'none'}`,
+      `Selected kind: ${selected ? artifactKind(selected) : 'none'}`,
+      `Artifact count: ${artifacts.length}`,
+      '',
+      'Artifacts:',
+      ...(artifactLines.length ? artifactLines : ['- none']),
+      '',
+      'Selected artifact excerpt:',
+      selected ? artifactExcerpt(selected) : 'No artifact excerpt available.',
+      '',
+      'Follow-up instructions:',
+      '- Use the artifact as evidence, not as a replacement for inspecting live source files.',
+      '- Preserve relevant diffs, logs, and plan details while scoping the next fix or review.',
+      '- Verify the artifact still appears in the Artifacts pane after the next implementation pass.'
+    ].join('\n'),
+    metadata: {
+      artifacts: artifacts.length,
+      selectedId: selected?.id ?? '',
+      selectedKind: selected ? artifactKind(selected) : '',
+      selectedPath: selected?.filePath ?? ''
+    }
+  };
+}
+
 function terminalAttachment(card: TimelineCard): TurnContextAttachment {
   return {
     id: `terminal:${card.id}`,
@@ -772,6 +876,12 @@ function releaseEvidenceSummary(status?: GitStatusSummary, actions?: GitHubActio
   return `${head} · ${actionsLabel} · ${runtime} · ${hf}`;
 }
 
+function browserEvidenceSummary(targets: BrowserContextTarget[], health?: ServerHealth): string {
+  const runtime = health ? (health.ready ? 'runtime ready' : health.ok ? 'runtime starting' : 'runtime unhealthy') : 'runtime unknown';
+  const target = targets[0]?.url ?? 'no preview target';
+  return `${targets.length} target${targets.length === 1 ? '' : 's'} · ${runtime} · ${target}`;
+}
+
 function githubActionsLabel(actions?: GitHubActionsSummary): string {
   if (!actions) return 'Actions loading';
   if (actions.error) return 'Actions unavailable';
@@ -783,6 +893,130 @@ function githubActionsLabel(actions?: GitHubActionsSummary): string {
 
 function shortSha(value: string): string {
   return value.slice(0, 12);
+}
+
+function contextBrowserTargets(cards: TimelineCard[], health?: ServerHealth): BrowserContextTarget[] {
+  const seen = new Set<string>();
+  const targets: BrowserContextTarget[] = [];
+  const push = (target: BrowserContextTarget) => {
+    if (seen.has(target.url)) return;
+    seen.add(target.url);
+    targets.push(target);
+  };
+
+  if (health?.huggingFace?.publicUrl) {
+    push({
+      id: `hf:${health.huggingFace.publicUrl}`,
+      title: 'Hugging Face Space',
+      subtitle: health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured Space target',
+      url: health.huggingFace.publicUrl,
+      source: 'runtime health',
+      kind: 'space'
+    });
+  } else if (health?.huggingFace?.spaceHost) {
+    const url = `https://${health.huggingFace.spaceHost}`;
+    push({
+      id: `hf:${url}`,
+      title: 'Hugging Face Space',
+      subtitle: health.huggingFace.spaceId ?? health.huggingFace.spaceHost,
+      url,
+      source: 'runtime health',
+      kind: 'space'
+    });
+  }
+
+  for (const card of [...cards].reverse()) {
+    if (card.kind !== 'command') continue;
+    for (const url of extractUrls([card.command, card.stdout, card.stderr, card.text].filter(Boolean).join('\n'))) {
+      push({
+        id: `${card.id}:${url}`,
+        title: localUrlLabel(url),
+        subtitle: card.command ?? card.title,
+        url,
+        source: `command ${card.id}`,
+        cardId: card.id,
+        capturedAt: card.createdAt,
+        kind: isLocalUrl(url) ? 'local' : 'remote'
+      });
+    }
+  }
+
+  return targets.slice(0, 8);
+}
+
+function contextArtifactCards(cards: TimelineCard[]): TimelineCard[] {
+  return cards
+    .filter((card) => card.kind === 'fileChange' || card.kind === 'agent' || card.kind === 'plan' || (card.kind === 'command' && (card.stdout || card.stderr)))
+    .slice(-12)
+    .reverse();
+}
+
+function extractUrls(value: string): string[] {
+  const matches = value.match(/\bhttps?:\/\/[^\s<>"'`]+/g) ?? [];
+  return matches.map((url) => url.replace(/[),.;\]]+$/, '')).filter((url, index, all) => all.indexOf(url) === index);
+}
+
+function isLocalUrl(url: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?\b/i.test(url);
+}
+
+function localUrlLabel(url: string): string {
+  if (!isLocalUrl(url)) return new URL(url).hostname;
+  const parsed = new URL(url);
+  return parsed.port ? `Local preview :${parsed.port}` : 'Local preview';
+}
+
+function targetKindLabel(kind: BrowserContextTarget['kind']): string {
+  if (kind === 'space') return 'HF Space';
+  if (kind === 'local') return 'local';
+  return 'remote';
+}
+
+function artifactKind(card: TimelineCard): string {
+  if (card.kind === 'fileChange') return 'diff';
+  if (card.kind === 'command') return 'terminal log';
+  if (card.kind === 'plan') return 'plan';
+  if (card.kind === 'agent') return 'summary';
+  return card.kind;
+}
+
+function artifactSubtitle(card: TimelineCard): string {
+  if (card.kind === 'fileChange') return diffStats(card.diff).label;
+  if (card.kind === 'command') return card.exitCode === null || card.exitCode === undefined ? card.status ?? 'command output' : `exit ${card.exitCode}`;
+  return card.status ?? card.kind;
+}
+
+function artifactExcerpt(card: TimelineCard): string {
+  const value = card.diff || card.stdout || card.stderr || card.text || safeJson(card.payload ?? card);
+  return compactText(value, 1800);
+}
+
+function diffStats(diff?: string): { added: number; removed: number; label: string } {
+  let added = 0;
+  let removed = 0;
+  for (const line of (diff ?? '').split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) added += 1;
+    if (line.startsWith('-')) removed += 1;
+  }
+  return { added, removed, label: `+${added} -${removed}` };
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return JSON.stringify({ error: 'Unable to serialize payload.' }, null, 2);
+  }
+}
+
+function compactText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 3)}...` : value;
+}
+
+function formatTime(value?: number): string {
+  if (!value) return '-';
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function truncateContent(value: string): { value: string; truncated: boolean } {
@@ -798,6 +1032,10 @@ function iconForContextKind(kind: TurnContextAttachmentKind): IconName {
       return 'branch';
     case 'releaseEvidence':
       return 'branch';
+    case 'browserEvidence':
+      return 'panel';
+    case 'artifactEvidence':
+      return 'file';
     case 'terminal':
       return 'terminal';
     case 'skill':
