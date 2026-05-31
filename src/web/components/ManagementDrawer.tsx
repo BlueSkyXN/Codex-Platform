@@ -93,7 +93,16 @@ export function ManagementDrawer(props: {
 
         <nav className="management-tabs" aria-label="Management sections">
           {managementTabs.map((tab) => (
-            <button key={tab} className={`tab ${props.tab === tab ? 'active' : ''}`} onClick={() => props.onTabChange(tab)}>{tabLabel(tab)}</button>
+            <button
+              key={tab}
+              className={`tab management-tab ${props.tab === tab ? 'active' : ''}`}
+              onClick={() => props.onTabChange(tab)}
+              title={tabTitle(tab)}
+              aria-label={tabTitle(tab)}
+            >
+              <span className="management-tab-icon"><Icon name={managementTabIcon(tab)} size={14} /></span>
+              <span>{tabLabel(tab)}</span>
+            </button>
           ))}
         </nav>
 
@@ -1435,6 +1444,17 @@ function tabLabel(tab: ManagementTab): string {
     case 'automations': return 'Automations';
     case 'triage': return 'Triage';
     case 'settings': return 'Settings';
+  }
+}
+
+function managementTabIcon(tab: ManagementTab): IconName {
+  switch (tab) {
+    case 'skills': return 'spark';
+    case 'agents': return 'agent';
+    case 'admin': return 'sliders';
+    case 'automations': return 'automation';
+    case 'triage': return 'inbox';
+    case 'settings': return 'settings';
   }
 }
 

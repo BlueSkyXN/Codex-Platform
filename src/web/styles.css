@@ -5969,6 +5969,41 @@ button,
   color: var(--codex-green, var(--ok));
 }
 
+.management-tabs {
+  gap: 4px;
+  padding-bottom: 7px;
+}
+
+.management-tab {
+  min-width: max-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 7px;
+}
+
+.management-tab-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--codex-radius-md);
+  color: var(--codex-muted);
+}
+
+.management-tab.active .management-tab-icon,
+.management-tab:hover .management-tab-icon {
+  background: var(--codex-hover);
+  color: var(--codex-text);
+}
+
+.management-tab span:last-child {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
 .automation-lane,
 .triage-row {
   width: 100%;
