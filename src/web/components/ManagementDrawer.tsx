@@ -434,6 +434,7 @@ function AutomationsPanel(props: {
           { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' }
         ]}
       />
+      <ReleaseReadbackStrip health={props.health} />
       <QueuePrimer
         title="Automation queue"
         subtitle="Next supervised lane"
@@ -550,7 +551,7 @@ function TriagePanel(props: {
       id: 'github-actions',
       icon: 'branch',
       title: 'GitHub Actions attention',
-      detail: githubActionsDetail(props.githubActions),
+      detail: githubActionsDetail(props.githubActions, props.gitStatus?.head),
       tone: 'warn',
       prompt: githubActionsPrompt(props.githubActions, props.gitStatus, props.health),
       agentName: 'worker',
@@ -620,6 +621,7 @@ function TriagePanel(props: {
           { label: 'Decisions', value: String(props.approvalHistory.length) }
         ]}
       />
+      <ReleaseReadbackStrip health={props.health} />
       <QueuePrimer
         title="Triage queue"
         subtitle={nextTriageItem ? 'Next item' : 'Queue clear'}
@@ -993,7 +995,7 @@ function githubActionsPrompt(actions: GitHubActionsSummary, gitStatus?: GitStatu
     'Recommended owner: #worker for CI repair once the failing job is identified.',
     '',
     `Actions state: ${githubActionsValue(actions)}`,
-    `Detail: ${githubActionsDetail(actions)}`,
+    `Detail: ${githubActionsDetail(actions, gitStatus?.head)}`,
     `Checked SHA: ${actions.checkedSha ?? actions.headSha ?? 'unknown'}`,
     `Local HEAD: ${gitStatus?.head ?? 'unknown'}`,
     `Runtime build SHA: ${health?.build?.sha ?? 'unknown'}`,
@@ -1140,6 +1142,31 @@ function CapabilitySummary(props: { items: Array<{ label: string; value: string;
   );
 }
 
+function ReleaseReadbackStrip(props: { health?: ServerHealth }) {
+  const commands = releaseReadbackCommands(props.health);
+  return (
+    <div className="release-readback-strip" aria-label="Release readback commands">
+      <div className="release-readback-head">
+        <span className="release-readback-icon"><Icon name="terminal" size={13} /></span>
+        <span>
+          <strong>Release readback</strong>
+          <small>{commands.targetLabel}</small>
+        </span>
+        <QueuePromptCopyButton
+          prompt={`${commands.healthCommand}\n${commands.smokeCommand}`}
+          label="Copy"
+          title="Copy release readback commands"
+          className="release-readback-copy"
+        />
+      </div>
+      <div className="release-readback-commands">
+        <code title={commands.healthCommand}>{commands.healthCommand}</code>
+        <code title={commands.smokeCommand}>{commands.smokeCommand}</code>
+      </div>
+    </div>
+  );
+}
+
 function CapabilityError(props: { message: string; title?: string }) {
   return (
     <div className="capability-error">
@@ -1156,6 +1183,12 @@ function RuntimeSettings(props: { health?: ServerHealth; githubActions?: GitHubA
   const sourceSynced = gitHead && upstreamHead ? gitHead === upstreamHead : undefined;
   const buildMatchesGit = buildSha && gitHead ? buildSha === gitHead : undefined;
   const actionsState = props.githubActions ? githubActionsCheckState(props.githubActions) : undefined;
+  const actionsMatchHead = githubActionsMatchHead(props.githubActions, gitHead);
+  const actionsEvidenceState = actionsState === false || actionsMatchHead === false
+    ? false
+    : actionsState === true && actionsMatchHead === true
+      ? true
+      : undefined;
   return (
     <section className="management-panel">
       <div className="section-title">Runtime settings</div>
@@ -1165,15 +1198,16 @@ function RuntimeSettings(props: { health?: ServerHealth; githubActions?: GitHubA
             <strong>Release verification</strong>
             <span>GitHub source, running build, and Space target evidence.</span>
           </div>
-          <span className={`release-state ${releaseState(sourceSynced, buildMatchesGit, actionsState)}`}>{releaseStateLabel(sourceSynced, buildMatchesGit, actionsState)}</span>
+          <span className={`release-state ${releaseState(sourceSynced, buildMatchesGit, actionsEvidenceState)}`}>{releaseStateLabel(sourceSynced, buildMatchesGit, actionsEvidenceState)}</span>
         </div>
         <div className="release-check-list">
           <ReleaseCheck label="GitHub source" value={gitHead ? shortSha(gitHead) : 'unknown'} detail={props.gitStatus?.remoteUrl ?? props.gitStatus?.upstream ?? 'No origin remote detected'} state={sourceSynced} />
           <ReleaseCheck label="Upstream sync" value={upstreamHead ? shortSha(upstreamHead) : 'unknown'} detail={sourceSynced === undefined ? 'No upstream HEAD available' : sourceSynced ? 'Local HEAD matches upstream' : 'Local HEAD differs from upstream'} state={sourceSynced} />
-          <ReleaseCheck label="GitHub Actions" value={githubActionsValue(props.githubActions)} detail={githubActionsDetail(props.githubActions)} state={actionsState} href={props.githubActions?.htmlUrl} />
+          <ReleaseCheck label="GitHub Actions" value={githubActionsValue(props.githubActions)} detail={githubActionsDetail(props.githubActions, gitHead)} state={actionsEvidenceState} href={props.githubActions?.htmlUrl} />
           <ReleaseCheck label="Running build" value={buildSha ? shortSha(buildSha) : 'not pinned'} detail={buildMatchesGit === undefined ? 'Build SHA is only present in release images' : buildMatchesGit ? 'Build SHA matches local Git HEAD' : 'Build SHA differs from local Git HEAD'} state={buildMatchesGit} />
           <ReleaseCheck label="HF target" value={props.health?.huggingFace?.enabled ? 'configured' : 'self-hosted'} detail={props.health?.huggingFace?.publicUrl ?? props.health?.huggingFace?.spaceHost ?? 'No Hugging Face Space URL'} state={props.health?.huggingFace?.enabled ? true : undefined} />
         </div>
+        <ReleaseReadbackStrip health={props.health} />
         {props.githubActions?.runs.length ? <GitHubActionsRuns actions={props.githubActions} /> : null}
       </div>
       <div className="kv"><span>Auth</span><strong>{props.codexWebConfig?.authRequired ? 'required' : 'not required'}</strong></div>
@@ -1242,10 +1276,15 @@ function releaseEvidenceSummary(gitStatus?: GitStatusSummary, health?: ServerHea
   const sourceSynced = gitHead && upstreamHead ? gitHead === upstreamHead : undefined;
   const buildMatchesGit = buildSha && gitHead ? buildSha === gitHead : undefined;
   const actionsState = actions ? githubActionsCheckState(actions) : undefined;
+  const actionsCheckedSha = githubActionsCheckedSha(actions);
+  const actionsMatchHead = githubActionsMatchHead(actions, gitHead);
   const hfTarget = health?.huggingFace?.publicUrl ?? health?.huggingFace?.spaceHost ?? 'no HF target';
 
   if (actionsState === false) {
     return { state: 'attention', label: 'attention', detail: `GitHub Actions failing for ${actions?.checkedSha ? shortSha(actions.checkedSha) : 'current HEAD'}.` };
+  }
+  if (actionsMatchHead === false) {
+    return { state: 'attention', label: 'attention', detail: `GitHub Actions checked ${actionsCheckedSha ? shortSha(actionsCheckedSha) : 'unknown'} but local HEAD is ${gitHead ? shortSha(gitHead) : 'unknown'}.` };
   }
   if (buildMatchesGit === false) {
     return { state: 'attention', label: 'attention', detail: `Runtime build ${buildSha ? shortSha(buildSha) : 'unknown'} does not match HEAD ${gitHead ? shortSha(gitHead) : 'unknown'}.` };
@@ -1256,10 +1295,10 @@ function releaseEvidenceSummary(gitStatus?: GitStatusSummary, health?: ServerHea
   if (changedFiles > 0) {
     return { state: 'waiting', label: 'partial', detail: `${changedFiles} changed file${changedFiles === 1 ? '' : 's'} need review before release evidence is final.` };
   }
-  if (actionsState === true && buildMatchesGit === true && health?.huggingFace?.enabled) {
+  if (actionsState === true && actionsMatchHead === true && sourceSynced === true && buildMatchesGit === true && health?.huggingFace?.enabled) {
     return { state: 'ready', label: 'verified', detail: `Actions, HEAD, runtime build, and ${hfTarget} line up.` };
   }
-  return { state: 'waiting', label: 'partial', detail: `${githubActionsValue(actions)} Actions · runtime ${buildSha ? shortSha(buildSha) : 'unversioned'} · ${hfTarget}.` };
+  return { state: 'waiting', label: 'partial', detail: `${githubActionsValue(actions)} Actions${actionsCheckedSha ? ` on ${shortSha(actionsCheckedSha)}` : ''} · runtime ${buildSha ? shortSha(buildSha) : 'unversioned'} · ${hfTarget}.` };
 }
 
 function releaseVerificationPrompt(gitStatus: GitStatusSummary | undefined, health: ServerHealth | undefined, actions: GitHubActionsSummary | undefined, release: ReleaseEvidenceSummary): string {
@@ -1275,8 +1314,7 @@ function releaseVerificationPrompt(gitStatus: GitStatusSummary | undefined, heal
     ? actions.runs.slice(0, 6).map((run) => `- ${run.name}: ${run.status ?? 'unknown'} / ${run.conclusion ?? 'pending'} · ${run.headSha ? shortSha(run.headSha) : 'unknown sha'}${run.htmlUrl ? ` · ${run.htmlUrl}` : ''}`)
     : ['- no workflow runs loaded'];
 
-  const hfUrl = health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : undefined);
-  const smokeTarget = hfUrl ?? '<HF Space URL>';
+  const readback = releaseReadbackCommands(health);
 
   return [
     'Continue release verification for Codex-Platform.',
@@ -1294,12 +1332,12 @@ function releaseVerificationPrompt(gitStatus: GitStatusSummary | undefined, heal
     `- Upstream HEAD: ${gitStatus?.upstreamHead ?? 'unknown'}`,
     `- Remote: ${gitStatus?.remoteUrl ?? 'unknown'}`,
     `- Changed files: ${files.length}`,
-    `- GitHub Actions: ${githubActionsValue(actions)}; ${githubActionsDetail(actions)}`,
+    `- GitHub Actions: ${githubActionsValue(actions)}; ${githubActionsDetail(actions, gitStatus?.head)}`,
     `- Actions checked SHA: ${actions?.checkedSha ?? actions?.headSha ?? 'unknown'}`,
     `- Runtime build SHA: ${health?.build?.sha ?? 'unknown'}`,
     `- HF enabled: ${health?.huggingFace?.enabled ? 'yes' : 'no'}`,
     `- HF space: ${health?.huggingFace?.spaceId ?? health?.huggingFace?.spaceHost ?? 'unknown'}`,
-    `- HF URL: ${hfUrl ?? 'unknown'}`,
+    `- HF URL: ${health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : 'unknown')}`,
     '',
     'Changed files:',
     ...changedFileLines,
@@ -1307,16 +1345,31 @@ function releaseVerificationPrompt(gitStatus: GitStatusSummary | undefined, heal
     'Recent GitHub Actions runs:',
     ...actionLines,
     '',
+    'Readback commands:',
+    `- ${readback.healthCommand}`,
+    `- ${readback.smokeCommand}`,
+    '',
     'Required next actions:',
     '1. Inspect the changed review package and confirm no unrelated files, secrets, local-only files, or HFS boundary violations are included.',
     '2. Run lightweight local gates: git diff --check; npm run typecheck; npm run build:web; npm run build:server; scripts/static-check.sh; bash -n scripts/hf-entrypoint.sh scripts/hf-healthcheck.sh scripts/hf-space-smoke.sh cloud/hfs/export_space_bundle.sh.',
     '3. Export the HFS bundle with cloud/hfs/export_space_bundle.sh and confirm it does not contain .env.local, local, dist, node_modules, .playwright-cli, or output.',
     '4. Commit and push to GitHub only after the review package is clean.',
     '5. Watch GitHub CI and HF Deploy for the pushed commit until both complete successfully.',
-    `6. Poll ${smokeTarget}/healthz until build.sha matches the pushed commit SHA.`,
-    `7. Run SMOKE_RETRIES=12 SMOKE_DELAY=5 scripts/hf-space-smoke.sh ${smokeTarget}.`,
+    `6. Poll with ${readback.healthCommand} until build.sha matches the pushed commit SHA.`,
+    `7. Run ${readback.smokeCommand}.`,
     '8. Report the verified commit SHA, CI run, HF deploy run, healthz build.sha, smoke result, and any residual risk.'
   ].join('\n');
+}
+
+function releaseReadbackCommands(health?: ServerHealth): { targetLabel: string; healthCommand: string; smokeCommand: string } {
+  const hfUrl = health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : undefined);
+  const smokeTarget = hfUrl ?? 'https://your-space.hf.space';
+  const normalizedTarget = smokeTarget.replace(/\/$/, '');
+  return {
+    targetLabel: hfUrl ? normalizedTarget : 'Set the target Space URL before running.',
+    healthCommand: `curl -fsS ${normalizedTarget}/healthz`,
+    smokeCommand: `SMOKE_RETRIES=12 SMOKE_DELAY=5 scripts/hf-space-smoke.sh ${smokeTarget}`
+  };
 }
 
 async function copyText(value: string): Promise<boolean> {
@@ -1392,6 +1445,16 @@ function githubActionsCheckState(actions: GitHubActionsSummary): boolean | undef
   return undefined;
 }
 
+function githubActionsCheckedSha(actions?: GitHubActionsSummary): string | undefined {
+  return actions?.checkedSha ?? actions?.headSha;
+}
+
+function githubActionsMatchHead(actions: GitHubActionsSummary | undefined, gitHead: string | undefined): boolean | undefined {
+  const checkedSha = githubActionsCheckedSha(actions);
+  if (!checkedSha || !gitHead) return undefined;
+  return checkedSha === gitHead;
+}
+
 function githubActionsValue(actions?: GitHubActionsSummary): string {
   if (!actions) return 'loading';
   if (actions.state === 'success') return 'passing';
@@ -1401,12 +1464,16 @@ function githubActionsValue(actions?: GitHubActionsSummary): string {
   return 'unavailable';
 }
 
-function githubActionsDetail(actions?: GitHubActionsSummary): string {
+function githubActionsDetail(actions?: GitHubActionsSummary, gitHead?: string): string {
   if (!actions) return 'GitHub Actions status has not loaded yet.';
   if (actions.error) return actions.error;
+  const checkedSha = githubActionsCheckedSha(actions);
+  if (checkedSha && gitHead && checkedSha !== gitHead) {
+    return `Workflow evidence is for ${shortSha(checkedSha)}, not local HEAD ${shortSha(gitHead)}.`;
+  }
   const matched = actions.matchedRuns ?? 0;
   const repo = actions.repo ? `${actions.repo}` : 'GitHub repository';
-  if (matched > 0) return `${matched} workflow run${matched === 1 ? '' : 's'} found for ${actions.checkedSha ? shortSha(actions.checkedSha) : 'current HEAD'} in ${repo}.`;
+  if (matched > 0) return `${matched} workflow run${matched === 1 ? '' : 's'} found for ${checkedSha ? shortSha(checkedSha) : 'current HEAD'} in ${repo}.`;
   return `No matching workflow run found for ${actions.headSha ? shortSha(actions.headSha) : 'current HEAD'} in ${repo}.`;
 }
 
