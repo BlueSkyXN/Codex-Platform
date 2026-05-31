@@ -18,6 +18,24 @@ type QueuePrimerStep = {
   tone?: 'ok' | 'warn';
 };
 
+type RouteSourceItem = {
+  title: string;
+  detail: string;
+  prompt: string;
+  agentName?: string;
+  state?: WorkQueueState;
+  tone?: 'attention' | 'warn' | 'ready';
+};
+
+type AgentRouteCard = {
+  agentName: string;
+  count: number;
+  attention: number;
+  detail: string;
+  tone: 'ready' | 'warn';
+  prompt: string;
+};
+
 type PromptHandoff = {
   prompt: string;
   threadId?: string;
@@ -385,6 +403,7 @@ function AutomationsPanel(props: {
     }
   ];
   const automationQueueItem = nextQueueItem(rows);
+  const automationRoutes = agentRouteCards(rows);
 
   return (
     <section className="management-panel automation-panel">
@@ -424,6 +443,7 @@ function AutomationsPanel(props: {
         handoffDisabled={!props.onUsePrompt}
         copyPrompt={automationQueueItem.prompt}
       />
+      <AgentRoutingStrip routes={automationRoutes} onUsePrompt={props.onUsePrompt} />
       <div className="automation-lanes">
         {rows.map((row) => (
           <div key={row.id} className={`automation-lane ${row.state}`}>
@@ -569,6 +589,7 @@ function TriagePanel(props: {
   const visibleItems = items.slice(0, 12);
   const nextTriageItem = visibleItems.find((item) => item.tone !== 'ready') ?? visibleItems[0];
   const attentionItems = visibleItems.filter((item) => item.tone !== 'ready').length;
+  const triageRoutes = agentRouteCards(visibleItems);
 
   return (
     <section className="management-panel triage-panel">
@@ -619,6 +640,7 @@ function TriagePanel(props: {
         copyPrompt={nextTriageItem?.prompt}
         copyDisabled={!nextTriageItem}
       />
+      <AgentRoutingStrip routes={triageRoutes} onUsePrompt={props.onUsePrompt} />
       {visibleItems.length === 0 ? <div className="empty">No triage items waiting.</div> : null}
       <div className="triage-list">
         {visibleItems.map((item) => (
@@ -686,6 +708,66 @@ function queueItemFromTriage(item: { icon: IconName; title: string; detail: stri
     detail: item.detail,
     state: item.tone
   };
+}
+
+function agentRouteCards(items: RouteSourceItem[]): AgentRouteCard[] {
+  const buckets = new Map<string, { items: RouteSourceItem[]; attention: number }>();
+  for (const item of items) {
+    const agentName = item.agentName ?? 'explorer';
+    const bucket = buckets.get(agentName) ?? { items: [], attention: 0 };
+    bucket.items.push(item);
+    if (routeItemNeedsAttention(item)) bucket.attention += 1;
+    buckets.set(agentName, bucket);
+  }
+  return [...buckets.entries()]
+    .map(([agentName, bucket]) => ({
+      agentName,
+      count: bucket.items.length,
+      attention: bucket.attention,
+      detail: `${bucket.items.length} item${bucket.items.length === 1 ? '' : 's'}${bucket.attention ? ` · ${bucket.attention} attention` : ' · ready batch'}`,
+      tone: bucket.attention ? 'warn' as const : 'ready' as const,
+      prompt: agentRoutePrompt(agentName, bucket.items)
+    }))
+    .sort((left, right) => right.attention - left.attention || right.count - left.count || left.agentName.localeCompare(right.agentName));
+}
+
+function routeItemNeedsAttention(item: RouteSourceItem): boolean {
+  if (item.tone) return item.tone !== 'ready';
+  return item.state !== undefined && item.state !== 'ready';
+}
+
+function AgentRoutingStrip(props: { routes: AgentRouteCard[]; onUsePrompt?: (handoff: PromptHandoff) => void }) {
+  if (props.routes.length === 0) return null;
+  return (
+    <div className="agent-routing-strip" aria-label="Agent routing">
+      <div className="agent-routing-head">
+        <div>
+          <strong>Agent routing</strong>
+          <span>Batch current lanes by owner before handoff.</span>
+        </div>
+        <span>{props.routes.length} route{props.routes.length === 1 ? '' : 's'}</span>
+      </div>
+      <div className="agent-route-list">
+        {props.routes.map((route) => (
+          <button
+            key={route.agentName}
+            type="button"
+            className={`agent-route-card ${route.tone}`}
+            onClick={() => props.onUsePrompt?.({ prompt: route.prompt, agentName: route.agentName })}
+            disabled={!props.onUsePrompt}
+            aria-label={`Hand off ${route.agentName} route to composer`}
+          >
+            <span className="agent-route-icon"><Icon name={route.agentName === 'worker' ? 'tool' : 'agent'} size={14} /></span>
+            <span className="agent-route-copy">
+              <strong>#{route.agentName}</strong>
+              <small>{route.detail}</small>
+            </span>
+            <span className="agent-route-count">{route.count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function QueuePrimer(props: {
@@ -945,6 +1027,31 @@ function reviewCardPrompt(card: TimelineCard): string {
     '3. If actionable, propose the smallest implementation or validation step.',
     '4. If not actionable, explain why and what evidence would change the decision.'
   ].join('\n');
+}
+
+function agentRoutePrompt(agentName: string, items: RouteSourceItem[]): string {
+  const lines = items.length
+    ? items.slice(0, 12).map((item) => `- ${item.title} · ${routeItemStateLabel(item)} · ${compactText(item.detail, 220)}`)
+    : ['- none loaded'];
+  return [
+    'Batch these Codex-Platform queue items for one agent route.',
+    '',
+    `Recommended owner: #${agentName}.`,
+    '',
+    'Route items:',
+    ...lines,
+    '',
+    'Required next actions:',
+    '1. Inspect the relevant panel before taking action.',
+    '2. Group duplicate work and identify the first concrete execution step.',
+    '3. Preserve user work, workspace boundaries, and release evidence requirements.',
+    '4. Return a concise plan or perform the scoped fix, then list validation evidence.'
+  ].join('\n');
+}
+
+function routeItemStateLabel(item: RouteSourceItem): string {
+  if (item.tone) return item.tone;
+  return item.state ?? 'unknown';
 }
 
 function compactText(value: string, maxLength: number): string {
