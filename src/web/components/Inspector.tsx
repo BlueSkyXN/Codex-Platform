@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DiffBlock } from './DiffBlock.js';
+import { DiffBlock, type DiffLineSelection } from './DiffBlock.js';
 import { Icon } from './Icon.js';
 import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
@@ -9,6 +9,15 @@ const primaryTabs: InspectorTab[] = ['review', 'plan', 'diff', 'files', 'git', '
 type PendingGitApproval =
   | { kind: 'stage' | 'unstage'; paths: string[] }
   | { kind: 'commit'; message: string; paths: string[] };
+
+type GitReviewFinding = {
+  id: string;
+  path: string;
+  lineNumber: number;
+  lineText: string;
+  note: string;
+  kind: string;
+};
 
 export function Inspector(props: {
   card?: TimelineCard;
@@ -659,7 +668,11 @@ function GitTab(props: {
   const [copiedPush, setCopiedPush] = useState(false);
   const [copiedPr, setCopiedPr] = useState(false);
   const [copiedReviewBrief, setCopiedReviewBrief] = useState(false);
+  const [copiedReviewPrompt, setCopiedReviewPrompt] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
+  const [selectedReviewLine, setSelectedReviewLine] = useState<DiffLineSelection | undefined>();
+  const [reviewNote, setReviewNote] = useState('');
+  const [reviewFindings, setReviewFindings] = useState<GitReviewFinding[]>([]);
   const status = props.status;
   const grouped = groupGitFiles(status?.files ?? []);
   const files = status?.files ?? [];
@@ -669,7 +682,8 @@ function GitTab(props: {
   const shipInfo = status?.isRepo ? gitShipInfo(status) : undefined;
   const releaseInfo = status?.isRepo ? gitReleaseInfo(status, props.health, props.githubActions) : undefined;
   const draftMessage = draftCommitMessage(files);
-  const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage) : undefined;
+  const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage, reviewFindings) : undefined;
+  const reviewPrompt = status?.isRepo ? gitReviewPrompt(status, reviewFindings, draftMessage) : undefined;
 
   async function copyPushCommand(command?: string) {
     if (!command) return;
@@ -692,6 +706,13 @@ function GitTab(props: {
     window.setTimeout(() => setCopiedReviewBrief(false), 1800);
   }
 
+  async function copyReviewPrompt() {
+    if (!reviewPrompt || reviewFindings.length === 0) return;
+    await copyText(reviewPrompt);
+    setCopiedReviewPrompt(true);
+    window.setTimeout(() => setCopiedReviewPrompt(false), 1800);
+  }
+
   function requestGitApproval(next: PendingGitApproval) {
     setPendingApproval(next);
   }
@@ -711,6 +732,40 @@ function GitTab(props: {
       props.onUnstage?.(pendingApproval.paths);
     }
     setPendingApproval(undefined);
+  }
+
+  function selectReviewLine(line: DiffLineSelection) {
+    setSelectedReviewLine(line);
+    setReviewNote('');
+  }
+
+  function selectGitFileFromPanel(path: string, cached = false) {
+    setSelectedReviewLine(undefined);
+    setReviewNote('');
+    props.onSelectFile?.(path, cached);
+  }
+
+  function addReviewFinding() {
+    if (!selectedReviewLine) return;
+    const path = props.diff?.path ?? props.selectedPath ?? 'selected diff';
+    const note = reviewNote.trim() || 'Review this line before committing.';
+    setReviewFindings((items) => [
+      {
+        id: `finding_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        path,
+        lineNumber: selectedReviewLine.lineNumber,
+        lineText: selectedReviewLine.text,
+        note,
+        kind: selectedReviewLine.kind
+      },
+      ...items
+    ].slice(0, 12));
+    setSelectedReviewLine(undefined);
+    setReviewNote('');
+  }
+
+  function removeReviewFinding(id: string) {
+    setReviewFindings((items) => items.filter((item) => item.id !== id));
   }
 
   return (
@@ -802,14 +857,17 @@ function GitTab(props: {
                 <strong>Review package</strong>
                 <span>Stage intentionally, draft the commit, then copy a PR handoff when ready.</span>
               </div>
-              <button className="mini-action" disabled={!reviewBrief} onClick={() => void copyReviewBrief()}>{copiedReviewBrief ? 'Copied' : 'Copy brief'}</button>
+              <div className="git-review-actions">
+                <button className="mini-action" disabled={!reviewBrief} onClick={() => void copyReviewBrief()}>{copiedReviewBrief ? 'Copied' : 'Copy brief'}</button>
+                <button className="mini-action" disabled={reviewFindings.length === 0 || !reviewPrompt} onClick={() => void copyReviewPrompt()}>{copiedReviewPrompt ? 'Copied' : 'Copy follow-up'}</button>
+              </div>
             </div>
             <div className="git-review-queues">
-              <button disabled={stageablePaths.length === 0 || !props.onSelectFile} onClick={() => props.onSelectFile?.(stageablePaths[0], false)}>
+              <button disabled={stageablePaths.length === 0 || !props.onSelectFile} onClick={() => selectGitFileFromPanel(stageablePaths[0], false)}>
                 <span>Unstaged</span>
                 <strong>{stageablePaths.length}</strong>
               </button>
-              <button disabled={stagedPaths.length === 0 || !props.onSelectFile} onClick={() => props.onSelectFile?.(stagedPaths[0], true)}>
+              <button disabled={stagedPaths.length === 0 || !props.onSelectFile} onClick={() => selectGitFileFromPanel(stagedPaths[0], true)}>
                 <span>Staged</span>
                 <strong>{stagedPaths.length}</strong>
               </button>
@@ -817,8 +875,28 @@ function GitTab(props: {
                 <span>Commit draft</span>
                 <strong>{draftMessage ? 'ready' : 'empty'}</strong>
               </button>
+              <button disabled={reviewFindings.length === 0}>
+                <span>Findings</span>
+                <strong>{reviewFindings.length}</strong>
+              </button>
             </div>
             {draftMessage ? <code className="git-draft-message">{draftMessage}</code> : null}
+            {reviewFindings.length > 0 ? (
+              <div className="git-finding-list">
+                {reviewFindings.map((finding) => (
+                  <article key={finding.id} className={`git-finding ${finding.kind}`}>
+                    <span>
+                      <strong>{finding.path}:{finding.lineNumber}</strong>
+                      <small>{finding.note}</small>
+                      <code>{finding.lineText || ' '}</code>
+                    </span>
+                    <button className="mini-action" onClick={() => removeReviewFinding(finding.id)}>Remove</button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="git-review-hint">Use the plus icon beside a diff line to capture review findings before commit or PR handoff.</div>
+            )}
           </div>
           {pendingApproval ? (
             <GitApprovalCard
@@ -842,7 +920,7 @@ function GitTab(props: {
                   className={`git-file-row ${props.selectedPath === file.path ? 'active' : ''}`}
                 >
                   <span className={`git-status status-${file.status}`}>{file.index}{file.workingTree}</span>
-                  <button className="git-file-main" onClick={() => props.onSelectFile?.(file.path, canUnstageFile(file) && !canStageFile(file))}>{file.path}</button>
+                  <button className="git-file-main" onClick={() => selectGitFileFromPanel(file.path, canUnstageFile(file) && !canStageFile(file))}>{file.path}</button>
                   <span className="git-row-actions">
                     {canStageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onStage} onClick={() => requestGitApproval({ kind: 'stage', paths: [file.path] })}>Stage</button> : null}
                     {canUnstageFile(file) ? <button className="mini-action" disabled={props.actionBusy || !props.onUnstage} onClick={() => requestGitApproval({ kind: 'unstage', paths: [file.path] })}>Unstage</button> : null}
@@ -861,10 +939,24 @@ function GitTab(props: {
               {props.diff?.cached ? <span className="branch-chip">staged</span> : null}
             </div>
             {props.loading ? <div className="empty">Loading diff...</div> : null}
-            {!props.loading && props.diff?.diff ? <DiffBlock diff={props.diff.diff} /> : null}
+            {!props.loading && props.diff?.diff ? <DiffBlock diff={props.diff.diff} activeLine={selectedReviewLine?.lineNumber} onSelectLine={selectReviewLine} /> : null}
             {!props.loading && props.selectedPath && !props.diff?.diff ? <div className="empty">No diff available for the selected file.</div> : null}
             {!props.selectedPath ? <div className="empty">Select a changed file to preview its diff.</div> : null}
           </div>
+          {selectedReviewLine ? (
+            <div className="git-inline-review-card">
+              <div>
+                <div className="section-title">Inline review finding</div>
+                <strong>{props.diff?.path ?? props.selectedPath ?? 'Selected diff'}:{selectedReviewLine.lineNumber}</strong>
+              </div>
+              <code>{selectedReviewLine.text || ' '}</code>
+              <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="What should be fixed, verified, or mentioned in review?" rows={3} />
+              <div className="approval-actions">
+                <button className="primary" onClick={addReviewFinding}>Add finding</button>
+                <button onClick={() => { setSelectedReviewLine(undefined); setReviewNote(''); }}>Cancel</button>
+              </div>
+            </div>
+          ) : null}
           <div className="git-commit-box">
             <div>
               <div className="section-title">Commit</div>
@@ -1007,7 +1099,7 @@ function commitScope(paths: string[]): 'docs' | 'styles' | 'server' | 'release' 
   return 'mixed';
 }
 
-function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth, draftMessage?: string): string {
+function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth, draftMessage?: string, findings: GitReviewFinding[] = []): string {
   const staged = status.files.filter(canUnstageFile).map((file) => file.path);
   const unstaged = status.files.filter(canStageFile).map((file) => file.path);
   const lines = [
@@ -1026,6 +1118,9 @@ function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary
     'Unstaged files:',
     ...listPaths(unstaged),
     '',
+    'Inline review findings:',
+    ...reviewFindingLines(findings),
+    '',
     'Verification evidence:',
     `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
     `- Runtime build: ${health?.build?.sha ?? 'unknown'}`,
@@ -1037,6 +1132,30 @@ function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary
     '- After push, verify GitHub Actions and HF /healthz build SHA before calling the release complete.'
   ];
   return lines.filter((line): line is string => line !== undefined).join('\n');
+}
+
+function gitReviewPrompt(status: GitStatusSummary, findings: GitReviewFinding[], draftMessage?: string): string {
+  const lines = [
+    'Address these Codex-Platform review findings before commit or PR.',
+    '',
+    `Branch: ${status.branch ?? 'HEAD'}`,
+    `HEAD: ${status.head ?? 'unknown'}`,
+    draftMessage ? `Suggested commit: ${draftMessage}` : undefined,
+    '',
+    'Review findings:',
+    ...reviewFindingLines(findings),
+    '',
+    'Please inspect the referenced files and diff lines, implement the smallest complete fix, rerun focused validation, and update the Git review package before committing.'
+  ];
+  return lines.filter((line): line is string => line !== undefined).join('\n');
+}
+
+function reviewFindingLines(findings: GitReviewFinding[]): string[] {
+  if (findings.length === 0) return ['- none'];
+  return findings.slice(0, 12).flatMap((finding) => [
+    `- ${finding.path}:${finding.lineNumber} (${finding.kind}) ${finding.note}`,
+    `  ${finding.lineText || ' '}`
+  ]);
 }
 
 function listPaths(paths: string[]): string[] {
