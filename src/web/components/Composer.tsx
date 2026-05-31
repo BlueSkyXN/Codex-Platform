@@ -35,6 +35,7 @@ type BrowserContextTarget = {
   kind: 'local' | 'remote' | 'space';
 };
 export type ComposerCapabilitySelection = { requestId: number; kind: 'skill' | 'agent'; name: string };
+export type ComposerDraftSelection = { requestId: number; prompt: string; agentName?: string };
 
 const MAX_CONTEXT_CONTENT_CHARS = 36_000;
 
@@ -57,6 +58,7 @@ export function Composer(props: {
   skillsError?: string;
   agentsError?: string;
   capabilitySelection?: ComposerCapabilitySelection;
+  draftSelection?: ComposerDraftSelection;
   codexWebConfig?: CodexWebConfig;
   onReloadSkills: () => void;
   onReadFileContext?: (path: string) => Promise<FileReadResult>;
@@ -79,7 +81,17 @@ export function Composer(props: {
 
   const agents = props.agents ?? [];
   const selectedSkill = useMemo(() => props.skills.find((skill) => skill.name === selectedSkillName), [props.skills, selectedSkillName]);
-  const selectedAgent = useMemo(() => agents.find((agent) => agent.name === selectedAgentName), [agents, selectedAgentName]);
+  const selectedAgent = useMemo<AgentSummary | undefined>(() => {
+    const agent = agents.find((item) => item.name === selectedAgentName);
+    if (agent) return agent;
+    if (!selectedAgentName) return undefined;
+    return {
+      id: `prompt-agent:${selectedAgentName}`,
+      name: selectedAgentName,
+      scope: 'built-in',
+      description: 'Built-in or prompt-routed Codex agent'
+    };
+  }, [agents, selectedAgentName]);
   const suggestions = useMemo(() => buildSuggestions(text, props.skills, agents), [text, props.skills, agents]);
   const terminalCards = useMemo(() => (props.cards ?? []).filter((card) => card.kind === 'command'), [props.cards]);
   const lastTerminalCard = terminalCards.at(-1);
@@ -112,6 +124,22 @@ export function Composer(props: {
     setShowContextPicker(false);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   }, [props.capabilitySelection?.requestId]);
+
+  useEffect(() => {
+    const selection = props.draftSelection;
+    if (!selection) return;
+    const nextAgent = selection.agentName ? agents.find((agent) => agent.name === selection.agentName) : undefined;
+    const agentToken = selection.agentName ? `#${selection.agentName}` : undefined;
+    setSelectedSkillName('');
+    setSelectedAgentName(selection.agentName ?? '');
+    setContextAttachments([]);
+    setText(agentToken ? ensureCapabilityToken(selection.prompt, agentToken) : selection.prompt);
+    if (nextAgent) attachContext(agentAttachment(nextAgent));
+    setShowSuggestions(false);
+    setShowRunConfig(false);
+    setShowContextPicker(false);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [props.draftSelection?.requestId]);
 
   async function submit() {
     const trimmed = text.trim();

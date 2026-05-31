@@ -10,6 +10,12 @@ type ReleaseEvidenceSummary = {
   detail: string;
 };
 
+type PromptHandoff = {
+  prompt: string;
+  threadId?: string;
+  agentName?: string;
+};
+
 export function ManagementDrawer(props: {
   open: boolean;
   tab: ManagementTab;
@@ -41,6 +47,7 @@ export function ManagementDrawer(props: {
   onRefreshAdmin?: () => void;
   onUseSkill?: (skill: SkillSummary) => void;
   onUseAgent?: (agent: AgentSummary) => void;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
   onToggleNotifications?: (enabled: boolean) => void;
   onOpenInspectorTab?: (tab: InspectorTab) => void;
   onSelectThread?: (threadId: string) => void | Promise<void>;
@@ -76,6 +83,7 @@ export function ManagementDrawer(props: {
             githubActions={props.githubActions}
             health={props.health}
             onOpenInspectorTab={props.onOpenInspectorTab}
+            onUsePrompt={props.onUsePrompt}
           />
         ) : null}
         {props.tab === 'triage' ? (
@@ -91,6 +99,7 @@ export function ManagementDrawer(props: {
             health={props.health}
             onOpenInspectorTab={props.onOpenInspectorTab}
             onSelectThread={props.onSelectThread}
+            onUsePrompt={props.onUsePrompt}
           />
         ) : null}
         {props.tab === 'settings' ? (
@@ -318,6 +327,7 @@ function AutomationsPanel(props: {
   githubActions?: GitHubActionsSummary;
   health?: ServerHealth;
   onOpenInspectorTab?: (tab: InspectorTab) => void;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
 }) {
   const activeThreads = props.threads.filter((thread) => isActiveThread(thread.status)).length;
   const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed').length;
@@ -331,6 +341,8 @@ function AutomationsPanel(props: {
       title: 'Release evidence packet',
       detail: release.detail,
       state: release.state,
+      prompt: releasePrompt,
+      agentName: 'worker',
       action: () => props.onOpenInspectorTab?.('git')
     },
     {
@@ -339,6 +351,8 @@ function AutomationsPanel(props: {
       title: 'Approval sweep',
       detail: `${props.approvals.length} pending approval${props.approvals.length === 1 ? '' : 's'}`,
       state: props.approvals.length ? 'attention' : 'ready',
+      prompt: approvalSweepPrompt(props.approvals),
+      agentName: 'worker',
       action: () => props.onOpenInspectorTab?.('review')
     },
     {
@@ -347,6 +361,8 @@ function AutomationsPanel(props: {
       title: 'Thread supervision',
       detail: `${activeThreads} running or blocked thread${activeThreads === 1 ? '' : 's'}`,
       state: activeThreads ? 'running' : 'ready',
+      prompt: threadSupervisionPrompt(props.threads),
+      agentName: 'explorer',
       action: () => props.onOpenInspectorTab?.('review')
     },
     {
@@ -355,6 +371,8 @@ function AutomationsPanel(props: {
       title: 'Git operation audit',
       detail: failedGit ? `${failedGit} failed Git action${failedGit === 1 ? '' : 's'}` : 'latest Git operations clear',
       state: failedGit ? 'attention' : 'ready',
+      prompt: gitOperationAuditPrompt(props.gitOperations, props.gitStatus),
+      agentName: 'worker',
       action: () => props.onOpenInspectorTab?.('git')
     }
   ];
@@ -381,14 +399,27 @@ function AutomationsPanel(props: {
       />
       <div className="automation-lanes">
         {rows.map((row) => (
-          <button key={row.id} className={`automation-lane ${row.state}`} onClick={row.action} disabled={!props.onOpenInspectorTab}>
-            <span className="automation-lane-icon"><Icon name={row.icon} size={15} /></span>
-            <span>
-              <strong>{row.title}</strong>
-              <small>{row.detail}</small>
-            </span>
-            <span className="lane-state">{row.state}</span>
-          </button>
+          <div key={row.id} className={`automation-lane ${row.state}`}>
+            <button type="button" className="lane-main" onClick={row.action} disabled={!props.onOpenInspectorTab}>
+              <span className="automation-lane-icon"><Icon name={row.icon} size={15} /></span>
+              <span className="lane-copy">
+                <strong>{row.title}</strong>
+                <small>{row.detail}</small>
+              </span>
+              <span className="lane-state">{row.state}</span>
+            </button>
+            <button
+              type="button"
+              className="lane-handoff"
+              onClick={() => props.onUsePrompt?.({ prompt: row.prompt, agentName: row.agentName })}
+              disabled={!props.onUsePrompt}
+              title={`Hand off ${row.title} to composer`}
+              aria-label={`Hand off ${row.title} to composer`}
+            >
+              <Icon name="send" size={13} />
+              <span>Hand off</span>
+            </button>
+          </div>
         ))}
       </div>
     </section>
@@ -407,6 +438,7 @@ function TriagePanel(props: {
   health?: ServerHealth;
   onOpenInspectorTab?: (tab: InspectorTab) => void;
   onSelectThread?: (threadId: string) => void | Promise<void>;
+  onUsePrompt?: (handoff: PromptHandoff) => void;
 }) {
   const failedThreads = props.threads.filter((thread) => isFailedThread(thread.status));
   const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed');
@@ -414,7 +446,7 @@ function TriagePanel(props: {
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
   const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const changedFiles = props.gitStatus?.isRepo ? props.gitStatus.files.length : 0;
-  const items: Array<{ id: string; icon: 'branch' | 'chat' | 'check' | 'file' | 'inbox' | 'terminal'; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; tab?: InspectorTab; threadId?: string }> = [];
+  const items: Array<{ id: string; icon: 'branch' | 'chat' | 'check' | 'file' | 'inbox' | 'terminal'; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; prompt: string; agentName?: string; tab?: InspectorTab; threadId?: string }> = [];
 
   for (const approval of props.approvals.slice(0, 4)) {
     items.push({
@@ -423,6 +455,8 @@ function TriagePanel(props: {
       title: approval.title,
       detail: approval.command ?? approval.reason ?? approval.kind,
       tone: 'attention',
+      prompt: approvalTriagePrompt(approval),
+      agentName: 'explorer',
       tab: 'review',
       threadId: approval.threadId
     });
@@ -434,6 +468,8 @@ function TriagePanel(props: {
       title: thread.name || thread.preview || compactThreadId(thread.id),
       detail: `${thread.status ?? 'failed'} · ${compactThreadId(thread.id)}`,
       tone: 'warn',
+      prompt: failedThreadPrompt(thread),
+      agentName: 'explorer',
       tab: 'review',
       threadId: thread.id
     });
@@ -445,6 +481,8 @@ function TriagePanel(props: {
       title: operation.title,
       detail: operation.error ?? operation.stderr ?? operation.detail ?? operation.kind,
       tone: 'warn',
+      prompt: gitOperationPrompt(operation, props.gitStatus),
+      agentName: 'worker',
       tab: 'git'
     });
   }
@@ -455,6 +493,8 @@ function TriagePanel(props: {
       title: 'GitHub Actions attention',
       detail: githubActionsDetail(props.githubActions),
       tone: 'warn',
+      prompt: githubActionsPrompt(props.githubActions, props.gitStatus, props.health),
+      agentName: 'worker',
       tab: 'git'
     });
   }
@@ -465,6 +505,8 @@ function TriagePanel(props: {
       title: 'Review package changed',
       detail: `${changedFiles} changed file${changedFiles === 1 ? '' : 's'} before PR/release handoff`,
       tone: 'warn',
+      prompt: reviewPackagePrompt(props.gitStatus, release),
+      agentName: 'explorer',
       tab: 'git'
     });
   }
@@ -475,6 +517,8 @@ function TriagePanel(props: {
       title: release.state === 'attention' ? 'Release evidence attention' : 'Release evidence partial',
       detail: release.detail,
       tone: release.state === 'attention' ? 'attention' : 'warn',
+      prompt: releasePrompt,
+      agentName: 'worker',
       tab: 'git'
     });
   }
@@ -485,6 +529,8 @@ function TriagePanel(props: {
       title: card.title,
       detail: card.filePath ?? card.status ?? card.kind,
       tone: card.kind === 'error' ? 'warn' : 'ready',
+      prompt: reviewCardPrompt(card),
+      agentName: card.kind === 'error' ? 'explorer' : 'worker',
       tab: card.kind === 'fileChange' ? 'diff' : 'review',
       threadId: card.threadId
     });
@@ -515,22 +561,38 @@ function TriagePanel(props: {
       {visibleItems.length === 0 ? <div className="empty">No triage items waiting.</div> : null}
       <div className="triage-list">
         {visibleItems.map((item) => (
-          <button
+          <div
             key={item.id}
             className={`triage-row ${item.tone}`}
-            onClick={() => {
-              if (item.threadId) void props.onSelectThread?.(item.threadId);
-              if (item.tab) props.onOpenInspectorTab?.(item.tab);
-            }}
-            disabled={!props.onOpenInspectorTab && !props.onSelectThread}
           >
-            <span className="triage-icon"><Icon name={item.icon} size={15} /></span>
-            <span>
-              <strong>{item.title}</strong>
-              <small>{item.detail}</small>
-            </span>
-            <span className="lane-state">{item.tone}</span>
-          </button>
+            <button
+              type="button"
+              className="lane-main"
+              onClick={() => {
+                if (item.threadId) void props.onSelectThread?.(item.threadId);
+                if (item.tab) props.onOpenInspectorTab?.(item.tab);
+              }}
+              disabled={!props.onOpenInspectorTab && !props.onSelectThread}
+            >
+              <span className="triage-icon"><Icon name={item.icon} size={15} /></span>
+              <span className="lane-copy">
+                <strong>{item.title}</strong>
+                <small>{item.detail}</small>
+              </span>
+              <span className="lane-state">{item.tone}</span>
+            </button>
+            <button
+              type="button"
+              className="lane-handoff"
+              onClick={() => props.onUsePrompt?.({ prompt: item.prompt, threadId: item.threadId, agentName: item.agentName })}
+              disabled={!props.onUsePrompt}
+              title={`Hand off ${item.title} to composer`}
+              aria-label={`Hand off ${item.title} to composer`}
+            >
+              <Icon name="send" size={13} />
+              <span>Hand off</span>
+            </button>
+          </div>
         ))}
       </div>
       {props.errors.length > 0 ? (
@@ -540,6 +602,221 @@ function TriagePanel(props: {
       ) : null}
     </section>
   );
+}
+
+function approvalSweepPrompt(approvals: ApprovalRequest[]): string {
+  const lines = approvals.length
+    ? approvals.slice(0, 10).map((approval) => `- ${approval.title} · ${approval.kind} · request ${approval.requestId}${approval.threadId ? ` · thread ${compactThreadId(approval.threadId)}` : ''}${approval.command ? ` · ${compactText(approval.command, 180)}` : ''}`)
+    : ['- none loaded'];
+  return [
+    'Review the current Codex-Platform approval queue.',
+    '',
+    'Recommended owner: #worker for execution review, or #explorer if the approval needs source investigation.',
+    '',
+    'Pending approvals:',
+    ...lines,
+    '',
+    'Required next actions:',
+    '1. Inspect each approval in the Review panel before deciding.',
+    '2. Identify whether the command, file change, or tool request is necessary for the active goal.',
+    '3. Check for unrelated scope expansion, secrets, destructive filesystem or Git operations, and workspace-root boundary issues.',
+    '4. Recommend accept, acceptForSession, decline, or cancel for each item with a short reason.'
+  ].join('\n');
+}
+
+function threadSupervisionPrompt(threads: ThreadSummary[]): string {
+  const active = threads.filter((thread) => isActiveThread(thread.status));
+  const lines = active.length
+    ? active.slice(0, 10).map((thread) => `- ${thread.name || thread.preview || compactThreadId(thread.id)} · ${thread.status ?? 'unknown'} · ${compactThreadId(thread.id)}`)
+    : ['- none loaded'];
+  return [
+    'Supervise the currently active Codex-Platform threads.',
+    '',
+    'Recommended owner: #explorer for state mapping, then #worker only for a concrete implementation follow-up.',
+    '',
+    'Active or blocked threads:',
+    ...lines,
+    '',
+    'Required next actions:',
+    '1. Determine which threads are running, waiting for approval, blocked, failed, or stale.',
+    '2. For each active thread, identify the next concrete action and whether user input is actually required.',
+    '3. Consolidate duplicate work and call out any thread that should be resumed, interrupted, or left alone.',
+    '4. Return a compact supervision summary with recommended next owners.'
+  ].join('\n');
+}
+
+function gitOperationAuditPrompt(operations: GitOperationRecord[], gitStatus?: GitStatusSummary): string {
+  const failed = operations.filter((operation) => operation.status === 'failed');
+  const lines = failed.length
+    ? failed.slice(0, 8).map((operation) => `- ${operation.title} · ${operation.kind} · ${compactText(operation.error ?? operation.stderr ?? operation.detail ?? 'failed', 180)}`)
+    : ['- none loaded'];
+  return [
+    'Audit the recent Codex-Platform Git operations.',
+    '',
+    'Recommended owner: #worker only after the failure cause is clear.',
+    '',
+    `Branch: ${gitStatus?.branch ?? 'unknown'}`,
+    `HEAD: ${gitStatus?.head ?? 'unknown'}`,
+    `Changed files: ${gitStatus?.isRepo ? gitStatus.files.length : 'unknown'}`,
+    '',
+    'Failed operations:',
+    ...lines,
+    '',
+    'Required next actions:',
+    '1. Inspect the Git panel and recent operation details.',
+    '2. Explain the failure cause without resetting or discarding user work.',
+    '3. Propose the smallest safe recovery path.',
+    '4. If a commit or push is needed, list the exact validation gates first.'
+  ].join('\n');
+}
+
+function approvalTriagePrompt(approval: ApprovalRequest): string {
+  return [
+    'Triage this Codex approval request.',
+    '',
+    'Recommended owner: #explorer for risk analysis, #worker only if the approval is clearly safe to execute.',
+    '',
+    `Title: ${approval.title}`,
+    `Request: ${approval.requestId}`,
+    `Kind: ${approval.kind}`,
+    `Thread: ${approval.threadId ?? 'unknown'}`,
+    `Reason: ${approval.reason ?? 'none provided'}`,
+    `Command: ${approval.command ?? 'not a command approval'}`,
+    `CWD: ${approval.cwd ?? 'unknown'}`,
+    `Grant root: ${approval.grantRoot ?? 'none'}`,
+    '',
+    'Required next actions:',
+    '1. Inspect the related Review item and any referenced thread/card.',
+    '2. Decide whether this approval is necessary for the active user goal.',
+    '3. Check safety: destructive operations, credentials, public output, workspace boundaries, and unrelated scope.',
+    '4. Recommend the approval decision and reason.'
+  ].join('\n');
+}
+
+function failedThreadPrompt(thread: ThreadSummary): string {
+  return [
+    'Investigate this Codex thread failure or cancellation.',
+    '',
+    'Recommended owner: #explorer for diagnosis.',
+    '',
+    `Thread: ${thread.id}`,
+    `Name: ${thread.name ?? 'unnamed'}`,
+    `Preview: ${thread.preview ?? 'none'}`,
+    `Status: ${thread.status ?? 'unknown'}`,
+    '',
+    'Required next actions:',
+    '1. Open the thread and inspect the most recent timeline cards.',
+    '2. Identify the concrete blocker, failed command, or missing input.',
+    '3. Determine whether the thread should be resumed, superseded, or interrupted.',
+    '4. Return a recovery plan with the next owner and validation step.'
+  ].join('\n');
+}
+
+function gitOperationPrompt(operation: GitOperationRecord, gitStatus?: GitStatusSummary): string {
+  return [
+    'Investigate this failed Git operation in Codex-Platform.',
+    '',
+    'Recommended owner: #worker after diagnosis.',
+    '',
+    `Operation: ${operation.title}`,
+    `Kind: ${operation.kind}`,
+    `Status: ${operation.status}`,
+    `Branch: ${operation.branch ?? gitStatus?.branch ?? 'unknown'}`,
+    `HEAD: ${operation.head ?? gitStatus?.head ?? 'unknown'}`,
+    `Paths: ${operation.paths?.length ? operation.paths.join(', ') : 'none recorded'}`,
+    `Message: ${operation.message ?? 'none'}`,
+    `Detail: ${operation.detail ?? 'none'}`,
+    `Error: ${operation.error ?? operation.stderr ?? 'none recorded'}`,
+    '',
+    'Required next actions:',
+    '1. Inspect current git status before proposing changes.',
+    '2. Preserve unrelated user work.',
+    '3. Explain the failure cause and smallest recovery path.',
+    '4. Run git diff --check or the relevant lightweight gate before any commit follow-up.'
+  ].join('\n');
+}
+
+function githubActionsPrompt(actions: GitHubActionsSummary, gitStatus?: GitStatusSummary, health?: ServerHealth): string {
+  const runLines = actions.runs.length
+    ? actions.runs.slice(0, 6).map((run) => `- ${run.name}: ${run.status ?? 'unknown'} / ${run.conclusion ?? 'pending'} · ${run.headSha ? shortSha(run.headSha) : 'unknown sha'}${run.htmlUrl ? ` · ${run.htmlUrl}` : ''}`)
+    : ['- no workflow runs loaded'];
+  return [
+    'Triage the GitHub Actions state for Codex-Platform.',
+    '',
+    'Recommended owner: #worker for CI repair once the failing job is identified.',
+    '',
+    `Actions state: ${githubActionsValue(actions)}`,
+    `Detail: ${githubActionsDetail(actions)}`,
+    `Checked SHA: ${actions.checkedSha ?? actions.headSha ?? 'unknown'}`,
+    `Local HEAD: ${gitStatus?.head ?? 'unknown'}`,
+    `Runtime build SHA: ${health?.build?.sha ?? 'unknown'}`,
+    '',
+    'Recent runs:',
+    ...runLines,
+    '',
+    'Required next actions:',
+    '1. Open the failing run and identify the first material failure.',
+    '2. Compare the failed SHA with local HEAD and runtime build SHA.',
+    '3. Propose a minimal fix and the validation command that proves it.',
+    '4. Do not call the release safe until CI and HF deploy evidence line up.'
+  ].join('\n');
+}
+
+function reviewPackagePrompt(gitStatus: GitStatusSummary | undefined, release: ReleaseEvidenceSummary): string {
+  const files = gitStatus?.isRepo ? gitStatus.files : [];
+  const fileLines = files.length
+    ? files.slice(0, 16).map((file) => `- ${file.status || `${file.index}${file.workingTree}`.trim() || 'changed'} ${file.path}${file.oldPath ? ` (from ${file.oldPath})` : ''}`)
+    : ['- none loaded'];
+  if (files.length > fileLines.length) fileLines.push(`- ... ${files.length - fileLines.length} more`);
+  return [
+    'Review the current Codex-Platform change package before release handoff.',
+    '',
+    'Recommended owner: #explorer for diff mapping, then #worker for narrow fixes.',
+    '',
+    `Release state: ${release.label} (${release.state})`,
+    `Release detail: ${release.detail}`,
+    `Branch: ${gitStatus?.branch ?? 'unknown'}`,
+    `HEAD: ${gitStatus?.head ?? 'unknown'}`,
+    `Upstream: ${gitStatus?.upstream ?? 'unknown'}`,
+    `Changed files: ${files.length}`,
+    '',
+    'Changed files:',
+    ...fileLines,
+    '',
+    'Required next actions:',
+    '1. Classify each changed file as intended, unrelated, generated, or risky.',
+    '2. Check for secrets, local-only files, HFS boundary violations, and broad formatting churn.',
+    '3. Decide what validation is required before commit.',
+    '4. Return a concise commit readiness verdict.'
+  ].join('\n');
+}
+
+function reviewCardPrompt(card: TimelineCard): string {
+  return [
+    'Triage this review item from the Codex-Platform timeline.',
+    '',
+    'Recommended owner: #explorer if more source mapping is needed, #worker for a confirmed small fix.',
+    '',
+    `Card: ${card.id}`,
+    `Thread: ${card.threadId}`,
+    `Kind: ${card.kind}`,
+    `Title: ${card.title}`,
+    `Status: ${card.status ?? 'unknown'}`,
+    `File: ${card.filePath ?? 'not file-specific'}`,
+    `Summary: ${compactText(card.text ?? card.stderr ?? card.stdout ?? card.command ?? 'No card text loaded.', 500)}`,
+    '',
+    'Required next actions:',
+    '1. Inspect the card and any related file diff or error output.',
+    '2. Determine whether it is actionable for the active v2 objective.',
+    '3. If actionable, propose the smallest implementation or validation step.',
+    '4. If not actionable, explain why and what evidence would change the decision.'
+  ].join('\n');
+}
+
+function compactText(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function CopyReleasePromptButton(props: { prompt: string }) {

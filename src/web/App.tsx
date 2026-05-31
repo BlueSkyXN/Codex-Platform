@@ -6,7 +6,7 @@ import { normalizeAccount } from './lib/normalize.js';
 import { Sidebar } from './components/Sidebar.js';
 import { Timeline } from './components/Timeline.js';
 import { Inspector } from './components/Inspector.js';
-import { Composer, type ComposerCapabilitySelection } from './components/Composer.js';
+import { Composer, type ComposerCapabilitySelection, type ComposerDraftSelection } from './components/Composer.js';
 import { TopBar } from './components/TopBar.js';
 import { ApprovalRail } from './components/ApprovalRail.js';
 import { ThreadHeader } from './components/ThreadHeader.js';
@@ -41,6 +41,7 @@ export function App() {
   const [managementOpen, setManagementOpen] = useState(false);
   const [managementTab, setManagementTab] = useState<ManagementTab>('skills');
   const [composerCapabilitySelection, setComposerCapabilitySelection] = useState<ComposerCapabilitySelection | undefined>();
+  const [composerDraftSelection, setComposerDraftSelection] = useState<ComposerDraftSelection | undefined>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => window.localStorage.getItem('codex-platform-notifications') === 'true');
   const [fileTree, setFileTree] = useState<FileTreeNode | undefined>();
   const [fileContent, setFileContent] = useState<FileReadResult | undefined>();
@@ -171,6 +172,27 @@ export function App() {
   function useComposerCapability(kind: ComposerCapabilitySelection['kind'], name: string) {
     setComposerCapabilitySelection({ requestId: Date.now(), kind, name });
     setManagementOpen(false);
+  }
+
+  function useComposerDraft(handoff: { prompt: string; threadId?: string; agentName?: string }) {
+    if (handoff.threadId && handoff.threadId !== selectedThread?.id) {
+      const thread = state.threads.find((item) => item.id === handoff.threadId);
+      if (thread?.projectId && thread.projectId !== selectedProject?.id && thread.projectId !== 'default') {
+        dispatch({ type: 'raw', method: 'selectProject', params: { projectId: thread.projectId } });
+      }
+      dispatch({ type: 'thread.selected', threadId: handoff.threadId });
+      if (thread) {
+        void api.resumeThread(thread.id, thread.projectId || selectedProject?.id || '').catch((error) => {
+          dispatch({ type: 'error', message: errorMessage(error) });
+        });
+      }
+    }
+    setComposerDraftSelection({ requestId: Date.now(), prompt: handoff.prompt, agentName: handoff.agentName });
+    setManagementOpen(false);
+    if (isNarrowViewport()) {
+      setSidebarVisible(false);
+      setInspectorVisible(false);
+    }
   }
 
   function focusCard(cardId: string, openInspector = true, knownCard?: TimelineCard) {
@@ -636,6 +658,7 @@ export function App() {
             skillsError={skillsError}
             agentsError={agentsError}
             capabilitySelection={composerCapabilitySelection}
+            draftSelection={composerDraftSelection}
             codexWebConfig={codexWebConfig}
             onReloadSkills={() => reloadSkills(true)}
             onReadFileContext={readProjectFileForContext}
@@ -751,6 +774,7 @@ export function App() {
         onRefreshAdmin={() => void reloadAdminStatus()}
         onUseSkill={(skill) => useComposerCapability('skill', skill.name)}
         onUseAgent={(agent) => useComposerCapability('agent', agent.name)}
+        onUsePrompt={useComposerDraft}
         onToggleNotifications={(enabled) => void toggleNotifications(enabled)}
         onOpenInspectorTab={(tab) => { setInspectorVisible(true); setInspectorTab(tab); }}
         onSelectThread={selectThread}
