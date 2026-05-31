@@ -1,6 +1,6 @@
-import type { ApprovalRequest, Project, ThreadSummary, TimelineCard } from '../../shared/types.js';
+import type { ApprovalRequest, GitStatusSummary, Project, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
-import { Icon } from './Icon.js';
+import { Icon, type IconName } from './Icon.js';
 
 function statusLabel(status?: string): string {
   if (!status || status === 'loaded') return 'Ready';
@@ -29,6 +29,8 @@ export function ThreadHeader(props: {
   thread?: ThreadSummary;
   cards: TimelineCard[];
   approvals: ApprovalRequest[];
+  gitStatus?: GitStatusSummary;
+  health?: ServerHealth;
   busy: boolean;
   onInterrupt: () => void;
 }) {
@@ -42,6 +44,7 @@ export function ThreadHeader(props: {
   const visibleStatus = pendingApprovals > 0 ? 'Approval' : statusLabel(props.thread?.status);
   const visibleStatusClass = pendingApprovals > 0 ? 'waiting_approval' : props.thread?.status ?? 'idle';
   const supervision = deriveSupervisionSummary({ thread: props.thread, cards: props.cards, approvals: props.approvals });
+  const signals = workbenchSignals(props.cards, props.gitStatus, props.health);
 
   return (
     <div className="thread-header codex-thread-header">
@@ -64,6 +67,15 @@ export function ThreadHeader(props: {
           <span title={supervision.detail}>{supervision.detail}</span>
           {supervision.turnId ? <code title={supervision.turnId}>{compactTurnId(supervision.turnId)}</code> : null}
         </div>
+        <div className="thread-workbench-signals" aria-label="Workbench evidence signals">
+          {signals.map((signal) => (
+            <span key={signal.label} className={`thread-workbench-signal ${signal.tone ?? ''}`} title={signal.detail}>
+              <Icon name={signal.icon} size={12} />
+              <span>{signal.label}</span>
+              <strong>{signal.value}</strong>
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="thread-metrics codex-thread-actions">
@@ -82,4 +94,87 @@ export function ThreadHeader(props: {
 
 function compactTurnId(id: string): string {
   return id.replace(/^turn_/, '').slice(-10);
+}
+
+type WorkbenchSignal = {
+  label: string;
+  value: string;
+  detail: string;
+  icon: IconName;
+  tone?: 'ok' | 'warn';
+};
+
+function workbenchSignals(cards: TimelineCard[], gitStatus?: GitStatusSummary, health?: ServerHealth): WorkbenchSignal[] {
+  const changedFiles = gitStatus?.isRepo ? gitStatus.files.length : countByKind(cards, 'fileChange');
+  const artifactCount = artifactSignalCount(cards);
+  const previewCount = browserTargetCount(cards, health);
+  const release = releaseSignal(gitStatus, health);
+  return [
+    {
+      label: 'Review',
+      value: !gitStatus ? 'loading' : gitStatus.isRepo ? (changedFiles === 0 ? 'clean' : `${changedFiles} changed`) : 'no repo',
+      detail: gitStatus?.isRepo ? `${changedFiles} changed file${changedFiles === 1 ? '' : 's'} in the current project.` : 'Git status is not available for this project.',
+      icon: 'check',
+      tone: changedFiles > 0 ? 'warn' : gitStatus?.isRepo ? 'ok' : undefined
+    },
+    {
+      label: 'Preview',
+      value: previewCount === 0 ? 'none' : `${previewCount} target${previewCount === 1 ? '' : 's'}`,
+      detail: previewCount === 0 ? 'No local, remote, or Hugging Face browser target is visible for this thread.' : 'Browser targets are available for visual verification.',
+      icon: 'panel',
+      tone: previewCount > 0 ? 'ok' : undefined
+    },
+    {
+      label: 'Artifacts',
+      value: artifactCount === 0 ? 'none' : `${artifactCount} item${artifactCount === 1 ? '' : 's'}`,
+      detail: artifactCount === 0 ? 'No thread artifacts have been captured yet.' : 'Thread artifacts are available for review or follow-up.',
+      icon: 'paperclip',
+      tone: artifactCount > 0 ? 'ok' : undefined
+    },
+    {
+      label: 'Release',
+      value: release.value,
+      detail: release.detail,
+      icon: 'branch',
+      tone: release.tone
+    }
+  ];
+}
+
+function artifactSignalCount(cards: TimelineCard[]): number {
+  return cards.filter((card) => (
+    card.kind === 'fileChange'
+    || card.kind === 'agent'
+    || card.kind === 'plan'
+    || card.kind === 'error'
+    || (card.kind === 'command' && (card.stdout || card.stderr))
+  )).length;
+}
+
+function browserTargetCount(cards: TimelineCard[], health?: ServerHealth): number {
+  const urls = new Set<string>();
+  if (health?.huggingFace?.publicUrl) urls.add(health.huggingFace.publicUrl);
+  if (health?.huggingFace?.spaceHost) urls.add(`https://${health.huggingFace.spaceHost}`);
+  for (const card of cards) {
+    const output = [card.text, card.stdout, card.stderr].filter(Boolean).join('\n');
+    for (const match of output.matchAll(/https?:\/\/[^\s)"'<>]+/g)) {
+      const url = match[0].replace(/[.,;]+$/, '');
+      if (/localhost|127\.0\.0\.1|hf\.space|huggingface\.co\/spaces/i.test(url)) urls.add(url);
+    }
+  }
+  return urls.size;
+}
+
+function releaseSignal(gitStatus?: GitStatusSummary, health?: ServerHealth): { value: string; detail: string; tone?: 'ok' | 'warn' } {
+  if (!gitStatus) return { value: 'loading', detail: 'Git and release evidence are still loading.' };
+  if (!gitStatus.isRepo) return { value: 'no repo', detail: gitStatus.error ?? 'The current project is not a Git repository.' };
+  if (gitStatus.files.length > 0) return { value: 'review', detail: 'Review and commit local changes before release readback.', tone: 'warn' };
+  const buildSha = health?.build?.sha;
+  if (buildSha && gitStatus.head && buildSha === gitStatus.head) {
+    return { value: 'verified', detail: 'Runtime build SHA matches local Git HEAD.', tone: 'ok' };
+  }
+  if (health?.huggingFace?.enabled) {
+    return { value: 'readback', detail: 'Hugging Face release target is visible; compare /healthz build.sha after push.' };
+  }
+  return { value: 'ready', detail: 'Git package is clean; no Hugging Face runtime evidence is visible.' };
 }

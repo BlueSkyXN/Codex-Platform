@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ApprovalRequest, GitStatusSummary, Project, TimelineCard, TimelineCardKind } from '../../shared/types.js';
+import type { AgentSummary, ApprovalRequest, GitStatusSummary, Project, ServerHealth, TimelineCard, TimelineCardKind } from '../../shared/types.js';
 import { CommandCard, FileChangeCard } from './cards.js';
 import { Icon, type IconName } from './Icon.js';
 
@@ -11,6 +11,9 @@ export function Timeline(props: {
   project?: Project;
   gitStatus?: GitStatusSummary;
   approvals?: ApprovalRequest[];
+  agents?: AgentSummary[];
+  agentsLoading?: boolean;
+  health?: ServerHealth;
   connected?: boolean;
   onFocus: (cardId: string) => void;
 }) {
@@ -67,7 +70,15 @@ export function Timeline(props: {
         {props.cards.length === 0 ? (
           <div className="empty-state codex-empty-state">
             <div className="empty-title">What should we build in {props.project?.name ?? 'this project'}?</div>
-            <EmptyCommandState project={props.project} gitStatus={props.gitStatus} approvals={props.approvals ?? []} connected={props.connected} />
+            <EmptyCommandState
+              project={props.project}
+              gitStatus={props.gitStatus}
+              approvals={props.approvals ?? []}
+              agents={props.agents ?? []}
+              agentsLoading={props.agentsLoading}
+              health={props.health}
+              connected={props.connected}
+            />
           </div>
         ) : null}
         {props.cards.length > 0 && filteredCards.length === 0 ? <div className="empty-state compact">No events match the current filter.</div> : null}
@@ -108,16 +119,28 @@ export function Timeline(props: {
   );
 }
 
-function EmptyCommandState(props: { project?: Project; gitStatus?: GitStatusSummary; approvals: ApprovalRequest[]; connected?: boolean }) {
-  const branch = props.gitStatus?.isRepo ? props.gitStatus.branch ?? 'HEAD' : 'no git';
+function EmptyCommandState(props: {
+  project?: Project;
+  gitStatus?: GitStatusSummary;
+  approvals: ApprovalRequest[];
+  agents: AgentSummary[];
+  agentsLoading?: boolean;
+  health?: ServerHealth;
+  connected?: boolean;
+}) {
+  const branch = !props.gitStatus ? 'loading' : props.gitStatus.isRepo ? props.gitStatus.branch ?? 'HEAD' : 'no git';
   const review = !props.gitStatus ? 'loading' : !props.gitStatus.isRepo ? 'unavailable' : props.gitStatus.files.length === 0 ? 'clean' : `${props.gitStatus.files.length} changed`;
   const risk = props.approvals.length === 0 ? 'clear' : `${props.approvals.length} pending`;
+  const agents = props.agentsLoading ? 'loading' : props.agents.length ? `${props.agents.length} ready` : 'built-in';
+  const deploy = !props.health ? 'loading' : props.health.huggingFace?.enabled ? 'HF Space' : 'local';
   return (
     <div className="empty-command-state" aria-label="Current command center state">
       <StatePill label="Project" value={props.project?.name ?? 'none'} />
       <StatePill label="Thread" value={props.connected ? 'live' : 'offline'} />
       <StatePill label="Branch" value={branch} />
       <StatePill label="Review" value={review} />
+      <StatePill label="Agents" value={agents} />
+      <StatePill label="Deploy" value={deploy} />
       <StatePill label="Risk" value={risk} tone={props.approvals.length > 0 ? 'warn' : undefined} />
     </div>
   );

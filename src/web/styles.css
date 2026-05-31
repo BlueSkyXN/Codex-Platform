@@ -7722,3 +7722,81 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* v2 workbench evidence pass: make multi-agent closure visible without adding decorative chrome. */
+.thread-workbench-signals {
+  width: min(100%, 720px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.thread-workbench-signal {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 12%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--codex-surface), transparent 8%);
+  color: var(--codex-muted);
+  padding: 3px 7px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.thread-workbench-signal .codex-icon {
+  flex: 0 0 auto;
+  opacity: .72;
+}
+
+.thread-workbench-signal > span {
+  color: var(--codex-muted);
+}
+
+.thread-workbench-signal strong {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--codex-text);
+  font-weight: 560;
+}
+
+.thread-workbench-signal.ok strong,
+.thread-workbench-signal.ok .codex-icon {
+  color: var(--codex-green, var(--ok));
+}
+
+.thread-workbench-signal.warn strong,
+.thread-workbench-signal.warn .codex-icon {
+  color: var(--codex-yellow, var(--warn));
+}
+
+.empty-command-state {
+  max-width: min(720px, 100%);
+  row-gap: 5px;
+}
+
+.empty-command-state .state-pill + .state-pill::before {
+  content: none;
+  margin: 0;
+}
+
+.empty-command-state .state-pill:not(:last-child)::after {
+  content: "·";
+  margin-left: 10px;
+  color: color-mix(in srgb, var(--codex-muted), transparent 56%);
+}
+
+@media (max-width: 820px) {
+  .thread-workbench-signals {
+    gap: 5px;
+  }
+
+  .thread-workbench-signal {
+    max-width: 100%;
+  }
+}

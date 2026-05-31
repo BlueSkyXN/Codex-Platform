@@ -648,7 +648,7 @@ export function App() {
           />
         ) : null}
         <main className="thread-column">
-          <ThreadHeader project={selectedProject} thread={selectedThread} cards={selectedCards} approvals={selectedApprovals} busy={busy} onInterrupt={interrupt} />
+          <ThreadHeader project={selectedProject} thread={selectedThread} cards={selectedCards} approvals={selectedApprovals} gitStatus={gitStatus} health={health} busy={busy} onInterrupt={interrupt} />
           {!inspectorVisible ? <ApprovalRail approvals={selectedApprovals} onDecision={approve} onFocusApproval={focusApproval} /> : null}
           <Timeline
             cards={selectedCards}
@@ -656,6 +656,9 @@ export function App() {
             project={selectedProject}
             gitStatus={gitStatus}
             approvals={selectedApprovals}
+            agents={agents}
+            agentsLoading={agentsLoading}
+            health={health}
             connected={state.connected}
             onFocus={(cardId) => focusCard(cardId)}
           />
