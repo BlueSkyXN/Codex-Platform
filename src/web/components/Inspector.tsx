@@ -546,7 +546,8 @@ function BrowserTab({
   const targets = browserTargets(cards, health);
   const activeTarget = targets.find((target) => target.url === selectedUrl) ?? targets[0];
   const evidence = browserEvidence(activeTarget, health);
-  const feedbackPrompt = browserFeedbackPrompt({ target: activeTarget, project, health, feedback });
+  const feedbackPrompt = activeTarget ? browserFeedbackPrompt({ target: activeTarget, project, health, feedback }) : missingBrowserTargetPrompt(project, health, feedback);
+  const hasBrowserFeedbackPrompt = Boolean(feedbackPrompt);
   const loopSteps = browserLoopSteps(activeTarget, feedback, health);
   const activeTargetThreadId = activeTarget?.cardId ? cards.find((card) => card.id === activeTarget.cardId)?.threadId : undefined;
   const routes = browserFeedbackRoutes({ target: activeTarget, project, health, feedback, threadId: activeTargetThreadId });
@@ -563,7 +564,7 @@ function BrowserTab({
     onUsePrompt?.({
       prompt: feedbackPrompt,
       threadId: activeTarget?.cardId ? cards.find((card) => card.id === activeTarget.cardId)?.threadId : undefined,
-      agentName: 'worker'
+      agentName: activeTarget ? 'worker' : 'explorer'
     });
   }
 
@@ -646,11 +647,11 @@ function BrowserTab({
         <EvidenceLoopStrip
           title="Browser evidence loop"
           steps={loopSteps}
-          summary={activeTarget ? 'Target URL, runtime evidence, and notes are included.' : 'Capture or select a preview target first.'}
+          summary={activeTarget ? 'Target URL, runtime evidence, and notes are included.' : hasBrowserFeedbackPrompt ? 'Missing preview target notes are ready for diagnosis.' : 'Capture or describe the expected preview first.'}
           onHandOff={handOffFeedbackPrompt}
-          handoffDisabled={!activeTarget || !feedbackPrompt || !onUsePrompt}
+          handoffDisabled={!hasBrowserFeedbackPrompt || !onUsePrompt}
           onCopy={() => void copyFeedbackPrompt()}
-          copyDisabled={!activeTarget || !feedbackPrompt}
+          copyDisabled={!hasBrowserFeedbackPrompt}
           copied={copiedFeedback}
         />
         <FeedbackRouteStrip routes={routes} onUsePrompt={onUsePrompt} />
@@ -767,8 +768,8 @@ function browserLoopSteps(activeTarget: BrowserTarget | undefined, feedback: str
   return [
     {
       label: 'Target',
-      value: activeTarget ? `${activeTarget.title} · ${targetKindLabel(activeTarget.kind)}` : 'none',
-      tone: activeTarget ? 'ok' : 'idle'
+      value: activeTarget ? `${activeTarget.title} · ${targetKindLabel(activeTarget.kind)}` : notesReady ? 'missing preview' : 'none',
+      tone: activeTarget ? 'ok' : notesReady ? 'warn' : 'idle'
     },
     {
       label: 'Notes',
@@ -777,13 +778,13 @@ function browserLoopSteps(activeTarget: BrowserTarget | undefined, feedback: str
     },
     {
       label: 'Owner',
-      value: '#worker',
-      tone: activeTarget ? 'ok' : 'idle'
+      value: activeTarget ? '#worker' : '#explorer',
+      tone: activeTarget || notesReady ? 'ok' : 'idle'
     },
     {
       label: 'Verify',
-      value: `${runtimeState} · ${verify}`,
-      tone: activeTarget ? 'ok' : 'idle'
+      value: activeTarget ? `${runtimeState} · ${verify}` : notesReady ? `${runtimeState} · trace missing preview` : `${runtimeState} · select target`,
+      tone: activeTarget ? 'ok' : notesReady ? 'warn' : 'idle'
     }
   ];
 }
@@ -814,7 +815,21 @@ function browserEvidence(activeTarget: BrowserTarget | undefined, health?: Serve
 }
 
 function browserFeedbackRoutes(input: { target?: BrowserTarget; project?: Project; health?: ServerHealth; feedback: string; threadId?: string }): FeedbackRoute[] {
-  const disabled = !input.target;
+  if (!input.target) {
+    return [
+      {
+        id: 'trace-missing-preview',
+        icon: 'search',
+        title: 'Trace missing',
+        detail: 'Diagnose why no browser target is available.',
+        agentName: 'explorer',
+        disabled: !input.feedback.trim(),
+        prompt: missingBrowserTargetPrompt(input.project, input.health, input.feedback)
+      }
+    ];
+  }
+
+  const disabled = false;
   return [
     {
       id: 'fix-preview',
@@ -882,6 +897,27 @@ function browserFeedbackPrompt(input: { target?: BrowserTarget; project?: Projec
     input.feedback.trim() || '- Describe the visible issue, missing state, or expected behavior here.',
     '',
     input.request ?? 'Please inspect the relevant code, implement the smallest complete fix, and verify the result in the browser preview across desktop and mobile widths.'
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+function missingBrowserTargetPrompt(project: Project | undefined, health: ServerHealth | undefined, feedback: string): string | undefined {
+  const feedbackText = feedback.trim();
+  if (!feedbackText) return undefined;
+  const lines = [
+    'Investigate a missing or expected browser preview target.',
+    '',
+    'Recommended owner: #explorer for event, command output, and runtime diagnosis before implementation.',
+    '',
+    `Project: ${project?.name ?? 'current project'}`,
+    `Runtime: ${health?.appServer ?? 'unknown'}`,
+    health?.build?.sha ? `Runtime build: ${health.build.sha}` : undefined,
+    health?.huggingFace?.enabled ? `Hugging Face: ${health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured'}` : undefined,
+    '',
+    'Expected browser feedback:',
+    feedbackText,
+    '',
+    'Please inspect the thread event stream, command output URL capture, Browser pane target extraction, and runtime health/HFS configuration before editing. Determine whether the preview never started, the URL was not captured, health lacks a public URL, or the Browser pane failed to represent the target. Implement the smallest complete fix and verify the Browser pane can show the preview target or a precise diagnostic.'
   ];
   return lines.filter(Boolean).join('\n');
 }
