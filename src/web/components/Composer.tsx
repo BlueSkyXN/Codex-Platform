@@ -101,6 +101,13 @@ export function Composer(props: {
   const artifactFeedback = props.artifactFeedback?.trim() ?? '';
   const fileOptions = useMemo(() => flattenTree(props.fileTree).filter((item) => item.node.path !== '.').slice(0, 18), [props.fileTree]);
   const showStarterPrompts = !text.trim() && contextAttachments.length === 0 && (props.cards?.length ?? 0) === 0;
+  const reviewPackSignalCount = [
+    props.gitStatus?.isRepo,
+    Boolean(props.gitDiff?.diff),
+    props.gitStatus?.isRepo || props.githubActions || props.health,
+    Boolean(lastTerminalCard)
+  ].filter(Boolean).length;
+  const routePackSignalCount = [selectedSkill, selectedAgent].filter(Boolean).length;
 
   useEffect(() => {
     const selection = props.capabilitySelection;
@@ -167,6 +174,35 @@ export function Composer(props: {
       return current.some((item) => item.id === next.id) ? current : [...current, next].slice(0, 12);
     });
     setShowContextPicker(false);
+  }
+
+  function attachContextPack(attachments: TurnContextAttachment[]) {
+    if (attachments.length === 0) return;
+    setContextAttachments((current) => {
+      const next = [...current];
+      for (const attachment of attachments) {
+        const normalized = normalizeAttachment(attachment);
+        if (!next.some((item) => item.id === normalized.id)) next.push(normalized);
+      }
+      return next.slice(0, 12);
+    });
+    setShowContextPicker(false);
+  }
+
+  function reviewContextPack(): TurnContextAttachment[] {
+    return compactAttachments([
+      props.gitStatus?.isRepo ? gitStatusAttachment(props.gitStatus) : undefined,
+      props.gitDiff?.diff ? gitDiffAttachment(props.gitDiff) : undefined,
+      (props.gitStatus?.isRepo || props.githubActions || props.health) ? releaseEvidenceAttachment(props.gitStatus, props.githubActions, props.health) : undefined,
+      lastTerminalCard ? terminalAttachment(lastTerminalCard) : undefined
+    ]);
+  }
+
+  function routeContextPack(): TurnContextAttachment[] {
+    return compactAttachments([
+      selectedSkill ? skillAttachment(selectedSkill) : undefined,
+      selectedAgent ? agentAttachment(selectedAgent) : undefined
+    ]);
   }
 
   async function attachFile(node: FileTreeNode) {
@@ -280,9 +316,51 @@ export function Composer(props: {
               <strong>Add context</strong>
               <span>Attach live project state to the next turn.</span>
             </div>
+            <div className="context-picker-head-meta" aria-label="Context attachment capacity">
+              <span>{contextAttachments.length}/12 attached</span>
+            </div>
             <button className="round-tool" title="Close context picker" aria-label="Close context picker" onClick={() => setShowContextPicker(false)}>
               <Icon name="close" size={14} />
             </button>
+          </div>
+
+          <div className="context-picker-pack-grid" aria-label="Evidence packs">
+            <ContextPackButton
+              icon="branch"
+              eyebrow="Review"
+              title="Review package"
+              detail={`${props.gitStatus?.files.length ?? 0} files · ${props.gitDiff?.diff ? 'diff loaded' : 'no diff'} · ${releaseEvidenceSummary(props.gitStatus, props.githubActions, props.health)}`}
+              meta={`${reviewPackSignalCount} signals`}
+              disabled={reviewPackSignalCount === 0}
+              onClick={() => attachContextPack(reviewContextPack())}
+            />
+            <ContextPackButton
+              icon="panel"
+              eyebrow="Preview"
+              title="Browser evidence"
+              detail={browserEvidenceSummary(browserTargets, props.health, browserFeedback)}
+              meta={`${browserTargets.length} targets`}
+              disabled={browserTargets.length === 0 && !props.health && !browserFeedback}
+              onClick={() => attachContext(browserEvidenceAttachment(browserTargets, props.health, browserFeedback))}
+            />
+            <ContextPackButton
+              icon="file"
+              eyebrow="Artifacts"
+              title="Artifact feedback"
+              detail={artifactEvidenceSummary(artifacts, artifactFeedback)}
+              meta={`${artifacts.length} items`}
+              disabled={artifacts.length === 0 && !artifactFeedback}
+              onClick={() => attachContext(artifactEvidenceAttachment(artifacts, artifactFeedback))}
+            />
+            <ContextPackButton
+              icon="agent"
+              eyebrow="Route"
+              title={selectedAgent || selectedSkill ? 'Selected capability' : 'Choose an agent or skill'}
+              detail={selectedAgent || selectedSkill ? [selectedAgent ? `#${selectedAgent.name}` : undefined, selectedSkill ? `$${selectedSkill.name}` : undefined].filter(Boolean).join(' · ') : `${agents.length} agents · ${props.skills.length} skills available below`}
+              meta={routePackSignalCount ? `${routePackSignalCount} selected` : 'optional'}
+              disabled={routePackSignalCount === 0}
+              onClick={() => attachContextPack(routeContextPack())}
+            />
           </div>
 
           <div className="context-picker-grid">
@@ -538,6 +616,35 @@ function ContextOption(props: {
   );
 }
 
+function ContextPackButton(props: {
+  icon: IconName;
+  eyebrow: string;
+  title: string;
+  detail: string;
+  meta: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="context-picker-pack"
+      type="button"
+      disabled={props.disabled}
+      onClick={props.onClick}
+      title={props.detail}
+      aria-label={`${props.title}: ${props.detail}`}
+    >
+      <span className="context-picker-pack-icon"><Icon name={props.icon} size={15} /></span>
+      <span className="context-picker-pack-main">
+        <small>{props.eyebrow}</small>
+        <strong>{props.title}</strong>
+        <span>{props.detail}</span>
+      </span>
+      <span className="context-picker-pack-meta">{props.meta}</span>
+    </button>
+  );
+}
+
 function hasOpenTrigger(text: string): boolean {
   const trigger = currentTrigger(text);
   return trigger?.startsWith('/') || trigger?.startsWith('$') || trigger?.startsWith('#') || false;
@@ -619,6 +726,10 @@ function normalizeAttachment(attachment: TurnContextAttachment): TurnContextAtta
     truncated: Boolean(attachment.truncated || content?.truncated),
     createdAt: attachment.createdAt ?? Date.now()
   };
+}
+
+function compactAttachments(values: Array<TurnContextAttachment | undefined | false>): TurnContextAttachment[] {
+  return values.filter((value): value is TurnContextAttachment => Boolean(value));
 }
 
 function fileAttachment(file: FileReadResult): TurnContextAttachment {
