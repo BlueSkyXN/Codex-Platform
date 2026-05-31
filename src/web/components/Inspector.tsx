@@ -844,6 +844,7 @@ function GitTab(props: {
   const [copiedReviewBrief, setCopiedReviewBrief] = useState(false);
   const [copiedReviewPrompt, setCopiedReviewPrompt] = useState(false);
   const [copiedPrBody, setCopiedPrBody] = useState(false);
+  const [copiedNextReview, setCopiedNextReview] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
   const [selectedReviewLine, setSelectedReviewLine] = useState<DiffLineSelection | undefined>();
   const [reviewNote, setReviewNote] = useState('');
@@ -869,6 +870,18 @@ function GitTab(props: {
     shipInfo,
     releaseInfo
   }) : [];
+  const nextReviewItem = status?.isRepo && shipInfo && releaseInfo && reviewBrief ? gitReviewQueueItem({
+    status,
+    stageablePaths,
+    stagedPaths,
+    draftMessage,
+    reviewFindings,
+    shipInfo,
+    releaseInfo,
+    reviewBrief,
+    prBody,
+    evidence: props.reviewEvidence
+  }) : undefined;
 
   async function copyPushCommand(command?: string) {
     if (!command) return;
@@ -905,11 +918,26 @@ function GitTab(props: {
     window.setTimeout(() => setCopiedPrBody(false), 1800);
   }
 
+  async function copyNextReviewPrompt() {
+    if (!nextReviewItem) return;
+    await copyText(nextReviewItem.prompt);
+    setCopiedNextReview(true);
+    window.setTimeout(() => setCopiedNextReview(false), 1800);
+  }
+
   function handOffReviewPackage() {
     if (!reviewBrief) return;
     props.onUsePrompt?.({
       prompt: gitReviewHandoffPrompt(reviewBrief, prBody, reviewFindings.length),
       agentName: reviewFindings.length > 0 ? 'worker' : 'explorer'
+    });
+  }
+
+  function handOffNextReview() {
+    if (!nextReviewItem) return;
+    props.onUsePrompt?.({
+      prompt: nextReviewItem.prompt,
+      agentName: nextReviewItem.agentName
     });
   }
 
@@ -963,6 +991,18 @@ function GitTab(props: {
 
   function removeReviewFinding(id: string) {
     props.onRemoveReviewFinding(id);
+  }
+
+  function openNextReviewItem() {
+    const target = nextReviewItem?.openTarget;
+    if (!target) return;
+    if (target.kind === 'file') {
+      selectGitFileFromPanel(target.path, Boolean(target.cached));
+    } else if (target.kind === 'draft') {
+      setCommitMessage(draftMessage);
+    } else {
+      window.open(target.url, '_blank', 'noopener,noreferrer');
+    }
   }
 
   return (
@@ -1066,6 +1106,17 @@ function GitTab(props: {
               <div className="git-closure-steps" aria-label="Review closure steps">
                 {closureSteps.map((step, index) => <GitClosureStep key={step.label} step={step} index={index + 1} />)}
               </div>
+            ) : null}
+            {nextReviewItem ? (
+              <GitReviewQueueCard
+                item={nextReviewItem}
+                onOpen={openNextReviewItem}
+                openDisabled={!nextReviewItem.openTarget}
+                onHandoff={handOffNextReview}
+                handoffDisabled={!props.onUsePrompt}
+                onCopy={() => void copyNextReviewPrompt()}
+                copied={copiedNextReview}
+              />
             ) : null}
             <div className="git-review-queues">
               <button disabled={stageablePaths.length === 0 || !props.onSelectFile} onClick={() => selectGitFileFromPanel(stageablePaths[0], false)}>
@@ -1261,6 +1312,20 @@ type GitClosureStepModel = {
   state: 'ok' | 'warn' | 'idle';
 };
 
+type GitReviewQueueItem = {
+  id: 'sync' | 'findings' | 'unstaged' | 'staged' | 'push' | 'release' | 'synced';
+  title: string;
+  detail: string;
+  owner: '#explorer' | '#worker';
+  state: 'attention' | 'ready' | 'waiting';
+  metricLabel: string;
+  metricValue: string;
+  prompt: string;
+  agentName: 'explorer' | 'worker';
+  openLabel: string;
+  openTarget?: { kind: 'file'; path: string; cached?: boolean } | { kind: 'draft' } | { kind: 'url'; url: string };
+};
+
 function GitClosureStep({ step, index }: { step: GitClosureStepModel; index: number }) {
   return (
     <div className={`git-closure-step ${step.state}`}>
@@ -1269,6 +1334,40 @@ function GitClosureStep({ step, index }: { step: GitClosureStepModel; index: num
         <strong>{step.label}</strong>
         <small>{step.value}</small>
       </span>
+    </div>
+  );
+}
+
+function GitReviewQueueCard(props: {
+  item: GitReviewQueueItem;
+  onOpen: () => void;
+  openDisabled?: boolean;
+  onHandoff: () => void;
+  handoffDisabled?: boolean;
+  onCopy: () => void;
+  copied?: boolean;
+}) {
+  return (
+    <div className={`git-review-next ${props.item.state}`}>
+      <div className="git-review-next-head">
+        <span className="git-review-next-icon"><Icon name={props.item.state === 'attention' ? 'inbox' : 'branch'} size={14} /></span>
+        <span>
+          <strong>{props.item.title}</strong>
+          <small>{props.item.detail}</small>
+        </span>
+        <code>{props.item.owner}</code>
+      </div>
+      <div className="git-review-next-meta">
+        <span>{props.item.metricLabel}</span>
+        <strong>{props.item.metricValue}</strong>
+        <span>State</span>
+        <strong>{props.item.state}</strong>
+      </div>
+      <div className="git-review-next-actions">
+        <button className="mini-action" disabled={props.openDisabled} onClick={props.onOpen}>{props.item.openLabel}</button>
+        <button className="mini-action primary-mini" disabled={props.handoffDisabled} onClick={props.onHandoff} aria-label="Hand off next Git review queue item to composer">Hand off next</button>
+        <button className="mini-action" onClick={props.onCopy}>{props.copied ? 'Copied' : 'Copy prompt'}</button>
+      </div>
     </div>
   );
 }
@@ -1310,6 +1409,197 @@ function gitClosureSteps(input: {
       state: input.releaseInfo.state === 'ready' ? 'ok' : input.releaseInfo.state === 'blocked' ? 'warn' : 'idle'
     }
   ];
+}
+
+function gitReviewQueueItem(input: {
+  status: GitStatusSummary;
+  stageablePaths: string[];
+  stagedPaths: string[];
+  draftMessage: string;
+  reviewFindings: GitReviewFinding[];
+  shipInfo: ReturnType<typeof gitShipInfo>;
+  releaseInfo: ReturnType<typeof gitReleaseInfo>;
+  reviewBrief: string;
+  prBody?: string;
+  evidence: ReviewEvidencePacket;
+}): GitReviewQueueItem {
+  const firstFinding = input.reviewFindings[0];
+  const firstUnstaged = input.stageablePaths[0];
+  const firstStaged = input.stagedPaths[0];
+  const base = {
+    reviewBrief: input.reviewBrief,
+    prBody: input.prBody,
+    evidence: input.evidence
+  };
+
+  if ((input.status.behind ?? 0) > 0) {
+    return gitReviewQueueModel({
+      id: 'sync',
+      title: 'Sync before review',
+      detail: `Branch is behind upstream by ${input.status.behind ?? 0}.`,
+      owner: '#explorer',
+      state: 'attention',
+      metricLabel: 'Behind',
+      metricValue: String(input.status.behind ?? 0),
+      agentName: 'explorer',
+      openLabel: 'Open repo',
+      openTarget: input.shipInfo.repoUrl ? { kind: 'url', url: input.shipInfo.repoUrl } : undefined,
+      ...base
+    });
+  }
+
+  if (firstFinding) {
+    return gitReviewQueueModel({
+      id: 'findings',
+      title: 'Resolve review findings',
+      detail: `${input.reviewFindings.length} captured finding${input.reviewFindings.length === 1 ? '' : 's'} before commit.`,
+      owner: '#worker',
+      state: 'attention',
+      metricLabel: 'Findings',
+      metricValue: String(input.reviewFindings.length),
+      agentName: 'worker',
+      openLabel: 'Open finding',
+      openTarget: { kind: 'file', path: firstFinding.path, cached: false },
+      ...base
+    });
+  }
+
+  if (firstUnstaged) {
+    return gitReviewQueueModel({
+      id: 'unstaged',
+      title: 'Review unstaged diff',
+      detail: `${input.stageablePaths.length} unstaged path${input.stageablePaths.length === 1 ? '' : 's'} need scope review.`,
+      owner: '#explorer',
+      state: 'attention',
+      metricLabel: 'Unstaged',
+      metricValue: String(input.stageablePaths.length),
+      agentName: 'explorer',
+      openLabel: 'Open diff',
+      openTarget: { kind: 'file', path: firstUnstaged, cached: false },
+      ...base
+    });
+  }
+
+  if (firstStaged) {
+    return gitReviewQueueModel({
+      id: 'staged',
+      title: 'Review staged package',
+      detail: input.draftMessage || `${input.stagedPaths.length} staged path${input.stagedPaths.length === 1 ? '' : 's'} ready for review.`,
+      owner: '#explorer',
+      state: 'ready',
+      metricLabel: 'Staged',
+      metricValue: String(input.stagedPaths.length),
+      agentName: 'explorer',
+      openLabel: 'Open staged',
+      openTarget: { kind: 'file', path: firstStaged, cached: true },
+      ...base
+    });
+  }
+
+  if ((input.status.ahead ?? 0) > 0) {
+    return gitReviewQueueModel({
+      id: 'push',
+      title: 'Push and PR verification',
+      detail: input.shipInfo.prNote,
+      owner: '#worker',
+      state: 'ready',
+      metricLabel: 'Ahead',
+      metricValue: String(input.status.ahead ?? 0),
+      agentName: 'worker',
+      openLabel: input.shipInfo.compareUrl ? 'Open compare' : 'Open repo',
+      openTarget: input.shipInfo.compareUrl ? { kind: 'url', url: input.shipInfo.compareUrl } : input.shipInfo.repoUrl ? { kind: 'url', url: input.shipInfo.repoUrl } : undefined,
+      ...base
+    });
+  }
+
+  if (input.releaseInfo.state !== 'ready') {
+    return gitReviewQueueModel({
+      id: 'release',
+      title: 'Verify release evidence',
+      detail: input.releaseInfo.detail,
+      owner: '#explorer',
+      state: input.releaseInfo.state === 'blocked' ? 'attention' : 'waiting',
+      metricLabel: 'Release',
+      metricValue: input.releaseInfo.label,
+      agentName: 'explorer',
+      openLabel: input.releaseInfo.actionsUrl ? 'Open Actions' : input.releaseInfo.healthUrl ? 'Open healthz' : 'Open repo',
+      openTarget: input.releaseInfo.actionsUrl
+        ? { kind: 'url', url: input.releaseInfo.actionsUrl }
+        : input.releaseInfo.healthUrl
+          ? { kind: 'url', url: input.releaseInfo.healthUrl }
+          : input.shipInfo.repoUrl
+            ? { kind: 'url', url: input.shipInfo.repoUrl }
+            : undefined,
+      ...base
+    });
+  }
+
+  return gitReviewQueueModel({
+    id: 'synced',
+    title: 'Ready for release readback',
+    detail: 'Working tree, upstream, Actions, and runtime evidence are aligned.',
+    owner: '#explorer',
+    state: 'ready',
+    metricLabel: 'Release',
+    metricValue: input.releaseInfo.label,
+    agentName: 'explorer',
+    openLabel: input.releaseInfo.healthUrl ? 'Open healthz' : 'Open repo',
+    openTarget: input.releaseInfo.healthUrl ? { kind: 'url', url: input.releaseInfo.healthUrl } : input.shipInfo.repoUrl ? { kind: 'url', url: input.shipInfo.repoUrl } : undefined,
+    ...base
+  });
+}
+
+function gitReviewQueueModel(input: Omit<GitReviewQueueItem, 'prompt'> & {
+  reviewBrief: string;
+  prBody?: string;
+  evidence: ReviewEvidencePacket;
+}): GitReviewQueueItem {
+  return {
+    id: input.id,
+    title: input.title,
+    detail: input.detail,
+    owner: input.owner,
+    state: input.state,
+    metricLabel: input.metricLabel,
+    metricValue: input.metricValue,
+    agentName: input.agentName,
+    openLabel: input.openLabel,
+    openTarget: input.openTarget,
+    prompt: gitReviewQueuePrompt(input)
+  };
+}
+
+function gitReviewQueuePrompt(input: Omit<GitReviewQueueItem, 'prompt'> & {
+  reviewBrief: string;
+  prBody?: string;
+  evidence: ReviewEvidencePacket;
+}): string {
+  return [
+    'Continue the next Codex-Platform Git / PR review queue item.',
+    '',
+    `Recommended owner: ${input.owner}.`,
+    `Queue item: ${input.title}`,
+    `State: ${input.state}`,
+    `Metric: ${input.metricLabel} = ${input.metricValue}`,
+    `Detail: ${input.detail}`,
+    input.openTarget?.kind === 'file' ? `Open target: ${input.openTarget.path}${input.openTarget.cached ? ' (staged)' : ''}` : undefined,
+    input.openTarget?.kind === 'url' ? `Open target: ${input.openTarget.url}` : undefined,
+    '',
+    'Review package:',
+    input.reviewBrief,
+    '',
+    'PR body draft:',
+    input.prBody ?? '- not available',
+    '',
+    'Evidence packet summary:',
+    ...reviewEvidenceSummaryLines(input.evidence),
+    '',
+    'Execution rules:',
+    '- Inspect the current files and diff before editing.',
+    '- Preserve the staged/unstaged boundary.',
+    '- Keep fixes scoped to the queue item.',
+    '- Rerun focused validation, then update the review package.'
+  ].filter((line): line is string => line !== undefined).join('\n');
 }
 
 function canStageFile(file: GitStatusSummary['files'][number]): boolean {
