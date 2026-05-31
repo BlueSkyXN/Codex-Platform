@@ -729,6 +729,38 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   color: var(--codex-text);
   padding: 5px 8px;
 }
+.git-release-command {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--border), transparent 24%);
+  padding-top: 8px;
+}
+.git-release-command > span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.git-release-command strong {
+  color: var(--codex-muted);
+  font-size: 10px;
+  font-weight: 560;
+  text-transform: uppercase;
+}
+.git-release-command code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--codex-surface);
+  color: var(--codex-text);
+  padding: 5px 8px;
+  font-size: 11px;
+}
 .git-pr-note {
   color: var(--codex-muted);
   font-size: 12px;
@@ -1194,6 +1226,7 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   .git-branch-card { grid-template-columns: repeat(2, 1fr); }
   .git-ship-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .git-closure-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .git-release-command { grid-template-columns: minmax(0, 1fr); }
   .git-review-head { display: grid; }
   .git-review-actions,
   .git-review-next-actions { justify-content: flex-start; }

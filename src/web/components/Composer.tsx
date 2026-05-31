@@ -806,6 +806,9 @@ function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubAc
   const head = status?.head;
   const upstreamHead = status?.upstreamHead;
   const files = status?.isRepo ? status.files : [];
+  const smokeTarget = hfUrl ?? 'https://your-space.hf.space';
+  const smokeCommand = `SMOKE_RETRIES=12 SMOKE_DELAY=5 scripts/hf-space-smoke.sh ${smokeTarget}`;
+  const healthCommand = `curl -fsS ${smokeTarget.replace(/\/$/, '')}/healthz`;
   const runLines = actions?.runs.length
     ? actions.runs.slice(0, 6).map((run) => `- ${run.name}: ${run.status ?? 'unknown'} / ${run.conclusion ?? 'pending'} · ${run.headSha ? shortSha(run.headSha) : 'unknown sha'}${run.htmlUrl ? ` · ${run.htmlUrl}` : ''}`)
     : ['- no workflow runs loaded'];
@@ -836,9 +839,14 @@ function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubAc
       '',
       'Release proof checklist:',
       '- Confirm local review package contains only intended files.',
+      '- Confirm HEAD matches upstream before treating the source as deployed.',
       '- Confirm GitHub Actions passed for the commit being released.',
       '- Confirm Hugging Face /healthz build.sha matches that GitHub commit.',
-      '- Run the Hugging Face smoke script against the Space URL before calling release complete.'
+      '- Run the Hugging Face smoke script against the Space URL before calling release complete.',
+      '',
+      'Release readback commands:',
+      `- ${healthCommand}`,
+      `- ${smokeCommand}`
     ].join('\n'),
     metadata: {
       branch: status?.branch ?? '',
@@ -850,7 +858,9 @@ function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubAc
       checkedSha: actions?.checkedSha ?? actions?.headSha ?? '',
       runtimeBuild: runtimeBuild ?? '',
       hfEnabled: Boolean(health?.huggingFace?.enabled),
-      hfUrl: hfUrl ?? ''
+      hfUrl: hfUrl ?? '',
+      healthCommand,
+      smokeCommand
     }
   };
 }

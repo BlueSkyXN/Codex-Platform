@@ -1044,6 +1044,7 @@ function GitTab(props: {
   const [copiedReviewPrompt, setCopiedReviewPrompt] = useState(false);
   const [copiedPrBody, setCopiedPrBody] = useState(false);
   const [copiedNextReview, setCopiedNextReview] = useState(false);
+  const [copiedReleaseCommand, setCopiedReleaseCommand] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingGitApproval | undefined>();
   const [selectedReviewLine, setSelectedReviewLine] = useState<DiffLineSelection | undefined>();
   const [reviewNote, setReviewNote] = useState('');
@@ -1125,6 +1126,13 @@ function GitTab(props: {
     await copyText(nextReviewItem.prompt);
     setCopiedNextReview(true);
     window.setTimeout(() => setCopiedNextReview(false), 1800);
+  }
+
+  async function copyReleaseCommand(command?: string) {
+    if (!command) return;
+    await copyText(command);
+    setCopiedReleaseCommand(true);
+    window.setTimeout(() => setCopiedReleaseCommand(false), 1800);
   }
 
   function handOffReviewPackage() {
@@ -1300,8 +1308,20 @@ function GitTab(props: {
                 <span className={`ship-state ${releaseInfo.state}`}>{releaseInfo.label}</span>
               </div>
               <div className="git-ship-checks">
-                {releaseInfo.checks.map((check) => <ShipCheck key={check.label} label={check.label} value={check.value} state={check.state} />)}
+                {releaseInfo.checks.map((check) => <ShipCheck key={check.label} label={check.label} value={check.value} detail={check.detail} state={check.state} />)}
               </div>
+              {releaseInfo.smokeCommand ? (
+                <div className="git-release-command">
+                  <span>
+                    <strong>HF smoke</strong>
+                    <code>{releaseInfo.smokeCommand}</code>
+                  </span>
+                  <button className={`git-review-action ${copiedReleaseCommand ? 'copied' : ''}`} onClick={() => void copyReleaseCommand(releaseInfo.smokeCommand)} aria-label={copiedReleaseCommand ? 'Copied HF smoke command' : 'Copy HF smoke command'} title={copiedReleaseCommand ? 'Copied HF smoke command' : 'Copy HF smoke command'}>
+                    <Icon name={copiedReleaseCommand ? 'check' : 'copy'} size={13} />
+                    <span>{copiedReleaseCommand ? 'Copied' : 'Copy smoke'}</span>
+                  </button>
+                </div>
+              ) : null}
               <div className="git-ship-links">
                 {releaseInfo.actionsUrl ? <a href={releaseInfo.actionsUrl} target="_blank" rel="noreferrer">Open Actions</a> : null}
                 {releaseInfo.healthUrl ? <a href={releaseInfo.healthUrl} target="_blank" rel="noreferrer">Open healthz</a> : null}
@@ -1936,6 +1956,7 @@ function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary
   const staged = status.files.filter(canUnstageFile).map((file) => file.path);
   const unstaged = status.files.filter(canStageFile).map((file) => file.path);
   const shipInfo = gitShipInfo(status);
+  const healthBaseUrl = releaseHealthBaseUrl(health);
   const lines = [
     'PR / review brief',
     '',
@@ -1968,6 +1989,8 @@ function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary
     `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
     `- Runtime build: ${health?.build?.sha ?? 'unknown'}`,
     `- HF target: ${health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local/unknown'}`,
+    healthBaseUrl ? `- Healthz readback: curl -fsS ${healthBaseUrl}/healthz` : undefined,
+    healthBaseUrl ? `- HF smoke: SMOKE_RETRIES=12 SMOKE_DELAY=5 scripts/hf-space-smoke.sh ${shellQuote(healthBaseUrl)}` : undefined,
     '',
     'Review focus:',
     '- Inspect staged and unstaged diffs separately.',
@@ -2029,6 +2052,7 @@ function gitPrBody(
   const unstaged = status.files.filter(canStageFile).map((file) => file.path);
   const changed = status.files.map((file) => file.path);
   const buildSha = health?.build?.sha;
+  const healthBaseUrl = releaseHealthBaseUrl(health);
   const lines = [
     '## Summary',
     `- ${draftMessage || 'Codex-Platform update'}`,
@@ -2063,6 +2087,8 @@ function gitPrBody(
     `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
     `- Runtime build SHA: ${buildSha ?? 'unknown'}`,
     `- HF target: ${health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local/unknown'}`,
+    healthBaseUrl ? `- Healthz readback: curl -fsS ${healthBaseUrl}/healthz` : undefined,
+    healthBaseUrl ? `- HF smoke: SMOKE_RETRIES=12 SMOKE_DELAY=5 scripts/hf-space-smoke.sh ${shellQuote(healthBaseUrl)}` : undefined,
     ...githubActionsRunLines(actions),
     '',
     '## Release Checklist',
@@ -2359,45 +2385,91 @@ function isDefaultBranch(branch: string): boolean {
   return branch === 'main' || branch === 'master';
 }
 
+function releaseHealthBaseUrl(health?: ServerHealth): string | undefined {
+  const value = health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : undefined);
+  return value?.replace(/\/$/, '');
+}
+
 function gitReleaseInfo(status: GitStatusSummary, health?: ServerHealth, actions?: GitHubActionsSummary): {
   state: 'ready' | 'review' | 'blocked';
   label: string;
   detail: string;
-  checks: Array<{ label: string; value: string; state: 'ok' | 'warn' | 'idle' }>;
+  checks: Array<{ label: string; value: string; detail?: string; state: 'ok' | 'warn' | 'idle' }>;
   actionsUrl?: string;
   healthUrl?: string;
+  smokeCommand?: string;
 } {
   const buildSha = health?.build?.sha;
   const sourceSha = status.head;
+  const upstreamSha = status.upstreamHead;
+  const sourceSynced = sourceSha && upstreamSha ? sourceSha === upstreamSha : undefined;
   const buildMatchesHead = buildSha && sourceSha ? buildSha === sourceSha : undefined;
   const actionsState = githubActionsShipState(actions);
+  const actionsCheckedSha = actions?.checkedSha ?? actions?.headSha;
+  const actionsMatchHead = actionsCheckedSha && sourceSha ? actionsCheckedSha === sourceSha : undefined;
   const hfTarget = health?.huggingFace?.enabled ? health.huggingFace.spaceId ?? health.huggingFace.spaceHost ?? 'configured' : 'local';
-  const healthBaseUrl = health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : undefined);
+  const healthBaseUrl = releaseHealthBaseUrl(health);
+  const healthUrl = healthBaseUrl ? `${healthBaseUrl}/healthz` : undefined;
+  const smokeCommand = healthBaseUrl ? `SMOKE_RETRIES=12 SMOKE_DELAY=5 scripts/hf-space-smoke.sh ${shellQuote(healthBaseUrl)}` : undefined;
   const checks = [
-    { label: 'Actions', value: githubActionsShipLabel(actions), state: actionsState },
-    { label: 'Runtime build', value: buildSha ? shortSha(buildSha) : 'unversioned', state: buildSha ? 'ok' : 'idle' },
-    { label: 'Build vs HEAD', value: buildMatchesHead === undefined ? 'unknown' : buildMatchesHead ? 'match' : 'mismatch', state: buildMatchesHead === undefined ? 'idle' : buildMatchesHead ? 'ok' : 'warn' },
-    { label: 'HF target', value: hfTarget, state: health?.huggingFace?.enabled ? 'ok' : 'idle' }
-  ] satisfies Array<{ label: string; value: string; state: 'ok' | 'warn' | 'idle' }>;
+    {
+      label: 'Source sync',
+      value: sourceSynced === undefined ? 'unknown' : sourceSynced ? 'synced' : 'mismatch',
+      detail: sourceSha && upstreamSha ? `${shortSha(sourceSha)} / ${shortSha(upstreamSha)}` : 'HEAD or upstream SHA not loaded',
+      state: sourceSynced === undefined ? 'idle' : sourceSynced ? 'ok' : 'warn'
+    },
+    {
+      label: 'Actions',
+      value: githubActionsShipLabel(actions),
+      detail: actionsCheckedSha ? `checked ${shortSha(actionsCheckedSha)}${actionsMatchHead === false ? ' (not HEAD)' : ''}` : actions?.error ?? 'workflow evidence not loaded',
+      state: actionsMatchHead === false ? 'warn' : actionsState
+    },
+    {
+      label: 'Runtime build',
+      value: buildSha ? shortSha(buildSha) : 'unversioned',
+      detail: buildSha ? 'reported by /healthz' : 'release image has not reported BUILD_SHA',
+      state: buildSha ? 'ok' : 'idle'
+    },
+    {
+      label: 'Build vs HEAD',
+      value: buildMatchesHead === undefined ? 'unknown' : buildMatchesHead ? 'match' : 'mismatch',
+      detail: sourceSha && buildSha ? `${shortSha(sourceSha)} / ${shortSha(buildSha)}` : 'need HEAD and runtime build SHA',
+      state: buildMatchesHead === undefined ? 'idle' : buildMatchesHead ? 'ok' : 'warn'
+    },
+    {
+      label: 'HF target',
+      value: hfTarget,
+      detail: healthBaseUrl ?? 'No public HF URL loaded',
+      state: health?.huggingFace?.enabled ? 'ok' : 'idle'
+    },
+    {
+      label: 'Smoke',
+      value: smokeCommand ? 'command ready' : 'no target',
+      detail: smokeCommand ?? 'Load an HF target before live smoke',
+      state: 'idle'
+    }
+  ] satisfies Array<{ label: string; value: string; detail?: string; state: 'ok' | 'warn' | 'idle' }>;
 
-  if (actionsState === 'warn' || buildMatchesHead === false) {
+  if (actionsState === 'warn' || actionsMatchHead === false || sourceSynced === false || buildMatchesHead === false) {
     return {
       state: 'blocked',
       label: 'attention',
       detail: 'Post-push verification has a failing or mismatched signal.',
       checks,
       actionsUrl: actions?.htmlUrl,
-      healthUrl: healthBaseUrl ? `${healthBaseUrl.replace(/\/$/, '')}/healthz` : undefined
+      healthUrl,
+      smokeCommand
     };
   }
-  if (actionsState === 'ok' && buildMatchesHead === true && health?.huggingFace?.enabled) {
+  if (actionsState === 'ok' && actionsMatchHead === true && sourceSynced === true && buildMatchesHead === true && health?.huggingFace?.enabled) {
     return {
       state: 'ready',
       label: 'verified',
-      detail: 'GitHub Actions, runtime build SHA, and HF target line up.',
+      detail: 'GitHub Actions, upstream HEAD, runtime build SHA, and HF target line up.',
       checks,
       actionsUrl: actions?.htmlUrl,
-      healthUrl: healthBaseUrl ? `${healthBaseUrl.replace(/\/$/, '')}/healthz` : undefined
+      healthUrl,
+      smokeCommand
     };
   }
   return {
@@ -2406,7 +2478,8 @@ function gitReleaseInfo(status: GitStatusSummary, health?: ServerHealth, actions
     detail: 'Use this after push to confirm Actions and HF runtime evidence.',
     checks,
     actionsUrl: actions?.htmlUrl,
-    healthUrl: healthBaseUrl ? `${healthBaseUrl.replace(/\/$/, '')}/healthz` : undefined
+    healthUrl,
+    smokeCommand
   };
 }
 
