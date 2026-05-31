@@ -2100,8 +2100,9 @@ function ArtifactsTab({
   const [selectedId, setSelectedId] = useState('');
   const [copiedArtifact, setCopiedArtifact] = useState(false);
   const selected = artifacts.find((artifact) => artifact.id === selectedId) ?? artifacts[0];
-  const artifactPrompt = selected ? artifactFeedbackPrompt(selected, project, feedback) : undefined;
+  const artifactPrompt = selected ? artifactFeedbackPrompt(selected, project, feedback) : missingArtifactFeedbackPrompt(project, feedback);
   const loopSteps = artifactLoopSteps(selected, feedback);
+  const hasArtifactFeedbackPrompt = Boolean(artifactPrompt);
 
   async function copyArtifactPrompt() {
     if (!artifactPrompt) return;
@@ -2111,11 +2112,11 @@ function ArtifactsTab({
   }
 
   function handOffArtifactPrompt() {
-    if (!artifactPrompt || !selected) return;
+    if (!artifactPrompt) return;
     onUsePrompt?.({
       prompt: artifactPrompt,
-      threadId: selected.threadId,
-      agentName: selected.kind === 'error' ? 'explorer' : 'worker'
+      threadId: selected?.threadId,
+      agentName: selected ? selected.kind === 'error' ? 'explorer' : 'worker' : 'explorer'
     });
   }
 
@@ -2163,32 +2164,33 @@ function ArtifactsTab({
                 </div>
               </div>
               <FocusedCard card={selected} />
-              <div className="artifact-feedback-card">
-                <div>
-                  <strong>Follow-up feedback</strong>
-                  <span>Artifact notes become the next scoped review or fix task.</span>
-                </div>
-                <textarea
-                  value={feedback}
-                  onChange={(event) => onFeedbackChange(event.target.value)}
-                  placeholder="Example: preserve this diff but refine the empty state copy and verify the artifact still appears here."
-                  rows={3}
-                />
-                <EvidenceLoopStrip
-                  title="Artifact evidence loop"
-                  steps={loopSteps}
-                  summary={selected ? 'Selected output, excerpt, and notes are included.' : 'Select an artifact before handoff.'}
-                  onHandOff={handOffArtifactPrompt}
-                  handoffDisabled={!artifactPrompt || !onUsePrompt}
-                  onCopy={() => void copyArtifactPrompt()}
-                  copyDisabled={!artifactPrompt}
-                  copied={copiedArtifact}
-                />
-              </div>
             </div>
           ) : null}
         </div>
       ) : null}
+
+      <div className="artifact-feedback-card">
+        <div>
+          <strong>Follow-up feedback</strong>
+          <span>{selected ? 'Artifact notes become the next scoped review or fix task.' : 'Describe the expected artifact so an explorer can trace why it is missing.'}</span>
+        </div>
+        <textarea
+          value={feedback}
+          onChange={(event) => onFeedbackChange(event.target.value)}
+          placeholder={selected ? 'Example: preserve this diff but refine the empty state copy and verify the artifact still appears here.' : 'Example: the run should have produced a deploy screenshot or diff artifact; trace the event stream and restore the artifact capture path.'}
+          rows={3}
+        />
+        <EvidenceLoopStrip
+          title="Artifact evidence loop"
+          steps={loopSteps}
+          summary={selected ? 'Selected output, excerpt, and notes are included.' : hasArtifactFeedbackPrompt ? 'Missing artifact notes are ready for diagnosis.' : 'Record the expected artifact before handoff.'}
+          onHandOff={handOffArtifactPrompt}
+          handoffDisabled={!hasArtifactFeedbackPrompt || !onUsePrompt}
+          onCopy={() => void copyArtifactPrompt()}
+          copyDisabled={!hasArtifactFeedbackPrompt}
+          copied={copiedArtifact}
+        />
+      </div>
     </section>
   );
 }
@@ -2202,8 +2204,8 @@ function artifactCards(cards: TimelineCard[]): TimelineCard[] {
 
 function artifactLoopSteps(card: TimelineCard | undefined, feedback: string): EvidenceLoopStep[] {
   const notesReady = feedback.trim().length > 0;
-  const owner = card?.kind === 'error' ? '#explorer' : '#worker';
-  const verify = card ? artifactVerificationLabel(card) : 'select artifact';
+  const owner = card ? card.kind === 'error' ? '#explorer' : '#worker' : '#explorer';
+  const verify = card ? artifactVerificationLabel(card) : notesReady ? 'trace missing output' : 'record expectation';
   return [
     {
       label: 'Artifact',
@@ -2218,12 +2220,12 @@ function artifactLoopSteps(card: TimelineCard | undefined, feedback: string): Ev
     {
       label: 'Owner',
       value: owner,
-      tone: card ? 'ok' : 'idle'
+      tone: card || notesReady ? 'ok' : 'idle'
     },
     {
       label: 'Verify',
       value: verify,
-      tone: card ? 'ok' : 'idle'
+      tone: card ? 'ok' : notesReady ? 'warn' : 'idle'
     }
   ];
 }
@@ -2494,6 +2496,25 @@ function artifactFeedbackPrompt(card: TimelineCard, project: Project | undefined
     artifactExcerpt(card),
     '',
     'Please inspect the source files before editing, keep the change scoped, and verify the affected UI or workflow.'
+  ];
+  return lines.join('\n');
+}
+
+function missingArtifactFeedbackPrompt(project: Project | undefined, feedback: string): string | undefined {
+  const feedbackText = feedback.trim();
+  if (!feedbackText) return undefined;
+  const lines = [
+    'Investigate a missing or expected thread artifact.',
+    '',
+    'Recommended owner: #explorer for diagnosis before implementation.',
+    '',
+    `Project: ${project?.name ?? 'current project'}`,
+    'Artifact: none selected or none produced',
+    '',
+    'Expected artifact feedback:',
+    feedbackText,
+    '',
+    'Please inspect the thread event stream, artifact extraction rules, and source files before editing. Identify whether the artifact was never produced, was filtered out, or is not represented in the Artifacts pane, then implement the smallest complete fix and verify the artifact appears in the pane.'
   ];
   return lines.join('\n');
 }
