@@ -60,6 +60,7 @@ export function ManagementDrawer(props: {
             threads={props.threads}
             approvals={props.approvals}
             gitOperations={props.gitOperations}
+            gitStatus={props.gitStatus}
             githubActions={props.githubActions}
             health={props.health}
             onOpenInspectorTab={props.onOpenInspectorTab}
@@ -73,7 +74,9 @@ export function ManagementDrawer(props: {
             threads={props.threads}
             cards={props.cards}
             errors={props.errors}
+            gitStatus={props.gitStatus}
             githubActions={props.githubActions}
+            health={props.health}
             onOpenInspectorTab={props.onOpenInspectorTab}
             onSelectThread={props.onSelectThread}
           />
@@ -207,19 +210,21 @@ function AutomationsPanel(props: {
   threads: ThreadSummary[];
   approvals: ApprovalRequest[];
   gitOperations: GitOperationRecord[];
+  gitStatus?: GitStatusSummary;
   githubActions?: GitHubActionsSummary;
   health?: ServerHealth;
   onOpenInspectorTab?: (tab: InspectorTab) => void;
 }) {
   const activeThreads = props.threads.filter((thread) => isActiveThread(thread.status)).length;
   const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed').length;
-  const releaseState = props.githubActions?.state ?? 'unknown';
+  const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
+  const automationAttention = props.approvals.length > 0 || failedGit > 0 || release.state === 'attention';
   const rows = [
     {
       id: 'release',
-      title: 'Release verification',
-      detail: `${githubActionsValue(props.githubActions)} · ${props.health?.huggingFace?.publicUrl ?? props.health?.huggingFace?.spaceHost ?? 'no Space target'}`,
-      state: releaseState === 'success' ? 'ready' : releaseState === 'failure' ? 'attention' : 'waiting',
+      title: 'Release evidence packet',
+      detail: release.detail,
+      state: release.state,
       action: () => props.onOpenInspectorTab?.('git')
     },
     {
@@ -252,13 +257,14 @@ function AutomationsPanel(props: {
           <div className="section-title">Automations</div>
           <div className="subtle">Release, approval, thread, and Git supervision lanes.</div>
         </div>
-        <span className={`capability-state ${props.approvals.length || failedGit ? 'warning' : 'ready'}`}>{props.approvals.length || failedGit ? 'attention' : 'ready'}</span>
+        <span className={`capability-state ${automationAttention ? 'warning' : 'ready'}`}>{automationAttention ? 'attention' : release.label}</span>
       </div>
       <CapabilitySummary
         items={[
           { label: 'Active', value: String(activeThreads), tone: activeThreads ? 'warn' : undefined },
           { label: 'Approvals', value: String(props.approvals.length), tone: props.approvals.length ? 'warn' : undefined },
-          { label: 'Actions', value: props.githubActions ? githubActionsValue(props.githubActions) : 'loading', tone: props.githubActions?.state === 'failure' ? 'warn' : props.githubActions?.state === 'success' ? 'ok' : undefined }
+          { label: 'Actions', value: props.githubActions ? githubActionsValue(props.githubActions) : 'loading', tone: props.githubActions?.state === 'failure' ? 'warn' : props.githubActions?.state === 'success' ? 'ok' : undefined },
+          { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' }
         ]}
       />
       <div className="automation-lanes">
@@ -284,13 +290,17 @@ function TriagePanel(props: {
   threads: ThreadSummary[];
   cards: TimelineCard[];
   errors: string[];
+  gitStatus?: GitStatusSummary;
   githubActions?: GitHubActionsSummary;
+  health?: ServerHealth;
   onOpenInspectorTab?: (tab: InspectorTab) => void;
   onSelectThread?: (threadId: string) => void | Promise<void>;
 }) {
   const failedThreads = props.threads.filter((thread) => isFailedThread(thread.status));
   const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed');
   const reviewCards = props.cards.filter((card) => card.kind === 'fileChange' || card.kind === 'error').slice(-8).reverse();
+  const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
+  const changedFiles = props.gitStatus?.isRepo ? props.gitStatus.files.length : 0;
   const items: Array<{ id: string; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; tab?: InspectorTab; threadId?: string }> = [];
 
   for (const approval of props.approvals.slice(0, 4)) {
@@ -331,6 +341,24 @@ function TriagePanel(props: {
       tab: 'git'
     });
   }
+  if (changedFiles > 0) {
+    items.push({
+      id: 'git-review-package',
+      title: 'Review package changed',
+      detail: `${changedFiles} changed file${changedFiles === 1 ? '' : 's'} before PR/release handoff`,
+      tone: 'warn',
+      tab: 'git'
+    });
+  }
+  if (release.state !== 'ready') {
+    items.push({
+      id: 'release-evidence',
+      title: release.state === 'attention' ? 'Release evidence attention' : 'Release evidence partial',
+      detail: release.detail,
+      tone: release.state === 'attention' ? 'attention' : 'warn',
+      tab: 'git'
+    });
+  }
   for (const card of reviewCards) {
     items.push({
       id: `card-${card.id}`,
@@ -357,6 +385,7 @@ function TriagePanel(props: {
         items={[
           { label: 'Approvals', value: String(props.approvals.length), tone: props.approvals.length ? 'warn' : undefined },
           { label: 'Failures', value: String(failedThreads.length + failedGit.length + props.errors.length), tone: failedThreads.length + failedGit.length + props.errors.length ? 'warn' : undefined },
+          { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' },
           { label: 'Decisions', value: String(props.approvalHistory.length) }
         ]}
       />
@@ -495,6 +524,38 @@ function GitHubActionsRuns(props: { actions: GitHubActionsSummary }) {
       ))}
     </div>
   );
+}
+
+function releaseEvidenceSummary(gitStatus?: GitStatusSummary, health?: ServerHealth, actions?: GitHubActionsSummary): {
+  state: 'ready' | 'waiting' | 'attention';
+  label: 'verified' | 'partial' | 'attention';
+  detail: string;
+} {
+  const changedFiles = gitStatus?.isRepo ? gitStatus.files.length : 0;
+  const buildSha = health?.build?.sha;
+  const gitHead = gitStatus?.head;
+  const upstreamHead = gitStatus?.upstreamHead;
+  const sourceSynced = gitHead && upstreamHead ? gitHead === upstreamHead : undefined;
+  const buildMatchesGit = buildSha && gitHead ? buildSha === gitHead : undefined;
+  const actionsState = actions ? githubActionsCheckState(actions) : undefined;
+  const hfTarget = health?.huggingFace?.publicUrl ?? health?.huggingFace?.spaceHost ?? 'no HF target';
+
+  if (actionsState === false) {
+    return { state: 'attention', label: 'attention', detail: `GitHub Actions failing for ${actions?.checkedSha ? shortSha(actions.checkedSha) : 'current HEAD'}.` };
+  }
+  if (buildMatchesGit === false) {
+    return { state: 'attention', label: 'attention', detail: `Runtime build ${buildSha ? shortSha(buildSha) : 'unknown'} does not match HEAD ${gitHead ? shortSha(gitHead) : 'unknown'}.` };
+  }
+  if (sourceSynced === false) {
+    return { state: 'attention', label: 'attention', detail: `Local HEAD ${gitHead ? shortSha(gitHead) : 'unknown'} differs from upstream ${upstreamHead ? shortSha(upstreamHead) : 'unknown'}.` };
+  }
+  if (changedFiles > 0) {
+    return { state: 'waiting', label: 'partial', detail: `${changedFiles} changed file${changedFiles === 1 ? '' : 's'} need review before release evidence is final.` };
+  }
+  if (actionsState === true && buildMatchesGit === true && health?.huggingFace?.enabled) {
+    return { state: 'ready', label: 'verified', detail: `Actions, HEAD, runtime build, and ${hfTarget} line up.` };
+  }
+  return { state: 'waiting', label: 'partial', detail: `${githubActionsValue(actions)} Actions · runtime ${buildSha ? shortSha(buildSha) : 'unversioned'} · ${hfTarget}.` };
 }
 
 function shortSha(value: string): string {
