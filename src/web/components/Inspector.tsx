@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DiffBlock, type DiffLineSelection } from './DiffBlock.js';
 import { Icon } from './Icon.js';
 import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
@@ -17,6 +17,24 @@ type GitReviewFinding = {
   lineText: string;
   note: string;
   kind: string;
+};
+
+type BrowserTarget = {
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
+  source: string;
+  cardId?: string;
+  capturedAt?: number;
+  kind: 'local' | 'remote' | 'space';
+};
+
+type ReviewEvidencePacket = {
+  browserTargets: BrowserTarget[];
+  browserFeedback: string;
+  artifacts: TimelineCard[];
+  artifactFeedback: string;
 };
 
 export function Inspector(props: {
@@ -55,12 +73,25 @@ export function Inspector(props: {
   open?: boolean;
 }) {
   const [internalTab, setInternalTab] = useState<InspectorTab>('review');
+  const [browserFeedback, setBrowserFeedback] = useState('');
+  const [artifactFeedback, setArtifactFeedback] = useState('');
   const activeTab = props.tab ?? internalTab;
   const setActiveTab = props.onTabChange ?? setInternalTab;
   const relatedApproval = props.card?.id ? props.approvals.find((a) => a.itemId === props.card?.id) : undefined;
   const plans = props.cards.filter((card) => card.kind === 'plan' || card.kind === 'reasoning');
   const diffs = props.cards.filter((card) => card.kind === 'fileChange');
   const commands = props.cards.filter((card) => card.kind === 'command');
+  const reviewEvidence: ReviewEvidencePacket = {
+    browserTargets: browserTargets(props.cards, props.health),
+    browserFeedback,
+    artifacts: artifactCards(props.cards),
+    artifactFeedback
+  };
+
+  useEffect(() => {
+    setBrowserFeedback('');
+    setArtifactFeedback('');
+  }, [props.project?.id, props.thread?.id]);
 
   return (
     <aside className={`inspector codex-inspector ${props.open === false ? 'closed' : ''}`}>
@@ -105,6 +136,7 @@ export function Inspector(props: {
           operations={props.gitOperations ?? []}
           githubActions={props.githubActions}
           health={props.health}
+          reviewEvidence={reviewEvidence}
           selectedPath={props.selectedGitPath}
           loading={Boolean(props.projectPanelLoading)}
           actionBusy={Boolean(props.gitActionBusy)}
@@ -118,8 +150,8 @@ export function Inspector(props: {
         />
       ) : null}
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} onFocusCard={props.onFocusCard} /> : null}
+      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} feedback={browserFeedback} onFeedbackChange={setBrowserFeedback} onFocusCard={props.onFocusCard} /> : null}
+      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} feedback={artifactFeedback} onFeedbackChange={setArtifactFeedback} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} rawEvents={props.rawEvents ?? []} /> : null}
     </aside>
   );
@@ -397,9 +429,22 @@ function TerminalTab({ commands, focusedCard, onFocusCard }: { commands: Timelin
   );
 }
 
-function BrowserTab({ cards, project, health, onFocusCard }: { cards: TimelineCard[]; project?: Project; health?: ServerHealth; onFocusCard?: (cardId: string) => void }) {
+function BrowserTab({
+  cards,
+  project,
+  health,
+  feedback,
+  onFeedbackChange,
+  onFocusCard
+}: {
+  cards: TimelineCard[];
+  project?: Project;
+  health?: ServerHealth;
+  feedback: string;
+  onFeedbackChange: (value: string) => void;
+  onFocusCard?: (cardId: string) => void;
+}) {
   const [selectedUrl, setSelectedUrl] = useState('');
-  const [feedback, setFeedback] = useState('');
   const [copiedFeedback, setCopiedFeedback] = useState(false);
   const targets = browserTargets(cards, health);
   const activeTarget = targets.find((target) => target.url === selectedUrl) ?? targets[0];
@@ -484,7 +529,7 @@ function BrowserTab({ cards, project, health, onFocusCard }: { cards: TimelineCa
         </div>
         <textarea
           value={feedback}
-          onChange={(event) => setFeedback(event.target.value)}
+          onChange={(event) => onFeedbackChange(event.target.value)}
           placeholder="Example: the mobile toolbar overlaps the preview; tighten spacing and verify at 390px."
           rows={3}
         />
@@ -653,6 +698,7 @@ function GitTab(props: {
   operations: GitOperationRecord[];
   githubActions?: GitHubActionsSummary;
   health?: ServerHealth;
+  reviewEvidence: ReviewEvidencePacket;
   selectedPath?: string;
   loading: boolean;
   actionBusy: boolean;
@@ -683,9 +729,9 @@ function GitTab(props: {
   const shipInfo = status?.isRepo ? gitShipInfo(status) : undefined;
   const releaseInfo = status?.isRepo ? gitReleaseInfo(status, props.health, props.githubActions) : undefined;
   const draftMessage = draftCommitMessage(files);
-  const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage, reviewFindings) : undefined;
+  const reviewBrief = status?.isRepo ? gitReviewBrief(status, props.githubActions, props.health, draftMessage, reviewFindings, props.reviewEvidence) : undefined;
   const reviewPrompt = status?.isRepo ? gitReviewPrompt(status, reviewFindings, draftMessage) : undefined;
-  const prBody = status?.isRepo ? gitPrBody(status, props.githubActions, props.health, draftMessage, reviewFindings, shipInfo?.prNote, releaseInfo?.detail) : undefined;
+  const prBody = status?.isRepo ? gitPrBody(status, props.githubActions, props.health, draftMessage, reviewFindings, props.reviewEvidence, shipInfo?.prNote, releaseInfo?.detail) : undefined;
 
   async function copyPushCommand(command?: string) {
     if (!command) return;
@@ -889,6 +935,10 @@ function GitTab(props: {
                 <span>Findings</span>
                 <strong>{reviewFindings.length}</strong>
               </button>
+            </div>
+            <div className="git-review-hint">
+              Evidence packet includes {props.reviewEvidence.browserTargets.length} browser target{props.reviewEvidence.browserTargets.length === 1 ? '' : 's'}, {props.reviewEvidence.artifacts.length} artifact{props.reviewEvidence.artifacts.length === 1 ? '' : 's'}
+              {props.reviewEvidence.browserFeedback.trim() || props.reviewEvidence.artifactFeedback.trim() ? ', and saved observation notes.' : '.'}
             </div>
             {draftMessage ? <code className="git-draft-message">{draftMessage}</code> : null}
             {reviewFindings.length > 0 ? (
@@ -1109,7 +1159,7 @@ function commitScope(paths: string[]): 'docs' | 'styles' | 'server' | 'release' 
   return 'mixed';
 }
 
-function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth, draftMessage?: string, findings: GitReviewFinding[] = []): string {
+function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth, draftMessage?: string, findings: GitReviewFinding[] = [], evidence?: ReviewEvidencePacket): string {
   const staged = status.files.filter(canUnstageFile).map((file) => file.path);
   const unstaged = status.files.filter(canStageFile).map((file) => file.path);
   const lines = [
@@ -1130,6 +1180,9 @@ function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary
     '',
     'Inline review findings:',
     ...reviewFindingLines(findings),
+    '',
+    'Browser and artifact evidence:',
+    ...reviewEvidenceSummaryLines(evidence),
     '',
     'Verification evidence:',
     `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
@@ -1166,6 +1219,7 @@ function gitPrBody(
   health?: ServerHealth,
   draftMessage?: string,
   findings: GitReviewFinding[] = [],
+  evidence?: ReviewEvidencePacket,
   shipNote?: string,
   releaseDetail?: string
 ): string {
@@ -1192,6 +1246,12 @@ function gitPrBody(
     '## Inline Review Findings',
     ...reviewFindingLines(findings),
     '',
+    '## Browser Evidence',
+    ...browserEvidenceLines(evidence),
+    '',
+    '## Artifact Evidence',
+    ...artifactEvidenceLines(evidence),
+    '',
     '## Validation',
     `- GitHub Actions: ${githubActionsShipLabel(actions)}`,
     `- Runtime build SHA: ${buildSha ?? 'unknown'}`,
@@ -1207,6 +1267,34 @@ function gitPrBody(
     '- [ ] Run the HF smoke check before calling the release complete.'
   ];
   return lines.filter((line): line is string => line !== undefined).join('\n');
+}
+
+function reviewEvidenceSummaryLines(evidence?: ReviewEvidencePacket): string[] {
+  if (!evidence) return ['- none loaded'];
+  const browserNotes = evidence.browserFeedback.trim();
+  const artifactNotes = evidence.artifactFeedback.trim();
+  return [
+    `- Browser targets: ${evidence.browserTargets.length}`,
+    `- Artifacts: ${evidence.artifacts.length}`,
+    `- Browser notes: ${browserNotes || 'none recorded'}`,
+    `- Artifact notes: ${artifactNotes || 'none recorded'}`
+  ];
+}
+
+function browserEvidenceLines(evidence?: ReviewEvidencePacket): string[] {
+  if (!evidence || (evidence.browserTargets.length === 0 && !evidence.browserFeedback.trim())) return ['- none captured'];
+  const lines = evidence.browserTargets.slice(0, 6).map((target) => `- ${target.title}: ${target.url} (${targetKindLabel(target.kind)} · ${target.source})`);
+  if (evidence.browserTargets.length > lines.length) lines.push(`- ${evidence.browserTargets.length - lines.length} more browser targets`);
+  lines.push(`- Observed feedback: ${evidence.browserFeedback.trim() || 'none recorded'}`);
+  return lines;
+}
+
+function artifactEvidenceLines(evidence?: ReviewEvidencePacket): string[] {
+  if (!evidence || (evidence.artifacts.length === 0 && !evidence.artifactFeedback.trim())) return ['- none captured'];
+  const lines = evidence.artifacts.slice(0, 8).map((artifact) => `- ${artifactKind(artifact)}: ${artifact.filePath ?? artifact.title}`);
+  if (evidence.artifacts.length > lines.length) lines.push(`- ${evidence.artifacts.length - lines.length} more artifacts`);
+  lines.push(`- Follow-up feedback: ${evidence.artifactFeedback.trim() || 'none recorded'}`);
+  return lines;
 }
 
 function reviewFindingLines(findings: GitReviewFinding[]): string[] {
@@ -1432,16 +1520,24 @@ function shortSha(value: string): string {
   return value.slice(0, 12);
 }
 
-function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; project?: Project; onFocusCard?: (cardId: string) => void }) {
-  const artifacts = cards
-    .filter((card) => card.kind === 'fileChange' || card.kind === 'agent' || card.kind === 'plan' || (card.kind === 'command' && (card.stdout || card.stderr)))
-    .slice(-12)
-    .reverse();
+function ArtifactsTab({
+  cards,
+  project,
+  feedback,
+  onFeedbackChange,
+  onFocusCard
+}: {
+  cards: TimelineCard[];
+  project?: Project;
+  feedback: string;
+  onFeedbackChange: (value: string) => void;
+  onFocusCard?: (cardId: string) => void;
+}) {
+  const artifacts = artifactCards(cards);
   const [selectedId, setSelectedId] = useState('');
-  const [artifactFeedback, setArtifactFeedback] = useState('');
   const [copiedArtifact, setCopiedArtifact] = useState(false);
   const selected = artifacts.find((artifact) => artifact.id === selectedId) ?? artifacts[0];
-  const artifactPrompt = selected ? artifactFeedbackPrompt(selected, project, artifactFeedback) : undefined;
+  const artifactPrompt = selected ? artifactFeedbackPrompt(selected, project, feedback) : undefined;
 
   async function copyArtifactPrompt() {
     if (!artifactPrompt) return;
@@ -1501,8 +1597,8 @@ function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; 
                   <span>Turn this output into the next review or fix task.</span>
                 </div>
                 <textarea
-                  value={artifactFeedback}
-                  onChange={(event) => setArtifactFeedback(event.target.value)}
+                  value={feedback}
+                  onChange={(event) => onFeedbackChange(event.target.value)}
                   placeholder="Example: preserve this diff but refine the empty state copy and verify the artifact still appears here."
                   rows={3}
                 />
@@ -1513,6 +1609,13 @@ function ArtifactsTab({ cards, project, onFocusCard }: { cards: TimelineCard[]; 
       ) : null}
     </section>
   );
+}
+
+function artifactCards(cards: TimelineCard[]): TimelineCard[] {
+  return cards
+    .filter((card) => card.kind === 'fileChange' || card.kind === 'agent' || card.kind === 'plan' || (card.kind === 'command' && (card.stdout || card.stderr)))
+    .slice(-12)
+    .reverse();
 }
 
 function RawTab(props: { card?: TimelineCard; thread?: ThreadSummary; project?: Project; rawEvents: RawEventRecord[] }) {
@@ -1646,17 +1749,6 @@ function diffStats(diff?: string): { added: number; removed: number; label: stri
   }
   return { added, removed, label: `+${added} −${removed}` };
 }
-
-type BrowserTarget = {
-  id: string;
-  title: string;
-  subtitle: string;
-  url: string;
-  source: string;
-  cardId?: string;
-  capturedAt?: number;
-  kind: 'local' | 'remote' | 'space';
-};
 
 function browserTargets(cards: TimelineCard[], health?: ServerHealth): BrowserTarget[] {
   const seen = new Set<string>();
