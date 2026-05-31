@@ -109,12 +109,24 @@ export function Inspector(props: {
   const plans = props.cards.filter((card) => card.kind === 'plan' || card.kind === 'reasoning');
   const diffs = props.cards.filter((card) => card.kind === 'fileChange');
   const commands = props.cards.filter((card) => card.kind === 'command');
+  const rawEvents = props.rawEvents ?? [];
   const reviewEvidence: ReviewEvidencePacket = {
     browserTargets: browserTargets(props.cards, props.health),
     browserFeedback: props.browserFeedback,
     artifacts: artifactCards(props.cards),
     artifactFeedback: props.artifactFeedback
   };
+  const panelCount = inspectorPanelCount(activeTab, {
+    plans,
+    diffs,
+    commands,
+    reviewEvidence,
+    rawEvents,
+    gitStatus: props.gitStatus,
+    fileTree: props.fileTree,
+    projectPanelLoading: props.projectPanelLoading,
+    projectPanelError: props.projectPanelError
+  });
 
   useEffect(() => {
     setReviewFindings([]);
@@ -127,7 +139,7 @@ export function Inspector(props: {
           <div className="section-title">Progress</div>
           <strong>{tabTitle(activeTab)}</strong>
         </div>
-        <span className="side-panel-count">{diffs.length} files</span>
+        <span className="side-panel-count">{panelCount}</span>
       </div>
 
       <div className="inspector-tabs codex-inspector-tabs">
@@ -193,9 +205,51 @@ export function Inspector(props: {
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} feedback={props.browserFeedback} onFeedbackChange={props.onBrowserFeedbackChange} onFocusCard={props.onFocusCard} onUsePrompt={props.onUsePrompt} /> : null}
       {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} feedback={props.artifactFeedback} onFeedbackChange={props.onArtifactFeedbackChange} onFocusCard={props.onFocusCard} onUsePrompt={props.onUsePrompt} /> : null}
-      {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} rawEvents={props.rawEvents ?? []} /> : null}
+      {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} rawEvents={rawEvents} /> : null}
     </aside>
   );
+}
+
+function inspectorPanelCount(tab: InspectorTab, input: {
+  plans: TimelineCard[];
+  diffs: TimelineCard[];
+  commands: TimelineCard[];
+  reviewEvidence: ReviewEvidencePacket;
+  rawEvents: RawEventRecord[];
+  gitStatus?: GitStatusSummary;
+  fileTree?: FileTreeNode;
+  projectPanelLoading?: boolean;
+  projectPanelError?: string;
+}): string {
+  switch (tab) {
+    case 'review': {
+      const changed = input.gitStatus?.isRepo ? input.gitStatus.files.length : input.diffs.length;
+      return changed === 0 ? 'clean' : pluralCount(changed, 'file');
+    }
+    case 'plan':
+      return input.plans.length === 0 ? 'no plan' : pluralCount(input.plans.length, 'item');
+    case 'diff':
+      return input.diffs.length === 0 ? 'no diffs' : pluralCount(input.diffs.length, 'file');
+    case 'files':
+      if (input.projectPanelLoading) return 'loading';
+      if (input.projectPanelError) return 'attention';
+      return input.fileTree ? 'tree loaded' : 'no tree';
+    case 'git':
+      if (!input.gitStatus?.isRepo) return 'no repo';
+      return input.gitStatus.files.length === 0 ? 'clean' : pluralCount(input.gitStatus.files.length, 'file');
+    case 'terminal':
+      return input.commands.length === 0 ? 'no runs' : pluralCount(input.commands.length, 'run');
+    case 'browser':
+      return input.reviewEvidence.browserTargets.length === 0 ? 'no target' : pluralCount(input.reviewEvidence.browserTargets.length, 'target');
+    case 'artifacts':
+      return input.reviewEvidence.artifacts.length === 0 ? 'no artifacts' : pluralCount(input.reviewEvidence.artifacts.length, 'item');
+    case 'raw':
+      return input.rawEvents.length === 0 ? 'no events' : pluralCount(input.rawEvents.length, 'event');
+  }
+}
+
+function pluralCount(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 function ReviewTab(props: {
