@@ -1,7 +1,14 @@
+import { useState } from 'react';
 import type { AccountSummary, AgentSummary, ApprovalRecord, ApprovalRequest, CodexWebConfig, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { Icon } from './Icon.js';
 
 const managementTabs: ManagementTab[] = ['skills', 'agents', 'automations', 'triage', 'settings'];
+
+type ReleaseEvidenceSummary = {
+  state: 'ready' | 'waiting' | 'attention';
+  label: 'verified' | 'partial' | 'attention';
+  detail: string;
+};
 
 export function ManagementDrawer(props: {
   open: boolean;
@@ -218,6 +225,7 @@ function AutomationsPanel(props: {
   const activeThreads = props.threads.filter((thread) => isActiveThread(thread.status)).length;
   const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed').length;
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
+  const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const automationAttention = props.approvals.length > 0 || failedGit > 0 || release.state === 'attention';
   const rows = [
     {
@@ -257,7 +265,10 @@ function AutomationsPanel(props: {
           <div className="section-title">Automations</div>
           <div className="subtle">Release, approval, thread, and Git supervision lanes.</div>
         </div>
-        <span className={`capability-state ${automationAttention ? 'warning' : 'ready'}`}>{automationAttention ? 'attention' : release.label}</span>
+        <div className="management-head-actions">
+          <CopyReleasePromptButton prompt={releasePrompt} />
+          <span className={`capability-state ${automationAttention ? 'warning' : 'ready'}`}>{automationAttention ? 'attention' : release.label}</span>
+        </div>
       </div>
       <CapabilitySummary
         items={[
@@ -300,6 +311,7 @@ function TriagePanel(props: {
   const failedGit = props.gitOperations.filter((operation) => operation.status === 'failed');
   const reviewCards = props.cards.filter((card) => card.kind === 'fileChange' || card.kind === 'error').slice(-8).reverse();
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
+  const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const changedFiles = props.gitStatus?.isRepo ? props.gitStatus.files.length : 0;
   const items: Array<{ id: string; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; tab?: InspectorTab; threadId?: string }> = [];
 
@@ -379,7 +391,10 @@ function TriagePanel(props: {
           <div className="section-title">Triage</div>
           <div className="subtle">Approvals, failures, review work, and release risks.</div>
         </div>
-        <span className={`capability-state ${visibleItems.some((item) => item.tone !== 'ready') ? 'warning' : 'ready'}`}>{visibleItems.length || 'clear'}</span>
+        <div className="management-head-actions">
+          <CopyReleasePromptButton prompt={releasePrompt} />
+          <span className={`capability-state ${visibleItems.some((item) => item.tone !== 'ready') ? 'warning' : 'ready'}`}>{visibleItems.length || 'clear'}</span>
+        </div>
       </div>
       <CapabilitySummary
         items={[
@@ -416,6 +431,22 @@ function TriagePanel(props: {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function CopyReleasePromptButton(props: { prompt: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyPrompt() {
+    await copyText(props.prompt);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  return (
+    <button type="button" className={`small release-copy-button ${copied ? 'primary' : 'ghost'}`} onClick={() => void copyPrompt()} title="Copy release verification prompt">
+      {copied ? 'Copied' : 'Copy verification prompt'}
+    </button>
   );
 }
 
@@ -526,11 +557,7 @@ function GitHubActionsRuns(props: { actions: GitHubActionsSummary }) {
   );
 }
 
-function releaseEvidenceSummary(gitStatus?: GitStatusSummary, health?: ServerHealth, actions?: GitHubActionsSummary): {
-  state: 'ready' | 'waiting' | 'attention';
-  label: 'verified' | 'partial' | 'attention';
-  detail: string;
-} {
+function releaseEvidenceSummary(gitStatus?: GitStatusSummary, health?: ServerHealth, actions?: GitHubActionsSummary): ReleaseEvidenceSummary {
   const changedFiles = gitStatus?.isRepo ? gitStatus.files.length : 0;
   const buildSha = health?.build?.sha;
   const gitHead = gitStatus?.head;
@@ -556,6 +583,85 @@ function releaseEvidenceSummary(gitStatus?: GitStatusSummary, health?: ServerHea
     return { state: 'ready', label: 'verified', detail: `Actions, HEAD, runtime build, and ${hfTarget} line up.` };
   }
   return { state: 'waiting', label: 'partial', detail: `${githubActionsValue(actions)} Actions · runtime ${buildSha ? shortSha(buildSha) : 'unversioned'} · ${hfTarget}.` };
+}
+
+function releaseVerificationPrompt(gitStatus: GitStatusSummary | undefined, health: ServerHealth | undefined, actions: GitHubActionsSummary | undefined, release: ReleaseEvidenceSummary): string {
+  const files = gitStatus?.isRepo ? gitStatus.files : [];
+  const changedFileLines = files.length
+    ? files.slice(0, 14).map((file) => `- ${file.status || `${file.index}${file.workingTree}`.trim() || 'changed'} ${file.path}${file.oldPath ? ` (from ${file.oldPath})` : ''}`)
+    : ['- none'];
+  if (files.length > changedFileLines.length) {
+    changedFileLines.push(`- ... ${files.length - changedFileLines.length} more`);
+  }
+
+  const actionLines = actions?.runs.length
+    ? actions.runs.slice(0, 6).map((run) => `- ${run.name}: ${run.status ?? 'unknown'} / ${run.conclusion ?? 'pending'} · ${run.headSha ? shortSha(run.headSha) : 'unknown sha'}${run.htmlUrl ? ` · ${run.htmlUrl}` : ''}`)
+    : ['- no workflow runs loaded'];
+
+  const hfUrl = health?.huggingFace?.publicUrl ?? (health?.huggingFace?.spaceHost ? `https://${health.huggingFace.spaceHost}` : undefined);
+  const smokeTarget = hfUrl ?? '<HF Space URL>';
+
+  return [
+    'Continue release verification for Codex-Platform.',
+    '',
+    'Goal:',
+    '- Prove the GitHub commit, GitHub Actions result, Hugging Face Space runtime, and local review package line up before calling the release safe.',
+    '',
+    'Current release evidence:',
+    `- State: ${release.label} (${release.state})`,
+    `- Detail: ${release.detail}`,
+    `- Branch: ${gitStatus?.branch ?? 'unknown'}`,
+    `- HEAD: ${gitStatus?.head ?? 'unknown'}`,
+    `- Upstream: ${gitStatus?.upstream ?? 'unknown'}`,
+    `- Upstream HEAD: ${gitStatus?.upstreamHead ?? 'unknown'}`,
+    `- Remote: ${gitStatus?.remoteUrl ?? 'unknown'}`,
+    `- Changed files: ${files.length}`,
+    `- GitHub Actions: ${githubActionsValue(actions)}; ${githubActionsDetail(actions)}`,
+    `- Actions checked SHA: ${actions?.checkedSha ?? actions?.headSha ?? 'unknown'}`,
+    `- Runtime build SHA: ${health?.build?.sha ?? 'unknown'}`,
+    `- HF enabled: ${health?.huggingFace?.enabled ? 'yes' : 'no'}`,
+    `- HF space: ${health?.huggingFace?.spaceId ?? health?.huggingFace?.spaceHost ?? 'unknown'}`,
+    `- HF URL: ${hfUrl ?? 'unknown'}`,
+    '',
+    'Changed files:',
+    ...changedFileLines,
+    '',
+    'Recent GitHub Actions runs:',
+    ...actionLines,
+    '',
+    'Required next actions:',
+    '1. Inspect the changed review package and confirm no unrelated files, secrets, local-only files, or HFS boundary violations are included.',
+    '2. Run lightweight local gates: git diff --check; npm run typecheck; npm run build:web; npm run build:server; scripts/static-check.sh; bash -n scripts/hf-entrypoint.sh scripts/hf-healthcheck.sh scripts/hf-space-smoke.sh cloud/hfs/export_space_bundle.sh.',
+    '3. Export the HFS bundle with cloud/hfs/export_space_bundle.sh and confirm it does not contain .env.local, local, dist, node_modules, .playwright-cli, or output.',
+    '4. Commit and push to GitHub only after the review package is clean.',
+    '5. Watch GitHub CI and HF Deploy for the pushed commit until both complete successfully.',
+    `6. Poll ${smokeTarget}/healthz until build.sha matches the pushed commit SHA.`,
+    `7. Run SMOKE_RETRIES=12 SMOKE_DELAY=5 scripts/hf-space-smoke.sh ${smokeTarget}.`,
+    '8. Report the verified commit SHA, CI run, HF deploy run, healthz build.sha, smoke result, and any residual risk.'
+  ].join('\n');
+}
+
+async function copyText(value: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // Fall back to the legacy selection path below.
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return document.execCommand('copy');
+  } finally {
+    textarea.remove();
+  }
 }
 
 function shortSha(value: string): string {

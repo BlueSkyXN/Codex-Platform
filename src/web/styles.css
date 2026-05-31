@@ -4947,6 +4947,28 @@ button,
   gap: 12px;
 }
 
+.automation-panel .pane-header > div:first-child,
+.triage-panel .pane-header > div:first-child {
+  min-width: 0;
+}
+
+.management-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.release-copy-button {
+  max-width: 190px;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+}
+
 .automation-lanes,
 .triage-list {
   display: grid;
