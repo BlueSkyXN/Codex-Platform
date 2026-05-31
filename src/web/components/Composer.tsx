@@ -50,6 +50,8 @@ export function Composer(props: {
   gitDiff?: GitDiffResult;
   githubActions?: GitHubActionsSummary;
   health?: ServerHealth;
+  browserFeedback?: string;
+  artifactFeedback?: string;
   skillsLoading: boolean;
   agentsLoading?: boolean;
   skillsError?: string;
@@ -83,6 +85,8 @@ export function Composer(props: {
   const lastTerminalCard = terminalCards.at(-1);
   const browserTargets = useMemo(() => contextBrowserTargets(props.cards ?? [], props.health), [props.cards, props.health]);
   const artifacts = useMemo(() => contextArtifactCards(props.cards ?? []), [props.cards]);
+  const browserFeedback = props.browserFeedback?.trim() ?? '';
+  const artifactFeedback = props.artifactFeedback?.trim() ?? '';
   const fileOptions = useMemo(() => flattenTree(props.fileTree).filter((item) => item.node.path !== '.').slice(0, 18), [props.fileTree]);
   const showStarterPrompts = !text.trim() && contextAttachments.length === 0 && (props.cards?.length ?? 0) === 0;
 
@@ -291,16 +295,16 @@ export function Composer(props: {
               <ContextOption
                 icon="panel"
                 title="Browser evidence"
-                subtitle={browserEvidenceSummary(browserTargets, props.health)}
-                disabled={browserTargets.length === 0 && !props.health}
-                onClick={() => attachContext(browserEvidenceAttachment(browserTargets, props.health))}
+                subtitle={browserEvidenceSummary(browserTargets, props.health, browserFeedback)}
+                disabled={browserTargets.length === 0 && !props.health && !browserFeedback}
+                onClick={() => attachContext(browserEvidenceAttachment(browserTargets, props.health, browserFeedback))}
               />
               <ContextOption
                 icon="file"
                 title="Artifact evidence"
-                subtitle={artifacts.length ? `${artifacts.length} thread artifact${artifacts.length === 1 ? '' : 's'} ready for follow-up` : 'No artifacts captured in this thread'}
-                disabled={artifacts.length === 0}
-                onClick={() => attachContext(artifactEvidenceAttachment(artifacts))}
+                subtitle={artifactEvidenceSummary(artifacts, artifactFeedback)}
+                disabled={artifacts.length === 0 && !artifactFeedback}
+                onClick={() => attachContext(artifactEvidenceAttachment(artifacts, artifactFeedback))}
               />
             </section>
 
@@ -697,8 +701,9 @@ function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubAc
   };
 }
 
-function browserEvidenceAttachment(targets: BrowserContextTarget[], health?: ServerHealth): TurnContextAttachment {
+function browserEvidenceAttachment(targets: BrowserContextTarget[], health?: ServerHealth, feedback = ''): TurnContextAttachment {
   const active = targets[0];
+  const feedbackText = feedback.trim();
   const targetLines = targets.length
     ? targets.slice(0, 8).map((target) => `- ${target.title}: ${target.url} · ${targetKindLabel(target.kind)} · ${target.source}${target.capturedAt ? ` · captured ${formatTime(target.capturedAt)}` : ''}`)
     : ['- no browser preview URL captured'];
@@ -721,6 +726,9 @@ function browserEvidenceAttachment(targets: BrowserContextTarget[], health?: Ser
       'Targets:',
       ...targetLines,
       '',
+      'Observed feedback:',
+      feedbackText || '- none recorded',
+      '',
       'Follow-up instructions:',
       '- Inspect the referenced preview target or runtime evidence before making UI changes.',
       '- Verify the affected view in a browser at desktop and mobile widths.',
@@ -732,13 +740,15 @@ function browserEvidenceAttachment(targets: BrowserContextTarget[], health?: Ser
       runtime: health?.appServer ?? '',
       ready: Boolean(health?.ready),
       buildSha: health?.build?.sha ?? '',
-      hfEnabled: Boolean(health?.huggingFace?.enabled)
+      hfEnabled: Boolean(health?.huggingFace?.enabled),
+      feedbackRecorded: Boolean(feedbackText)
     }
   };
 }
 
-function artifactEvidenceAttachment(artifacts: TimelineCard[]): TurnContextAttachment {
+function artifactEvidenceAttachment(artifacts: TimelineCard[], feedback = ''): TurnContextAttachment {
   const selected = artifacts[0];
+  const feedbackText = feedback.trim();
   const artifactLines = artifacts.slice(0, 10).map((artifact) => `- ${artifact.filePath ?? artifact.title}: ${artifactKind(artifact)} · ${artifactSubtitle(artifact)} · ${formatTime(artifact.createdAt)}`);
   return {
     id: 'artifactEvidence:current',
@@ -757,6 +767,9 @@ function artifactEvidenceAttachment(artifacts: TimelineCard[]): TurnContextAttac
       'Selected artifact excerpt:',
       selected ? artifactExcerpt(selected) : 'No artifact excerpt available.',
       '',
+      'Follow-up feedback:',
+      feedbackText || '- none recorded',
+      '',
       'Follow-up instructions:',
       '- Use the artifact as evidence, not as a replacement for inspecting live source files.',
       '- Preserve relevant diffs, logs, and plan details while scoping the next fix or review.',
@@ -766,7 +779,8 @@ function artifactEvidenceAttachment(artifacts: TimelineCard[]): TurnContextAttac
       artifacts: artifacts.length,
       selectedId: selected?.id ?? '',
       selectedKind: selected ? artifactKind(selected) : '',
-      selectedPath: selected?.filePath ?? ''
+      selectedPath: selected?.filePath ?? '',
+      feedbackRecorded: Boolean(feedbackText)
     }
   };
 }
@@ -876,10 +890,16 @@ function releaseEvidenceSummary(status?: GitStatusSummary, actions?: GitHubActio
   return `${head} · ${actionsLabel} · ${runtime} · ${hf}`;
 }
 
-function browserEvidenceSummary(targets: BrowserContextTarget[], health?: ServerHealth): string {
+function browserEvidenceSummary(targets: BrowserContextTarget[], health?: ServerHealth, feedback = ''): string {
   const runtime = health ? (health.ready ? 'runtime ready' : health.ok ? 'runtime starting' : 'runtime unhealthy') : 'runtime unknown';
   const target = targets[0]?.url ?? 'no preview target';
-  return `${targets.length} target${targets.length === 1 ? '' : 's'} · ${runtime} · ${target}`;
+  const notes = feedback.trim() ? ' · notes saved' : '';
+  return `${targets.length} target${targets.length === 1 ? '' : 's'} · ${runtime} · ${target}${notes}`;
+}
+
+function artifactEvidenceSummary(artifacts: TimelineCard[], feedback = ''): string {
+  const base = artifacts.length ? `${artifacts.length} thread artifact${artifacts.length === 1 ? '' : 's'} ready for follow-up` : 'No artifacts captured in this thread';
+  return feedback.trim() ? `${base} · notes saved` : base;
 }
 
 function githubActionsLabel(actions?: GitHubActionsSummary): string {

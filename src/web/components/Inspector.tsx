@@ -59,8 +59,12 @@ export function Inspector(props: {
   projectPanelError?: string;
   account?: AccountSummary;
   health?: ServerHealth;
+  browserFeedback: string;
+  artifactFeedback: string;
   tab?: InspectorTab;
   onTabChange?: (tab: InspectorTab) => void;
+  onBrowserFeedbackChange: (value: string) => void;
+  onArtifactFeedbackChange: (value: string) => void;
   onDecision: (requestId: string | number, decision: ApprovalDecision) => void;
   onRefreshProjectPanels?: () => void;
   onSelectFile?: (path: string) => void;
@@ -73,8 +77,6 @@ export function Inspector(props: {
   open?: boolean;
 }) {
   const [internalTab, setInternalTab] = useState<InspectorTab>('review');
-  const [browserFeedback, setBrowserFeedback] = useState('');
-  const [artifactFeedback, setArtifactFeedback] = useState('');
   const [reviewFindings, setReviewFindings] = useState<GitReviewFinding[]>([]);
   const activeTab = props.tab ?? internalTab;
   const setActiveTab = props.onTabChange ?? setInternalTab;
@@ -84,14 +86,12 @@ export function Inspector(props: {
   const commands = props.cards.filter((card) => card.kind === 'command');
   const reviewEvidence: ReviewEvidencePacket = {
     browserTargets: browserTargets(props.cards, props.health),
-    browserFeedback,
+    browserFeedback: props.browserFeedback,
     artifacts: artifactCards(props.cards),
-    artifactFeedback
+    artifactFeedback: props.artifactFeedback
   };
 
   useEffect(() => {
-    setBrowserFeedback('');
-    setArtifactFeedback('');
     setReviewFindings([]);
   }, [props.project?.id, props.thread?.id]);
 
@@ -155,8 +155,8 @@ export function Inspector(props: {
         />
       ) : null}
       {activeTab === 'terminal' ? <TerminalTab commands={commands} focusedCard={props.card} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} feedback={browserFeedback} onFeedbackChange={setBrowserFeedback} onFocusCard={props.onFocusCard} /> : null}
-      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} feedback={artifactFeedback} onFeedbackChange={setArtifactFeedback} onFocusCard={props.onFocusCard} /> : null}
+      {activeTab === 'browser' ? <BrowserTab cards={props.cards} project={props.project} health={props.health} feedback={props.browserFeedback} onFeedbackChange={props.onBrowserFeedbackChange} onFocusCard={props.onFocusCard} /> : null}
+      {activeTab === 'artifacts' ? <ArtifactsTab cards={props.cards} project={props.project} feedback={props.artifactFeedback} onFeedbackChange={props.onArtifactFeedbackChange} onFocusCard={props.onFocusCard} /> : null}
       {activeTab === 'raw' ? <RawTab card={props.card} thread={props.thread} project={props.project} rawEvents={props.rawEvents ?? []} /> : null}
     </aside>
   );

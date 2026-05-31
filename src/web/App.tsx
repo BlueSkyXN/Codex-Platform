@@ -49,6 +49,8 @@ export function App() {
   const [gitActionMessage, setGitActionMessage] = useState<string | undefined>();
   const [projectPanelLoading, setProjectPanelLoading] = useState(false);
   const [projectPanelError, setProjectPanelError] = useState<string | undefined>();
+  const [browserFeedback, setBrowserFeedback] = useState('');
+  const [artifactFeedback, setArtifactFeedback] = useState('');
   const notifiedApprovals = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -146,6 +148,11 @@ export function App() {
   const selectedApprovals = useMemo(() => state.approvals.filter((a) => !a.threadId || a.threadId === selectedThread?.id), [state.approvals, selectedThread?.id]);
   const selectedApprovalHistory = useMemo(() => filterApprovalHistory(state.approvalHistory, selectedThread?.id), [state.approvalHistory, selectedThread?.id]);
   const selectedGitOperations = useMemo(() => filterGitOperations(state.gitOperations, selectedProject?.id), [state.gitOperations, selectedProject?.id]);
+
+  useEffect(() => {
+    setBrowserFeedback('');
+    setArtifactFeedback('');
+  }, [selectedProject?.id, selectedThread?.id]);
 
   function openManagementTab(tab: ManagementTab) {
     setManagementTab(tab);
@@ -595,6 +602,8 @@ export function App() {
             gitDiff={gitDiff}
             githubActions={githubActions}
             health={health}
+            browserFeedback={browserFeedback}
+            artifactFeedback={artifactFeedback}
             skillsLoading={skillsLoading}
             agentsLoading={agentsLoading}
             skillsError={skillsError}
@@ -628,6 +637,10 @@ export function App() {
             projectPanelLoading={projectPanelLoading}
             projectPanelError={projectPanelError}
             health={health}
+            browserFeedback={browserFeedback}
+            artifactFeedback={artifactFeedback}
+            onBrowserFeedbackChange={setBrowserFeedback}
+            onArtifactFeedbackChange={setArtifactFeedback}
             onSelectFile={(path) => void selectProjectFile(path)}
             onSelectGitFile={(path, cached) => void selectGitFile(path, cached)}
             onGitStage={(paths) => void runGitAction('stage', paths)}
