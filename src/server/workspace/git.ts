@@ -17,14 +17,18 @@ export async function readGitStatus(cwd: string, timeoutMs: number): Promise<Git
       maxBuffer: 1024 * 1024
     });
     const summary = parseGitStatus(stdout);
-    const [head, upstreamHead, remoteUrl] = await Promise.all([
+    const defaultRemote = remoteNameForStatus(summary);
+    const [head, upstreamHead, remoteUrl, defaultRef] = await Promise.all([
       runGitOptional(cwd, ['rev-parse', '--verify', 'HEAD'], timeoutMs),
       runGitOptional(cwd, ['rev-parse', '--verify', '@{u}'], timeoutMs),
-      runGitOptional(cwd, ['remote', 'get-url', 'origin'], timeoutMs)
+      runGitOptional(cwd, ['remote', 'get-url', defaultRemote], timeoutMs),
+      runGitOptional(cwd, ['symbolic-ref', '--quiet', '--short', `refs/remotes/${defaultRemote}/HEAD`], timeoutMs)
     ]);
     summary.head = head || undefined;
     summary.upstreamHead = upstreamHead || undefined;
     summary.remoteUrl = remoteUrl || undefined;
+    summary.defaultRemote = remoteUrl ? defaultRemote : undefined;
+    summary.defaultBranch = parseDefaultBranch(defaultRef, defaultRemote) || undefined;
     return summary;
   } catch (error) {
     return {
@@ -90,6 +94,17 @@ function safeGitPath(filePath: string): string {
   if (path.isAbsolute(value)) throw new Error(`Git file path must be relative: ${value}`);
   if (value.split(/[\\/]+/).includes('..')) throw new Error(`Git file path cannot contain '..': ${value}`);
   return `:(literal)${value}`;
+}
+
+function remoteNameForStatus(summary: GitStatusSummary): string {
+  const upstreamRemote = summary.upstream?.split('/')[0]?.trim();
+  return upstreamRemote || 'origin';
+}
+
+function parseDefaultBranch(defaultRef: string, remoteName: string): string {
+  const value = defaultRef.trim();
+  if (!value) return '';
+  return value.startsWith(`${remoteName}/`) ? value.slice(remoteName.length + 1) : value;
 }
 
 function parseGitStatus(stdout: string): GitStatusSummary {

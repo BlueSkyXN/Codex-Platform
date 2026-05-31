@@ -853,6 +853,7 @@ function GitTab(props: {
         <>
           <div className="git-branch-card">
             <div><span>Branch</span><strong>{status.branch ?? 'HEAD'}</strong></div>
+            <div><span>Default</span><strong>{status.defaultBranch ?? '—'}</strong></div>
             <div><span>Upstream</span><strong>{status.upstream ?? '—'}</strong></div>
             <div><span>Ahead</span><strong>{status.ahead ?? 0}</strong></div>
             <div><span>Behind</span><strong>{status.behind ?? 0}</strong></div>
@@ -879,7 +880,7 @@ function GitTab(props: {
                 <ShipCheck label="Ahead" value={String(status.ahead ?? 0)} state={(status.ahead ?? 0) > 0 ? 'ok' : 'idle'} />
                 <ShipCheck label="Behind" value={String(status.behind ?? 0)} state={(status.behind ?? 0) > 0 ? 'warn' : 'ok'} />
                 <ShipCheck label="Remote" value={shipInfo.remoteLabel} state={status.remoteUrl ? 'ok' : 'warn'} />
-                <ShipCheck label="PR path" value={shipInfo.prMode === 'branch' ? `base ${shipInfo.prBaseBranch}` : shipInfo.prMode === 'direct' ? 'direct deploy' : 'unavailable'} state={shipInfo.prMode === 'unavailable' ? 'idle' : 'ok'} />
+                <ShipCheck label="PR base" value={shipInfo.prMode === 'unavailable' ? 'unavailable' : `${shipInfo.prBaseBranch ?? 'main'} · ${baseBranchCheckLabel(shipInfo.prBaseSource)}`} detail={shipInfo.prMode === 'unavailable' ? undefined : baseBranchSourceLabel(shipInfo.prBaseSource)} state={shipInfo.prMode === 'unavailable' ? 'idle' : 'ok'} />
               </div>
               {shipInfo.pushCommand ? (
                 <div className="git-push-command">
@@ -1110,11 +1111,11 @@ function GitOperationHistory({ operations }: { operations: GitOperationRecord[] 
   );
 }
 
-function ShipCheck(props: { label: string; value: string; state: 'ok' | 'warn' | 'idle' }) {
+function ShipCheck(props: { label: string; value: string; detail?: string; state: 'ok' | 'warn' | 'idle' }) {
   return (
     <div className="ship-check">
       <span>{props.label}</span>
-      <strong className={props.state}>{props.value}</strong>
+      <strong className={props.state} title={props.detail ?? props.value}>{props.value}</strong>
     </div>
   );
 }
@@ -1175,10 +1176,13 @@ function commitScope(paths: string[]): 'docs' | 'styles' | 'server' | 'release' 
 function gitReviewBrief(status: GitStatusSummary, actions?: GitHubActionsSummary, health?: ServerHealth, draftMessage?: string, findings: GitReviewFinding[] = [], evidence?: ReviewEvidencePacket): string {
   const staged = status.files.filter(canUnstageFile).map((file) => file.path);
   const unstaged = status.files.filter(canStageFile).map((file) => file.path);
+  const shipInfo = gitShipInfo(status);
   const lines = [
     'PR / review brief',
     '',
     `Branch: ${status.branch ?? 'HEAD'}`,
+    `Default branch: ${status.defaultBranch ?? 'unknown'}`,
+    `PR base: ${shipInfo.prBaseBranch ?? 'unknown'} (${baseBranchSourceLabel(shipInfo.prBaseSource)})`,
     `HEAD: ${status.head ?? 'unknown'}`,
     `Upstream: ${status.upstream ?? 'none'}`,
     `Ahead / behind: ${status.ahead ?? 0} / ${status.behind ?? 0}`,
@@ -1215,6 +1219,7 @@ function gitReviewPrompt(status: GitStatusSummary, findings: GitReviewFinding[],
     'Address these Codex-Platform review findings before commit or PR.',
     '',
     `Branch: ${status.branch ?? 'HEAD'}`,
+    `Default branch: ${status.defaultBranch ?? 'unknown'}`,
     `HEAD: ${status.head ?? 'unknown'}`,
     draftMessage ? `Suggested commit: ${draftMessage}` : undefined,
     '',
@@ -1244,6 +1249,7 @@ function gitPrBody(
     '## Summary',
     `- ${draftMessage || 'Codex-Platform update'}`,
     `- Branch: ${status.branch ?? 'HEAD'}`,
+    `- Default branch: ${status.defaultBranch ?? 'unknown'}`,
     `- HEAD: ${status.head ?? 'unknown'}`,
     shipNote ? `- Release path: ${shipNote}` : undefined,
     releaseDetail ? `- Deployment evidence: ${releaseDetail}` : undefined,
@@ -1343,28 +1349,29 @@ function gitShipInfo(status: GitStatusSummary): {
   prCommand?: string;
   prUrl?: string;
   prBaseBranch?: string;
+  prBaseSource?: BaseBranchSource;
   prMode: 'branch' | 'direct' | 'unavailable';
   prNote: string;
   repoUrl?: string;
 } {
   const branch = status.branch && status.branch !== 'HEAD' ? status.branch : undefined;
-  const remoteName = status.upstream?.split('/')[0] || 'origin';
+  const baseBranch = defaultBaseBranch(status, branch);
+  const remoteName = status.defaultRemote || status.upstream?.split('/')[0] || 'origin';
   const repoUrl = githubRemoteUrl(status.remoteUrl);
   const remoteLabel = status.remoteUrl ? remoteName : 'missing';
   const pushCommand = branch ? `git push ${remoteName} ${branch}` : undefined;
-  const baseBranch = branch === 'master' ? 'master' : 'main';
-  const prMode = repoUrl && branch ? isDefaultBranch(branch) ? 'direct' : 'branch' : 'unavailable';
+  const prMode = repoUrl && branch ? branch === baseBranch.branch ? 'direct' : 'branch' : 'unavailable';
   const compareUrl = repoUrl && branch
     ? prMode === 'branch'
-      ? `${repoUrl}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(branch)}?expand=1`
+      ? `${repoUrl}/compare/${encodeURIComponent(baseBranch.branch)}...${encodeURIComponent(branch)}?expand=1`
       : `${repoUrl}/commits/${encodeURIComponent(branch)}`
     : undefined;
-  const prUrl = repoUrl && branch && prMode === 'branch' ? `${repoUrl}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(branch)}?expand=1` : undefined;
-  const prCommand = branch && prMode === 'branch' ? `gh pr create --base ${shellQuote(baseBranch)} --head ${shellQuote(branch)} --fill --draft` : undefined;
+  const prUrl = repoUrl && branch && prMode === 'branch' ? `${repoUrl}/compare/${encodeURIComponent(baseBranch.branch)}...${encodeURIComponent(branch)}?expand=1` : undefined;
+  const prCommand = branch && prMode === 'branch' ? `gh pr create --base ${shellQuote(baseBranch.branch)} --head ${shellQuote(branch)} --fill --draft` : undefined;
   const prNote = prMode === 'branch'
-    ? `Branch flow: push ${branch}, then open a draft PR into ${baseBranch}.`
+    ? `Branch flow: push ${branch}, then open a draft PR into ${baseBranch.branch} (${baseBranchSourceLabel(baseBranch.source)}).`
     : prMode === 'direct'
-      ? `Default branch flow: push ${branch}, then verify GitHub Actions and HF runtime evidence.`
+      ? `Default branch flow: ${branch} matches ${baseBranch.branch} (${baseBranchSourceLabel(baseBranch.source)}); push, then verify GitHub Actions and HF runtime evidence.`
       : 'Add a GitHub remote and named branch to enable PR commands.';
   const changed = status.files.length;
   const ahead = status.ahead ?? 0;
@@ -1378,6 +1385,8 @@ function gitShipInfo(status: GitStatusSummary): {
       remoteLabel,
       prMode,
       prNote,
+      prBaseBranch: baseBranch.branch,
+      prBaseSource: baseBranch.source,
       repoUrl
     };
   }
@@ -1391,7 +1400,8 @@ function gitShipInfo(status: GitStatusSummary): {
       compareUrl,
       prCommand,
       prUrl,
-      prBaseBranch: baseBranch,
+      prBaseBranch: baseBranch.branch,
+      prBaseSource: baseBranch.source,
       prMode,
       prNote,
       repoUrl
@@ -1407,7 +1417,8 @@ function gitShipInfo(status: GitStatusSummary): {
       compareUrl,
       prCommand,
       prUrl,
-      prBaseBranch: baseBranch,
+      prBaseBranch: baseBranch.branch,
+      prBaseSource: baseBranch.source,
       prMode,
       prNote,
       repoUrl
@@ -1423,7 +1434,8 @@ function gitShipInfo(status: GitStatusSummary): {
       compareUrl,
       prCommand,
       prUrl,
-      prBaseBranch: baseBranch,
+      prBaseBranch: baseBranch.branch,
+      prBaseSource: baseBranch.source,
       prMode,
       prNote,
       repoUrl
@@ -1438,11 +1450,45 @@ function gitShipInfo(status: GitStatusSummary): {
     compareUrl,
     prCommand,
     prUrl,
-    prBaseBranch: baseBranch,
+    prBaseBranch: baseBranch.branch,
+    prBaseSource: baseBranch.source,
     prMode,
     prNote,
     repoUrl
   };
+}
+
+type BaseBranchSource = 'remote-head' | 'upstream' | 'current' | 'assumed';
+
+function defaultBaseBranch(status: GitStatusSummary, branch?: string): { branch: string; source: BaseBranchSource } {
+  const detected = status.defaultBranch?.trim();
+  if (detected) return { branch: detected, source: 'remote-head' };
+
+  const upstreamBranch = remoteBranchName(status.upstream);
+  if (upstreamBranch && isDefaultBranch(upstreamBranch)) return { branch: upstreamBranch, source: 'upstream' };
+  if (branch && isDefaultBranch(branch)) return { branch, source: 'current' };
+  return { branch: 'main', source: 'assumed' };
+}
+
+function remoteBranchName(value?: string): string | undefined {
+  const branch = value?.trim();
+  if (!branch) return undefined;
+  const slash = branch.indexOf('/');
+  return slash >= 0 ? branch.slice(slash + 1) : branch;
+}
+
+function baseBranchSourceLabel(source?: BaseBranchSource): string {
+  if (source === 'remote-head') return 'remote HEAD';
+  if (source === 'upstream') return 'upstream branch';
+  if (source === 'current') return 'current default branch';
+  return 'assumed default';
+}
+
+function baseBranchCheckLabel(source?: BaseBranchSource): string {
+  if (source === 'remote-head') return 'detected';
+  if (source === 'upstream') return 'upstream';
+  if (source === 'current') return 'current';
+  return 'assumed';
 }
 
 function isDefaultBranch(branch: string): boolean {

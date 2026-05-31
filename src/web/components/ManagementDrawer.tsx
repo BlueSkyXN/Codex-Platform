@@ -611,6 +611,7 @@ function releaseVerificationPrompt(gitStatus: GitStatusSummary | undefined, heal
     `- State: ${release.label} (${release.state})`,
     `- Detail: ${release.detail}`,
     `- Branch: ${gitStatus?.branch ?? 'unknown'}`,
+    `- Default branch: ${gitStatus?.defaultBranch ?? 'unknown'}`,
     `- HEAD: ${gitStatus?.head ?? 'unknown'}`,
     `- Upstream: ${gitStatus?.upstream ?? 'unknown'}`,
     `- Upstream HEAD: ${gitStatus?.upstreamHead ?? 'unknown'}`,

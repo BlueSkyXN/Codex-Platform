@@ -629,6 +629,8 @@ function gitStatusAttachment(status: GitStatusSummary): TurnContextAttachment {
     metadata: {
       branch: status.branch ?? '',
       upstream: status.upstream ?? '',
+      defaultBranch: status.defaultBranch ?? '',
+      defaultRemote: status.defaultRemote ?? '',
       ahead: status.ahead ?? 0,
       behind: status.behind ?? 0,
       files: status.files.length
@@ -666,6 +668,7 @@ function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubAc
     content: [
       'Release verification evidence:',
       `Branch: ${status?.branch ?? 'unknown'}`,
+      `Default branch: ${status?.defaultBranch ?? 'unknown'}`,
       `HEAD: ${head ?? 'unknown'}`,
       `Upstream: ${status?.upstream ?? 'unknown'}`,
       `Upstream HEAD: ${upstreamHead ?? 'unknown'}`,
@@ -689,6 +692,7 @@ function releaseEvidenceAttachment(status?: GitStatusSummary, actions?: GitHubAc
     ].join('\n'),
     metadata: {
       branch: status?.branch ?? '',
+      defaultBranch: status?.defaultBranch ?? '',
       head: head ?? '',
       upstreamHead: upstreamHead ?? '',
       changedFiles: files.length,
@@ -858,6 +862,7 @@ function formatGitStatus(status: GitStatusSummary): string {
   if (!status.isRepo) return status.error ?? 'Not a Git repository.';
   const lines = [
     `Branch: ${status.branch ?? 'HEAD'}`,
+    status.defaultBranch ? `Default branch: ${status.defaultBranch}` : undefined,
     status.upstream ? `Upstream: ${status.upstream}` : undefined,
     status.ahead ? `Ahead: ${status.ahead}` : undefined,
     status.behind ? `Behind: ${status.behind}` : undefined,

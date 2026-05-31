@@ -121,6 +121,8 @@ export type GitStatusSummary = {
   isRepo: boolean;
   branch?: string;
   upstream?: string;
+  defaultBranch?: string;
+  defaultRemote?: string;
   head?: string;
   upstreamHead?: string;
   remoteUrl?: string;
