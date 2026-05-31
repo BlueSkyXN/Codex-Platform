@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DiffBlock, type DiffLineSelection } from './DiffBlock.js';
-import { Icon } from './Icon.js';
+import { Icon, type IconName } from './Icon.js';
 import type { AccountSummary, ApprovalDecision, ApprovalRecord, ApprovalRequest, FileReadResult, FileTreeNode, GitDiffResult, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, Project, RawEventRecord, ServerHealth, ThreadSummary, TimelineCard } from '../../shared/types.js';
 import { deriveSupervisionSummary, supervisionStateClass } from '../lib/supervision.js';
 
@@ -114,7 +114,8 @@ export function Inspector(props: {
             title={tabTitle(item)}
             aria-label={tabTitle(item)}
           >
-            {tabShortLabel(item)}
+            <Icon name={tabIcon(item)} size={13} />
+            <span>{tabShortLabel(item)}</span>
           </button>
         ))}
       </div>
@@ -1789,6 +1790,21 @@ function tabShortLabel(tab: InspectorTab): string {
     case 'browser': return 'Web';
     case 'artifacts': return 'Art';
     default: return tabLabel(tab);
+  }
+}
+
+function tabIcon(tab: InspectorTab): IconName {
+  switch (tab) {
+    case 'review': return 'check';
+    case 'plan': return 'clock';
+    case 'diff': return 'file';
+    case 'files': return 'folder';
+    case 'git': return 'branch';
+    case 'terminal': return 'terminal';
+    case 'browser': return 'panel';
+    case 'artifacts': return 'paperclip';
+    case 'raw': return 'sliders';
+    default: return 'dot';
   }
 }
 

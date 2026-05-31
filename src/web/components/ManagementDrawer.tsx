@@ -155,8 +155,8 @@ function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; error
     <section className="management-panel agents-panel">
       <div className="pane-header">
         <div>
-          <div className="section-title">Agents registry</div>
-          <div className="subtle">Custom agents discovered from user and project configuration.</div>
+          <div className="section-title">Codex agents registry</div>
+          <div className="subtle">Project and user agents available for multi-agent delegation.</div>
         </div>
         <button className="small ghost" onClick={props.onRefresh} disabled={props.loading || !props.onRefresh}>{props.loading ? 'Loading...' : 'Reload'}</button>
       </div>
@@ -168,12 +168,12 @@ function AgentsRegistry(props: { agents: AgentSummary[]; loading: boolean; error
         ]}
       />
       {props.error ? <CapabilityError message={props.error} /> : null}
-      {props.agents.length === 0 ? <div className="empty">No custom agents found. Built-in agents such as explorer and worker can still be requested in natural language.</div> : null}
-      <AgentGroup title="Project agents" agents={repoAgents} onUseAgent={props.onUseAgent} />
-      <AgentGroup title="User agents" agents={userAgents} onUseAgent={props.onUseAgent} />
+      {props.agents.length === 0 ? <div className="empty">No configured Codex agents found. Built-in agents such as explorer and worker can still be requested in natural language.</div> : null}
+      <AgentGroup title="Project Codex agents" agents={repoAgents} onUseAgent={props.onUseAgent} />
+      <AgentGroup title="User Codex agents" agents={userAgents} onUseAgent={props.onUseAgent} />
       <div className="agent-help-card">
-        <strong>Composer shortcut</strong>
-        <p>Type <code>#</code> in the composer to pick one of these agents. Codex-Platform prefixes the next turn with a direct delegation request.</p>
+        <strong>Multi-agent routing</strong>
+        <p>Type <code>#</code> in the composer to pick an agent for the next turn. Codex-Platform prefixes the request with a direct delegation brief.</p>
       </div>
     </section>
   );
@@ -230,6 +230,7 @@ function AutomationsPanel(props: {
   const rows = [
     {
       id: 'release',
+      icon: 'branch' as const,
       title: 'Release evidence packet',
       detail: release.detail,
       state: release.state,
@@ -237,6 +238,7 @@ function AutomationsPanel(props: {
     },
     {
       id: 'approvals',
+      icon: 'check' as const,
       title: 'Approval sweep',
       detail: `${props.approvals.length} pending approval${props.approvals.length === 1 ? '' : 's'}`,
       state: props.approvals.length ? 'attention' : 'ready',
@@ -244,6 +246,7 @@ function AutomationsPanel(props: {
     },
     {
       id: 'threads',
+      icon: 'chat' as const,
       title: 'Thread supervision',
       detail: `${activeThreads} running or blocked thread${activeThreads === 1 ? '' : 's'}`,
       state: activeThreads ? 'running' : 'ready',
@@ -251,6 +254,7 @@ function AutomationsPanel(props: {
     },
     {
       id: 'git',
+      icon: 'terminal' as const,
       title: 'Git operation audit',
       detail: failedGit ? `${failedGit} failed Git action${failedGit === 1 ? '' : 's'}` : 'latest Git operations clear',
       state: failedGit ? 'attention' : 'ready',
@@ -281,7 +285,7 @@ function AutomationsPanel(props: {
       <div className="automation-lanes">
         {rows.map((row) => (
           <button key={row.id} className={`automation-lane ${row.state}`} onClick={row.action} disabled={!props.onOpenInspectorTab}>
-            <span className="automation-lane-icon"><Icon name="automation" size={15} /></span>
+            <span className="automation-lane-icon"><Icon name={row.icon} size={15} /></span>
             <span>
               <strong>{row.title}</strong>
               <small>{row.detail}</small>
@@ -313,11 +317,12 @@ function TriagePanel(props: {
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
   const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const changedFiles = props.gitStatus?.isRepo ? props.gitStatus.files.length : 0;
-  const items: Array<{ id: string; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; tab?: InspectorTab; threadId?: string }> = [];
+  const items: Array<{ id: string; icon: 'branch' | 'chat' | 'check' | 'file' | 'inbox' | 'terminal'; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; tab?: InspectorTab; threadId?: string }> = [];
 
   for (const approval of props.approvals.slice(0, 4)) {
     items.push({
       id: `approval-${approval.requestId}`,
+      icon: 'check',
       title: approval.title,
       detail: approval.command ?? approval.reason ?? approval.kind,
       tone: 'attention',
@@ -328,6 +333,7 @@ function TriagePanel(props: {
   for (const thread of failedThreads.slice(0, 4)) {
     items.push({
       id: `thread-${thread.id}`,
+      icon: 'chat',
       title: thread.name || thread.preview || compactThreadId(thread.id),
       detail: `${thread.status ?? 'failed'} · ${compactThreadId(thread.id)}`,
       tone: 'warn',
@@ -338,6 +344,7 @@ function TriagePanel(props: {
   for (const operation of failedGit.slice(0, 3)) {
     items.push({
       id: `git-${operation.id}`,
+      icon: 'terminal',
       title: operation.title,
       detail: operation.error ?? operation.stderr ?? operation.detail ?? operation.kind,
       tone: 'warn',
@@ -347,6 +354,7 @@ function TriagePanel(props: {
   if (props.githubActions?.state === 'failure') {
     items.push({
       id: 'github-actions',
+      icon: 'branch',
       title: 'GitHub Actions attention',
       detail: githubActionsDetail(props.githubActions),
       tone: 'warn',
@@ -356,6 +364,7 @@ function TriagePanel(props: {
   if (changedFiles > 0) {
     items.push({
       id: 'git-review-package',
+      icon: 'file',
       title: 'Review package changed',
       detail: `${changedFiles} changed file${changedFiles === 1 ? '' : 's'} before PR/release handoff`,
       tone: 'warn',
@@ -365,6 +374,7 @@ function TriagePanel(props: {
   if (release.state !== 'ready') {
     items.push({
       id: 'release-evidence',
+      icon: 'branch',
       title: release.state === 'attention' ? 'Release evidence attention' : 'Release evidence partial',
       detail: release.detail,
       tone: release.state === 'attention' ? 'attention' : 'warn',
@@ -374,6 +384,7 @@ function TriagePanel(props: {
   for (const card of reviewCards) {
     items.push({
       id: `card-${card.id}`,
+      icon: card.kind === 'fileChange' ? 'file' : 'inbox',
       title: card.title,
       detail: card.filePath ?? card.status ?? card.kind,
       tone: card.kind === 'error' ? 'warn' : 'ready',
@@ -416,7 +427,7 @@ function TriagePanel(props: {
             }}
             disabled={!props.onOpenInspectorTab && !props.onSelectThread}
           >
-            <span className="triage-icon"><Icon name={item.tone === 'ready' ? 'check' : 'inbox'} size={15} /></span>
+            <span className="triage-icon"><Icon name={item.icon} size={15} /></span>
             <span>
               <strong>{item.title}</strong>
               <small>{item.detail}</small>
@@ -766,7 +777,7 @@ function tabLabel(tab: ManagementTab): string {
 
 function tabTitle(tab: ManagementTab): string {
   if (tab === 'skills') return 'Skills registry';
-  if (tab === 'agents') return 'Agents registry';
+  if (tab === 'agents') return 'Codex agents';
   if (tab === 'automations') return 'Automations';
   if (tab === 'triage') return 'Triage inbox';
   return 'Runtime settings';

@@ -48,10 +48,10 @@ export function Sidebar(props: {
   return (
     <aside className="sidebar codex-sidebar">
       <div className="sidebar-head">
-        <div className="codex-logo" aria-hidden="true">CP</div>
+        <div className="codex-logo" aria-hidden="true"><Icon name="agent" size={15} /></div>
         <div>
           <div className="sidebar-brand">Codex Platform</div>
-          <div className="sidebar-caption">Agent command center</div>
+          <div className="sidebar-caption">Multi-agent web console</div>
         </div>
       </div>
 

@@ -41,14 +41,15 @@ export function TopBar(props: {
   };
 
   return (
-    <header className="topbar app-frame-bar">
-      <div className="window-controls" aria-label="Window controls">
-        <span className="traffic-dot close" />
-        <span className="traffic-dot minimize" />
-        <span className="traffic-dot zoom" />
+    <header className="topbar app-frame-bar web-topbar">
+      <div className="topbar-product" aria-label="Codex Platform navigation">
         <button className="icon-button frame-toggle" onClick={props.onToggleSidebar} title="Toggle sidebar" aria-label="Toggle sidebar">
           <Icon name={sidebarVisible ? 'sidebarLeft' : 'sidebarRight'} size={15} />
         </button>
+        <div className="topbar-product-copy">
+          <span className="topbar-product-name">Codex Platform</span>
+          <span className="topbar-product-tagline">Multi-agent Codex workspace</span>
+        </div>
       </div>
 
       <div className="frame-breadcrumb" title={props.project?.cwd}>
