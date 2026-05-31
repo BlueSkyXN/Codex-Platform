@@ -59,7 +59,7 @@ export function Sidebar(props: {
         <div className="sidebar-nav-group">
           <div className="sidebar-nav-label">Work</div>
           <button className="primary-nav" onClick={props.onNewThread}>
-            <span className="nav-icon"><Icon name="plus" size={15} /></span>
+            <span className="nav-icon"><Icon name="chat" size={15} /></span>
             <span>New thread</span>
           </button>
         </div>
@@ -84,7 +84,8 @@ export function Sidebar(props: {
         </div>
       </nav>
 
-      <section className="sidebar-search-block">
+      <section className="sidebar-search-block sidebar-search-shell">
+        <Icon name="search" size={14} />
         <input className="sidebar-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" />
       </section>
 

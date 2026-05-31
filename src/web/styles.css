@@ -5851,3 +5851,98 @@ body {
     max-width: 96px;
   }
 }
+
+/* Codex App alignment pass: quiet controls, visible tabs, and list-like review context. */
+.sidebar-search-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-search-shell .codex-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--codex-muted);
+  pointer-events: none;
+}
+
+.sidebar-search-shell .sidebar-search {
+  padding-left: 32px;
+}
+
+.codex-inspector-tabs {
+  padding-right: 0;
+  flex-wrap: nowrap;
+  overflow: visible;
+  min-height: auto;
+  gap: 1px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.codex-inspector-tabs .tab {
+  min-height: 26px;
+  padding: 4px 5px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.codex-inspector-tabs .tab.active {
+  background: var(--codex-hover);
+  box-shadow: none;
+}
+
+.review-control-strip {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border), transparent 16%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 16%);
+  margin: 12px 0 10px;
+}
+
+.review-signal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 7px 0;
+}
+
+.review-signal + .review-signal {
+  border-top: 1px solid color-mix(in srgb, var(--border), transparent 36%);
+}
+
+.review-signal span {
+  font-size: 12px;
+  color: var(--codex-muted);
+}
+
+.review-signal strong {
+  font-size: 12px;
+  font-weight: 560;
+  text-align: right;
+}
+
+.approval-history-panel,
+.supervision-panel {
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 14px 0;
+}
+
+.supervision-focus-icon {
+  border-color: transparent;
+  background: var(--codex-soft);
+}
+
+@media (max-width: 820px) {
+  .codex-inspector-tabs {
+    overflow: visible;
+  }
+}

@@ -107,7 +107,15 @@ export function Inspector(props: {
 
       <div className="inspector-tabs codex-inspector-tabs">
         {primaryTabs.map((item) => (
-          <button key={item} className={`tab ${activeTab === item ? 'active' : ''}`} onClick={() => setActiveTab(item)}>{tabLabel(item)}</button>
+          <button
+            key={item}
+            className={`tab ${activeTab === item ? 'active' : ''}`}
+            onClick={() => setActiveTab(item)}
+            title={tabTitle(item)}
+            aria-label={tabTitle(item)}
+          >
+            {tabShortLabel(item)}
+          </button>
         ))}
       </div>
 
@@ -1724,6 +1732,17 @@ function tabLabel(tab: InspectorTab): string {
     case 'browser': return 'Browser';
     case 'artifacts': return 'Artifacts';
     case 'raw': return 'Raw';
+  }
+}
+
+function tabShortLabel(tab: InspectorTab): string {
+  switch (tab) {
+    case 'review': return 'Rev';
+    case 'files': return 'File';
+    case 'terminal': return 'Term';
+    case 'browser': return 'Web';
+    case 'artifacts': return 'Art';
+    default: return tabLabel(tab);
   }
 }
 
