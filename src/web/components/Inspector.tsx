@@ -617,7 +617,8 @@ function BrowserTab({
         <div className="browser-target-list">
           {targets.map((target) => (
             <button key={target.id} className={`browser-target-row ${target.url === activeTarget?.url ? 'active' : ''}`} onClick={() => setSelectedUrl(target.url)}>
-              <span>
+              <span className="browser-target-icon"><Icon name={browserTargetIcon(target)} size={14} /></span>
+              <span className="browser-target-copy">
                 <strong>{target.title}</strong>
                 <small>{target.subtitle}</small>
               </span>
@@ -2478,7 +2479,8 @@ function ArtifactsTab({
           <div className="artifact-list">
             {artifacts.map((artifact) => (
               <button key={artifact.id} className={`artifact-file-row ${artifact.id === selected?.id ? 'active' : ''}`} onClick={() => setSelectedId(artifact.id)}>
-                <span>
+                <span className="artifact-file-icon"><Icon name={artifactIcon(artifact)} size={14} /></span>
+                <span className="artifact-file-copy">
                   <strong>{artifact.filePath ?? artifact.title}</strong>
                   <small>{artifactSubtitle(artifact)}</small>
                 </span>
@@ -2489,9 +2491,12 @@ function ArtifactsTab({
           {selected ? (
             <div className="artifact-detail">
               <div className="artifact-detail-head">
-                <div>
-                  <div className="section-title">{artifactKind(selected)}</div>
-                  <div className="panel-title">{selected.filePath ?? selected.title}</div>
+                <div className="artifact-detail-title">
+                  <span className="artifact-file-icon"><Icon name={artifactIcon(selected)} size={14} /></span>
+                  <span>
+                    <div className="section-title">{artifactKind(selected)}</div>
+                    <div className="panel-title">{selected.filePath ?? selected.title}</div>
+                  </span>
                 </div>
                 <div className="artifact-detail-actions">
                   <button className="small ghost" onClick={() => onFocusCard?.(selected.id)}>Focus</button>
@@ -2836,6 +2841,21 @@ function localUrlLabel(url: string): string {
   if (!isLocalUrl(url)) return new URL(url).hostname;
   const parsed = new URL(url);
   return parsed.port ? `Local preview :${parsed.port}` : 'Local preview';
+}
+
+function browserTargetIcon(target: BrowserTarget): IconName {
+  if (target.kind === 'space') return 'panel';
+  if (target.kind === 'local') return 'terminal';
+  return 'search';
+}
+
+function artifactIcon(card: TimelineCard): IconName {
+  if (card.kind === 'fileChange') return 'file';
+  if (card.kind === 'command') return 'terminal';
+  if (card.kind === 'plan') return 'clock';
+  if (card.kind === 'agent') return 'agent';
+  if (card.kind === 'error') return 'inbox';
+  return 'paperclip';
 }
 
 function artifactKind(card: TimelineCard): string {

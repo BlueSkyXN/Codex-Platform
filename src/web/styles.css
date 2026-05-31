@@ -4534,8 +4534,8 @@ button.icon-only {
 .browser-target-row {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
   border: 0;
   border-radius: 10px;
@@ -4549,7 +4549,18 @@ button.icon-only {
   background: #f4f4f4;
 }
 
-.browser-target-row span {
+.browser-target-icon,
+.artifact-file-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--codex-radius-md, 7px);
+  color: var(--codex-muted, var(--muted));
+}
+
+.browser-target-copy,
+.artifact-file-copy {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -4893,6 +4904,10 @@ button.icon-only {
 .artifact-file-row {
   border-bottom: 0;
   border-radius: 10px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   padding: 8px;
 }
 
@@ -4900,7 +4915,7 @@ button.icon-only {
   background: #f4f4f4;
 }
 
-.artifact-file-row span {
+.artifact-file-copy {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -4935,6 +4950,14 @@ button.icon-only {
   gap: 12px;
   align-items: flex-start;
   margin-bottom: 8px;
+}
+
+.artifact-detail-title {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
 }
 
 .artifact-detail-head > div:first-child {
@@ -6201,7 +6224,9 @@ button,
 .palette-row-icon,
 .starter-prompt-icon,
 .context-picker-option-icon,
-.skill-row-icon {
+.skill-row-icon,
+.browser-target-icon,
+.artifact-file-icon {
   width: 22px;
   height: 22px;
   display: inline-grid;
@@ -6218,6 +6243,10 @@ button,
 .starter-prompt:hover .starter-prompt-icon,
 .palette-row.active .palette-row-icon,
 .palette-row:hover:not(:disabled) .palette-row-icon,
+.browser-target-row.active .browser-target-icon,
+.browser-target-row:hover .browser-target-icon,
+.artifact-file-row.active .artifact-file-icon,
+.artifact-file-row:hover .artifact-file-icon,
 .command-menu button:hover .suggestion-icon {
   background: var(--codex-hover);
   color: var(--codex-text);
