@@ -19,7 +19,7 @@ export function App() {
   const [state, dispatch] = useReducer(reduce, initialState);
   const [busy, setBusy] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(() => !isNarrowViewport());
-  const [inspectorVisible, setInspectorVisible] = useState(false);
+  const [inspectorVisible, setInspectorVisible] = useState(() => !isNarrowViewport());
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState<string | undefined>();
@@ -153,6 +153,12 @@ export function App() {
     setBrowserFeedback('');
     setArtifactFeedback('');
   }, [selectedProject?.id, selectedThread?.id]);
+
+  useEffect(() => {
+    if (selectedApprovals.length === 0 || isNarrowViewport()) return;
+    setInspectorVisible(true);
+    setInspectorTab('review');
+  }, [selectedApprovals.length]);
 
   function openManagementTab(tab: ManagementTab) {
     setManagementTab(tab);

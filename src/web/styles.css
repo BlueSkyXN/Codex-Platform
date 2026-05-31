@@ -5211,6 +5211,12 @@ button,
   color: var(--codex-muted);
 }
 
+.codex-inspector-tabs {
+  padding-right: 18px;
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent);
+}
+
 .management-tabs .tab.active,
 .codex-inspector-tabs .tab.active {
   background: var(--codex-soft);
