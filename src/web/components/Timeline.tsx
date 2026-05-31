@@ -68,18 +68,15 @@ export function Timeline(props: {
 
       <div className="timeline codex-timeline">
         {props.cards.length === 0 ? (
-          <div className="empty-state codex-empty-state">
-            <div className="empty-title">What should we build in {props.project?.name ?? 'this project'}?</div>
-            <EmptyCommandState
-              project={props.project}
-              gitStatus={props.gitStatus}
-              approvals={props.approvals ?? []}
-              agents={props.agents ?? []}
-              agentsLoading={props.agentsLoading}
-              health={props.health}
-              connected={props.connected}
-            />
-          </div>
+          <WorkbenchStartPanel
+            project={props.project}
+            gitStatus={props.gitStatus}
+            approvals={props.approvals ?? []}
+            agents={props.agents ?? []}
+            agentsLoading={props.agentsLoading}
+            health={props.health}
+            connected={props.connected}
+          />
         ) : null}
         {props.cards.length > 0 && filteredCards.length === 0 ? <div className="empty-state compact">No events match the current filter.</div> : null}
 
@@ -119,7 +116,16 @@ export function Timeline(props: {
   );
 }
 
-function EmptyCommandState(props: {
+type WorkbenchLane = {
+  id: string;
+  icon: IconName;
+  label: string;
+  value: string;
+  detail: string;
+  state: 'ready' | 'waiting' | 'attention';
+};
+
+function WorkbenchStartPanel(props: {
   project?: Project;
   gitStatus?: GitStatusSummary;
   approvals: ApprovalRequest[];
@@ -128,21 +134,44 @@ function EmptyCommandState(props: {
   health?: ServerHealth;
   connected?: boolean;
 }) {
-  const branch = !props.gitStatus ? 'loading' : props.gitStatus.isRepo ? props.gitStatus.branch ?? 'HEAD' : 'no git';
-  const review = !props.gitStatus ? 'loading' : !props.gitStatus.isRepo ? 'unavailable' : props.gitStatus.files.length === 0 ? 'clean' : `${props.gitStatus.files.length} changed`;
+  const branch = branchLabel(props.gitStatus);
+  const review = reviewLabel(props.gitStatus);
   const risk = props.approvals.length === 0 ? 'clear' : `${props.approvals.length} pending`;
   const agents = props.agentsLoading ? 'loading' : props.agents.length ? `${props.agents.length} ready` : 'built-in';
   const deploy = !props.health ? 'loading' : props.health.huggingFace?.enabled ? 'HF Space' : 'local';
+  const lanes = workbenchLanes(props);
+
   return (
-    <div className="empty-command-state" aria-label="Current command center state">
-      <StatePill label="Project" value={props.project?.name ?? 'none'} />
-      <StatePill label="Thread" value={props.connected ? 'live' : 'offline'} />
-      <StatePill label="Branch" value={branch} />
-      <StatePill label="Review" value={review} />
-      <StatePill label="Agents" value={agents} />
-      <StatePill label="Deploy" value={deploy} />
-      <StatePill label="Risk" value={risk} tone={props.approvals.length > 0 ? 'warn' : undefined} />
-    </div>
+    <section className="empty-state codex-empty-state workbench-start" aria-label="Agent command center start">
+      <div className="workbench-start-head">
+        <span className="workbench-kicker">Agent Command Center</span>
+        <h2>What should we build in {props.project?.name ?? 'this project'}?</h2>
+        <p>Route the next turn with review, browser evidence, artifacts, and release readback in view.</p>
+      </div>
+
+      <div className="empty-command-state" aria-label="Current command center state">
+        <StatePill label="Project" value={props.project?.name ?? 'none'} />
+        <StatePill label="Thread" value={props.connected ? 'live' : 'offline'} />
+        <StatePill label="Branch" value={branch} />
+        <StatePill label="Review" value={review} tone={props.gitStatus?.isRepo && props.gitStatus.files.length > 0 ? 'warn' : undefined} />
+        <StatePill label="Agents" value={agents} />
+        <StatePill label="Deploy" value={deploy} />
+        <StatePill label="Risk" value={risk} tone={props.approvals.length > 0 ? 'warn' : undefined} />
+      </div>
+
+      <div className="workbench-start-lanes" aria-label="Command center lanes">
+        {lanes.map((lane) => (
+          <article key={lane.id} className={`workbench-start-lane ${lane.state}`}>
+            <span className="workbench-lane-icon"><Icon name={lane.icon} size={14} /></span>
+            <span className="workbench-lane-copy">
+              <strong>{lane.label}</strong>
+              <small>{lane.detail}</small>
+            </span>
+            <span className="workbench-lane-value">{lane.value}</span>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -153,6 +182,69 @@ function StatePill(props: { label: string; value: string; tone?: 'warn' }) {
       <strong>{props.value}</strong>
     </div>
   );
+}
+
+function workbenchLanes(props: {
+  gitStatus?: GitStatusSummary;
+  approvals: ApprovalRequest[];
+  agents: AgentSummary[];
+  agentsLoading?: boolean;
+  health?: ServerHealth;
+  connected?: boolean;
+}): WorkbenchLane[] {
+  const changedFiles = props.gitStatus?.isRepo ? props.gitStatus.files.length : 0;
+  const buildSha = props.health?.build?.sha ? shortSha(props.health.build.sha) : 'no build';
+  const hasPreviewTarget = Boolean(props.health?.huggingFace?.publicUrl || props.health?.huggingFace?.spaceHost);
+  return [
+    {
+      id: 'agent-routing',
+      icon: 'agent',
+      label: 'Agent routing',
+      value: props.agentsLoading ? 'loading' : props.agents.length ? `${props.agents.length}` : 'built-in',
+      detail: props.connected ? 'Thread stream live; choose #agent or attach a skill.' : 'Event stream offline; reconnect before long runs.',
+      state: props.connected ? 'ready' : 'attention'
+    },
+    {
+      id: 'review-gate',
+      icon: 'check',
+      label: 'Review gate',
+      value: !props.gitStatus ? 'loading' : changedFiles ? `${changedFiles} files` : props.gitStatus.isRepo ? 'clean' : 'no git',
+      detail: changedFiles ? 'Diff package should be reviewed before commit.' : 'Git state is ready for the next task.',
+      state: changedFiles || props.approvals.length ? 'attention' : props.gitStatus ? 'ready' : 'waiting'
+    },
+    {
+      id: 'evidence-loop',
+      icon: 'panel',
+      label: 'Evidence loop',
+      value: hasPreviewTarget ? 'preview' : 'pending',
+      detail: hasPreviewTarget ? 'Browser target is available for visual readback.' : 'Attach browser or artifact evidence when work starts.',
+      state: hasPreviewTarget ? 'ready' : 'waiting'
+    },
+    {
+      id: 'release-readback',
+      icon: 'branch',
+      label: 'Release readback',
+      value: buildSha,
+      detail: props.health?.huggingFace?.enabled ? 'GitHub and HF runtime can be compared after push.' : 'Local runtime only; HF readback is unavailable.',
+      state: props.health?.build?.sha ? 'ready' : 'waiting'
+    }
+  ];
+}
+
+function branchLabel(status?: GitStatusSummary): string {
+  if (!status) return 'loading';
+  if (!status.isRepo) return 'no git';
+  return status.branch ?? 'HEAD';
+}
+
+function reviewLabel(status?: GitStatusSummary): string {
+  if (!status) return 'loading';
+  if (!status.isRepo) return 'unavailable';
+  return status.files.length === 0 ? 'clean' : `${status.files.length} changed`;
+}
+
+function shortSha(value: string): string {
+  return value.length > 10 ? value.slice(0, 7) : value;
 }
 
 function GenericCard({ card }: { card: TimelineCard }) {
