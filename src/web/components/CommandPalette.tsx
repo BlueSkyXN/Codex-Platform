@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { InspectorTab, ManagementTab, Project, ThreadSummary } from '../../shared/types.js';
+import { Icon, type IconName } from './Icon.js';
 
 type PaletteAction = {
   id: string;
   title: string;
   subtitle?: string;
   group: string;
+  icon: IconName;
   shortcut?: string;
   disabled?: boolean;
   run: () => void | Promise<void>;
@@ -44,35 +46,36 @@ export function CommandPalette(props: {
 
   const actions = useMemo<PaletteAction[]>(() => {
     const base: PaletteAction[] = [
-      { id: 'new-thread', group: 'Actions', title: 'New thread', subtitle: 'Start a new Codex thread in the selected project', shortcut: '⌘N', disabled: !props.selectedProjectId, run: props.onNewThread },
-      { id: 'refresh-threads', group: 'Actions', title: 'Refresh threads', subtitle: 'Ask codex app-server for the latest thread list', run: props.onRefreshThreads },
-      { id: 'reload-skills', group: 'Actions', title: 'Reload skills', subtitle: 'Force Codex to rediscover available skills for this project', run: props.onReloadSkills },
-      { id: 'activity', group: 'Navigation', title: 'Open activity center', subtitle: 'Approvals, running threads, recent events', run: props.onOpenActivity },
-      { id: 'review', group: 'Navigation', title: 'Open review pane', subtitle: 'Changed files, approvals, focused item', run: () => props.onOpenInspectorTab('review') },
-      { id: 'diff', group: 'Navigation', title: 'Open diff pane', subtitle: 'Review reported file changes', shortcut: '⌘⇧I', run: () => props.onOpenInspectorTab('diff') },
-      { id: 'terminal', group: 'Navigation', title: 'Open terminal pane', subtitle: 'Commands and outputs from the thread', shortcut: '⌘J', run: () => props.onOpenInspectorTab('terminal') },
-      { id: 'files', group: 'Navigation', title: 'Open files pane', subtitle: 'Browse the active project without leaving Codex-Platform', run: () => props.onOpenInspectorTab('files') },
-      { id: 'git', group: 'Navigation', title: 'Open Git pane', subtitle: 'Inspect branch and working tree status', run: () => props.onOpenInspectorTab('git') },
-      { id: 'browser', group: 'Navigation', title: 'Open browser pane', subtitle: 'Preview local dev servers and Hugging Face Space targets', run: () => props.onOpenInspectorTab('browser') },
-      { id: 'artifacts', group: 'Navigation', title: 'Open artifacts pane', subtitle: 'Generated files, summaries, and previews for the thread', run: () => props.onOpenInspectorTab('artifacts') },
-      { id: 'raw', group: 'Navigation', title: 'Open raw debug pane', subtitle: 'Focused card, thread, and project payloads', run: () => props.onOpenInspectorTab('raw') },
-      { id: 'skills', group: 'Management', title: 'Open skills registry', subtitle: 'Available project/user/admin skills', run: () => props.onOpenManagementTab('skills') },
-      { id: 'agents', group: 'Management', title: 'Open agent registry', subtitle: 'Project and user .codex/agents TOML presets', run: () => props.onOpenManagementTab('agents') },
-      { id: 'admin', group: 'Management', title: 'Open runtime status', subtitle: 'Runtime posture, auth gate, storage, and HFS checks', run: () => props.onOpenManagementTab('admin') },
-      { id: 'automations', group: 'Management', title: 'Open automations', subtitle: 'Release checks, recurring sweeps, and capability refreshes', run: () => props.onOpenManagementTab('automations') },
-      { id: 'triage', group: 'Management', title: 'Open triage inbox', subtitle: 'Approvals, failures, review work, and release risks', run: () => props.onOpenManagementTab('triage') },
-      { id: 'settings', group: 'Management', title: 'Open runtime settings', subtitle: 'Runtime, workspace, auth, notification settings', run: () => props.onOpenManagementTab('settings') },
-      { id: 'toggle-sidebar', group: 'Layout', title: 'Toggle sidebar', subtitle: 'Show or hide project/thread navigation', shortcut: '⌘B', run: props.onToggleSidebar },
-      { id: 'toggle-inspector', group: 'Layout', title: 'Toggle side panel', subtitle: 'Show or hide review/terminal/artifacts pane', shortcut: '⌘⌥B', run: props.onToggleInspector },
-      { id: 'copy-thread', group: 'Utilities', title: 'Copy current thread id', subtitle: props.selectedThreadId ?? 'No selected thread', disabled: !props.selectedThreadId, run: () => void navigator.clipboard?.writeText(props.selectedThreadId ?? '') },
-      { id: 'copy-project-path', group: 'Utilities', title: 'Copy project path', subtitle: props.projects.find((project) => project.id === props.selectedProjectId)?.cwd ?? 'No selected project', disabled: !props.selectedProjectId, run: () => void navigator.clipboard?.writeText(props.projects.find((project) => project.id === props.selectedProjectId)?.cwd ?? '') }
+      { id: 'new-thread', group: 'Actions', icon: 'plus', title: 'New thread', subtitle: 'Start a new Codex thread in the selected project', shortcut: '⌘N', disabled: !props.selectedProjectId, run: props.onNewThread },
+      { id: 'refresh-threads', group: 'Actions', icon: 'refresh', title: 'Refresh threads', subtitle: 'Ask codex app-server for the latest thread list', run: props.onRefreshThreads },
+      { id: 'reload-skills', group: 'Actions', icon: 'spark', title: 'Reload skills', subtitle: 'Force Codex to rediscover available skills for this project', run: props.onReloadSkills },
+      { id: 'activity', group: 'Navigation', icon: 'clock', title: 'Open activity center', subtitle: 'Approvals, running threads, recent events', run: props.onOpenActivity },
+      { id: 'review', group: 'Navigation', icon: 'check', title: 'Open review pane', subtitle: 'Changed files, approvals, focused item', run: () => props.onOpenInspectorTab('review') },
+      { id: 'diff', group: 'Navigation', icon: 'file', title: 'Open diff pane', subtitle: 'Review reported file changes', shortcut: '⌘⇧I', run: () => props.onOpenInspectorTab('diff') },
+      { id: 'terminal', group: 'Navigation', icon: 'terminal', title: 'Open terminal pane', subtitle: 'Commands and outputs from the thread', shortcut: '⌘J', run: () => props.onOpenInspectorTab('terminal') },
+      { id: 'files', group: 'Navigation', icon: 'folder', title: 'Open files pane', subtitle: 'Browse the active project without leaving Codex-Platform', run: () => props.onOpenInspectorTab('files') },
+      { id: 'git', group: 'Navigation', icon: 'branch', title: 'Open Git pane', subtitle: 'Inspect branch and working tree status', run: () => props.onOpenInspectorTab('git') },
+      { id: 'browser', group: 'Navigation', icon: 'panel', title: 'Open browser pane', subtitle: 'Preview local dev servers and Hugging Face Space targets', run: () => props.onOpenInspectorTab('browser') },
+      { id: 'artifacts', group: 'Navigation', icon: 'paperclip', title: 'Open artifacts pane', subtitle: 'Generated files, summaries, and previews for the thread', run: () => props.onOpenInspectorTab('artifacts') },
+      { id: 'raw', group: 'Navigation', icon: 'sliders', title: 'Open raw debug pane', subtitle: 'Focused card, thread, and project payloads', run: () => props.onOpenInspectorTab('raw') },
+      { id: 'skills', group: 'Management', icon: 'spark', title: 'Open skills registry', subtitle: 'Available project/user/admin skills', run: () => props.onOpenManagementTab('skills') },
+      { id: 'agents', group: 'Management', icon: 'agent', title: 'Open agent registry', subtitle: 'Project and user .codex/agents TOML presets', run: () => props.onOpenManagementTab('agents') },
+      { id: 'admin', group: 'Management', icon: 'sliders', title: 'Open runtime status', subtitle: 'Runtime posture, auth gate, storage, and HFS checks', run: () => props.onOpenManagementTab('admin') },
+      { id: 'automations', group: 'Management', icon: 'automation', title: 'Open automations', subtitle: 'Release checks, recurring sweeps, and capability refreshes', run: () => props.onOpenManagementTab('automations') },
+      { id: 'triage', group: 'Management', icon: 'inbox', title: 'Open triage inbox', subtitle: 'Approvals, failures, review work, and release risks', run: () => props.onOpenManagementTab('triage') },
+      { id: 'settings', group: 'Management', icon: 'settings', title: 'Open runtime settings', subtitle: 'Runtime, workspace, auth, notification settings', run: () => props.onOpenManagementTab('settings') },
+      { id: 'toggle-sidebar', group: 'Layout', icon: 'sidebarLeft', title: 'Toggle sidebar', subtitle: 'Show or hide project/thread navigation', shortcut: '⌘B', run: props.onToggleSidebar },
+      { id: 'toggle-inspector', group: 'Layout', icon: 'sidebarRight', title: 'Toggle side panel', subtitle: 'Show or hide review/terminal/artifacts pane', shortcut: '⌘⌥B', run: props.onToggleInspector },
+      { id: 'copy-thread', group: 'Utilities', icon: 'copy', title: 'Copy current thread id', subtitle: props.selectedThreadId ?? 'No selected thread', disabled: !props.selectedThreadId, run: () => void navigator.clipboard?.writeText(props.selectedThreadId ?? '') },
+      { id: 'copy-project-path', group: 'Utilities', icon: 'folder', title: 'Copy project path', subtitle: props.projects.find((project) => project.id === props.selectedProjectId)?.cwd ?? 'No selected project', disabled: !props.selectedProjectId, run: () => void navigator.clipboard?.writeText(props.projects.find((project) => project.id === props.selectedProjectId)?.cwd ?? '') }
     ];
     if (props.onLogout) {
-      base.push({ id: 'lock', group: 'Security', title: 'Lock Codex-Platform', subtitle: 'Clear the local Codex-Platform token', run: props.onLogout });
+      base.push({ id: 'lock', group: 'Security', icon: 'settings', title: 'Lock Codex-Platform', subtitle: 'Clear the local Codex-Platform token', run: props.onLogout });
     }
     const projectActions = props.projects.map<PaletteAction>((project) => ({
       id: `project-${project.id}`,
       group: 'Projects',
+      icon: 'folder',
       title: `Switch project: ${project.name}`,
       subtitle: project.cwd,
       run: () => props.onSelectProject(project.id)
@@ -83,6 +86,7 @@ export function CommandPalette(props: {
       .map<PaletteAction>((thread) => ({
         id: `thread-${thread.id}`,
         group: 'Threads',
+        icon: 'chat',
         title: thread.name || thread.preview || compactThreadId(thread.id),
         subtitle: `${thread.status ?? 'idle'} · ${compactThreadId(thread.id)}`,
         run: () => props.onSelectThread(thread.id)
@@ -143,6 +147,7 @@ export function CommandPalette(props: {
               <div key={action.id}>
                 {showGroup ? <div className="palette-group">{action.group}</div> : null}
                 <button className={`palette-row ${index === activeIndex ? 'active' : ''}`} disabled={action.disabled} onMouseEnter={() => setActiveIndex(index)} onClick={() => void run(action)}>
+                  <span className="palette-row-icon"><Icon name={action.icon} size={14} /></span>
                   <span className="palette-row-main">
                     <strong>{action.title}</strong>
                     {action.subtitle ? <span>{action.subtitle}</span> : null}

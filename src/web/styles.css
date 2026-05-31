@@ -1260,14 +1260,22 @@ kbd {
   border: 0;
   background: transparent;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
   text-align: left;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
 }
 .palette-row.active { background: var(--codex-soft, var(--panel-2)); }
+.palette-row-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--codex-radius-md, 7px);
+  color: var(--codex-muted, var(--muted));
+}
 .palette-row-main { min-width: 0; display: grid; gap: 2px; }
 .palette-row-main strong { font-size: 13px; }
 .palette-row-main span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -6190,6 +6198,7 @@ button,
 .file-icon,
 .kind-icon,
 .suggestion-icon,
+.palette-row-icon,
 .starter-prompt-icon,
 .context-picker-option-icon,
 .skill-row-icon {
@@ -6207,6 +6216,8 @@ button,
 .settings-row:hover .nav-icon,
 .context-picker-option:hover:not(:disabled) .context-picker-option-icon,
 .starter-prompt:hover .starter-prompt-icon,
+.palette-row.active .palette-row-icon,
+.palette-row:hover:not(:disabled) .palette-row-icon,
 .command-menu button:hover .suggestion-icon {
   background: var(--codex-hover);
   color: var(--codex-text);
