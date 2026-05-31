@@ -9,6 +9,7 @@ export type IconName =
   | 'chevronDown'
   | 'clock'
   | 'close'
+  | 'copy'
   | 'dot'
   | 'file'
   | 'folder'
@@ -112,6 +113,13 @@ function iconPath(name: IconName) {
         <>
           <path d="M7 7l10 10" />
           <path d="M17 7 7 17" />
+        </>
+      );
+    case 'copy':
+      return (
+        <>
+          <rect x="8" y="8" width="10" height="10" rx="2" />
+          <path d="M6 15.5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8.5a2 2 0 0 1 2 2v1" />
         </>
       );
     case 'dot':

@@ -422,6 +422,7 @@ function AutomationsPanel(props: {
           props.onUsePrompt?.({ prompt: automationQueueItem.prompt, agentName: automationQueueItem.agentName });
         }}
         handoffDisabled={!props.onUsePrompt}
+        copyPrompt={automationQueueItem.prompt}
       />
       <div className="automation-lanes">
         {rows.map((row) => (
@@ -434,17 +435,20 @@ function AutomationsPanel(props: {
               </span>
               <span className="lane-state">{row.state}</span>
             </button>
-            <button
-              type="button"
-              className="lane-handoff"
-              onClick={() => props.onUsePrompt?.({ prompt: row.prompt, agentName: row.agentName })}
-              disabled={!props.onUsePrompt}
-              title={`Hand off ${row.title} to composer`}
-              aria-label={`Hand off ${row.title} to composer`}
-            >
-              <Icon name="send" size={13} />
-              <span>Hand off</span>
-            </button>
+            <div className="lane-actions">
+              <QueuePromptCopyButton prompt={row.prompt} label="Copy" title={`Copy ${row.title} prompt`} />
+              <button
+                type="button"
+                className="lane-handoff"
+                onClick={() => props.onUsePrompt?.({ prompt: row.prompt, agentName: row.agentName })}
+                disabled={!props.onUsePrompt}
+                title={`Hand off ${row.title} to composer`}
+                aria-label={`Hand off ${row.title} to composer`}
+              >
+                <Icon name="send" size={13} />
+                <span>Hand off</span>
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -612,6 +616,8 @@ function TriagePanel(props: {
           props.onUsePrompt?.({ prompt: nextTriageItem.prompt, threadId: nextTriageItem.threadId, agentName: nextTriageItem.agentName });
         }}
         handoffDisabled={!nextTriageItem || !props.onUsePrompt}
+        copyPrompt={nextTriageItem?.prompt}
+        copyDisabled={!nextTriageItem}
       />
       {visibleItems.length === 0 ? <div className="empty">No triage items waiting.</div> : null}
       <div className="triage-list">
@@ -636,17 +642,20 @@ function TriagePanel(props: {
               </span>
               <span className="lane-state">{item.tone}</span>
             </button>
-            <button
-              type="button"
-              className="lane-handoff"
-              onClick={() => props.onUsePrompt?.({ prompt: item.prompt, threadId: item.threadId, agentName: item.agentName })}
-              disabled={!props.onUsePrompt}
-              title={`Hand off ${item.title} to composer`}
-              aria-label={`Hand off ${item.title} to composer`}
-            >
-              <Icon name="send" size={13} />
-              <span>Hand off</span>
-            </button>
+            <div className="lane-actions">
+              <QueuePromptCopyButton prompt={item.prompt} label="Copy" title={`Copy ${item.title} prompt`} />
+              <button
+                type="button"
+                className="lane-handoff"
+                onClick={() => props.onUsePrompt?.({ prompt: item.prompt, threadId: item.threadId, agentName: item.agentName })}
+                disabled={!props.onUsePrompt}
+                title={`Hand off ${item.title} to composer`}
+                aria-label={`Hand off ${item.title} to composer`}
+              >
+                <Icon name="send" size={13} />
+                <span>Hand off</span>
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -689,6 +698,8 @@ function QueuePrimer(props: {
   openDisabled?: boolean;
   onHandoff: () => void;
   handoffDisabled?: boolean;
+  copyPrompt?: string;
+  copyDisabled?: boolean;
 }) {
   return (
     <div className={`queue-primer ${props.item.state}`} aria-label={props.title}>
@@ -717,6 +728,7 @@ function QueuePrimer(props: {
       </div>
       <div className="queue-primer-actions">
         <button type="button" className="mini-action" onClick={props.onOpen} disabled={props.openDisabled}>Open</button>
+        <QueuePromptCopyButton prompt={props.copyPrompt} label="Copy prompt" title={`Copy ${props.item.title} prompt`} disabled={props.copyDisabled} />
         <button type="button" className="lane-handoff" onClick={props.onHandoff} disabled={props.handoffDisabled} aria-label={`Hand off ${props.item.title} to composer`}>
           <Icon name="send" size={13} />
           <span>Hand off next</span>
@@ -941,19 +953,39 @@ function compactText(value: string, maxLength: number): string {
   return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
-function CopyReleasePromptButton(props: { prompt: string }) {
+function QueuePromptCopyButton(props: { prompt?: string; label: string; title: string; disabled?: boolean; className?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copyPrompt() {
+    if (!props.prompt) return;
     await copyText(props.prompt);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
 
   return (
-    <button type="button" className={`small release-copy-button ${copied ? 'primary' : 'ghost'}`} onClick={() => void copyPrompt()} title="Copy release verification prompt">
-      {copied ? 'Copied' : 'Copy verification prompt'}
+    <button
+      type="button"
+      className={`lane-prompt-copy ${copied ? 'copied' : ''} ${props.className ?? ''}`}
+      onClick={() => void copyPrompt()}
+      disabled={props.disabled || !props.prompt}
+      title={copied ? 'Prompt copied' : props.title}
+      aria-label={copied ? 'Prompt copied' : props.title}
+    >
+      <Icon name={copied ? 'check' : 'copy'} size={13} />
+      <span>{copied ? 'Copied' : props.label}</span>
     </button>
+  );
+}
+
+function CopyReleasePromptButton(props: { prompt: string }) {
+  return (
+    <QueuePromptCopyButton
+      prompt={props.prompt}
+      label="Copy verification"
+      title="Copy release verification prompt"
+      className="small release-copy-button"
+    />
   );
 }
 
@@ -1167,6 +1199,8 @@ async function copyText(value: string): Promise<boolean> {
   textarea.select();
   try {
     return document.execCommand('copy');
+  } catch {
+    return false;
   } finally {
     textarea.remove();
   }

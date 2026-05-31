@@ -5423,6 +5423,10 @@ button,
 
 .release-copy-button {
   max-width: 190px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   line-height: 1.18;
   overflow-wrap: anywhere;
   text-align: center;
@@ -5569,6 +5573,7 @@ button,
 
 .queue-primer-actions {
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .automation-lane,
@@ -6763,7 +6768,8 @@ body {
 }
 
 .lane-main:disabled,
-.lane-handoff:disabled {
+.lane-handoff:disabled,
+.lane-prompt-copy:disabled {
   cursor: default;
   opacity: .48;
 }
@@ -6782,7 +6788,17 @@ body {
   white-space: nowrap;
 }
 
-.lane-handoff {
+.lane-actions {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  align-self: center;
+}
+
+.lane-handoff,
+.lane-prompt-copy {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
@@ -6799,10 +6815,16 @@ body {
   white-space: nowrap;
 }
 
-.lane-handoff:hover:not(:disabled) {
+.lane-handoff:hover:not(:disabled),
+.lane-prompt-copy:hover:not(:disabled) {
   border-color: var(--border-strong);
   background: var(--codex-hover);
   color: var(--codex-text);
+}
+
+.lane-prompt-copy.copied {
+  border-color: color-mix(in srgb, var(--codex-green, var(--ok)), var(--border) 58%);
+  color: var(--codex-green, var(--ok));
 }
 
 .automation-lane + .automation-lane,
@@ -6854,15 +6876,26 @@ body {
     justify-self: start;
     margin-left: 33px;
   }
+
+  .lane-actions {
+    justify-self: start;
+    margin-left: 33px;
+  }
+
+  .lane-actions .lane-handoff {
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 430px) {
-  .lane-handoff {
+  .lane-handoff,
+  .lane-prompt-copy {
     width: 32px;
     padding: 0;
   }
 
-  .lane-handoff span {
+  .lane-handoff span,
+  .lane-prompt-copy span {
     display: none;
   }
 }
