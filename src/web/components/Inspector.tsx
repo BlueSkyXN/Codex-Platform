@@ -632,15 +632,22 @@ function EvidenceLoopStrip(props: {
       </div>
       <div className="evidence-loop-actions">
         <button
-          className="mini-action primary-mini"
+          className="evidence-loop-action primary"
           disabled={props.handoffDisabled}
           onClick={props.onHandOff}
           aria-label={`Hand off ${props.title} to composer`}
         >
-          Hand off
+          <Icon name="send" size={13} />
+          <span>Hand off</span>
         </button>
-        <button className="mini-action" disabled={props.copyDisabled} onClick={props.onCopy}>
-          {props.copied ? 'Copied' : 'Copy prompt'}
+        <button
+          className={`evidence-loop-action ${props.copied ? 'copied' : ''}`}
+          disabled={props.copyDisabled}
+          onClick={props.onCopy}
+          aria-label={props.copied ? 'Prompt copied' : `Copy ${props.title} prompt`}
+        >
+          <Icon name={props.copied ? 'check' : 'copy'} size={13} />
+          <span>{props.copied ? 'Copied' : 'Copy prompt'}</span>
         </button>
       </div>
     </div>
@@ -811,6 +818,8 @@ async function copyText(value: string): Promise<boolean> {
   textarea.select();
   try {
     return document.execCommand('copy');
+  } catch {
+    return false;
   } finally {
     textarea.remove();
   }
