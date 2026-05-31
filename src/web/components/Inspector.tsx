@@ -43,6 +43,12 @@ type PromptHandoff = {
   agentName?: string;
 };
 
+type EvidenceLoopStep = {
+  label: string;
+  value: string;
+  tone?: 'ok' | 'warn' | 'idle';
+};
+
 export function Inspector(props: {
   card?: TimelineCard;
   cards: TimelineCard[];
@@ -474,6 +480,7 @@ function BrowserTab({
   const activeTarget = targets.find((target) => target.url === selectedUrl) ?? targets[0];
   const evidence = browserEvidence(activeTarget, health);
   const feedbackPrompt = browserFeedbackPrompt({ target: activeTarget, project, health, feedback });
+  const loopSteps = browserLoopSteps(activeTarget, feedback, health);
 
   async function copyFeedbackPrompt() {
     if (!feedbackPrompt) return;
@@ -558,7 +565,7 @@ function BrowserTab({
       <div className="browser-feedback-card">
         <div>
           <strong>Feedback loop</strong>
-          <span>Record what you see, then turn it into the next Codex prompt.</span>
+          <span>Observation notes become the next verification task.</span>
         </div>
         <textarea
           value={feedback}
@@ -566,18 +573,16 @@ function BrowserTab({
           placeholder="Example: the mobile toolbar overlaps the preview; tighten spacing and verify at 390px."
           rows={3}
         />
-        <div className="feedback-actions">
-          <button
-            className="small primary"
-            disabled={!activeTarget || !feedbackPrompt || !onUsePrompt}
-            onClick={handOffFeedbackPrompt}
-            aria-label="Hand off browser feedback to composer"
-          >
-            Hand off
-          </button>
-          <button className="small ghost" disabled={!activeTarget} onClick={() => void copyFeedbackPrompt()}>{copiedFeedback ? 'Copied prompt' : 'Copy follow-up prompt'}</button>
-          <span>{activeTarget ? 'Includes target URL, runtime evidence, and observation notes.' : 'Select or capture a browser target first.'}</span>
-        </div>
+        <EvidenceLoopStrip
+          title="Browser evidence loop"
+          steps={loopSteps}
+          summary={activeTarget ? 'Target URL, runtime evidence, and notes are included.' : 'Capture or select a preview target first.'}
+          onHandOff={handOffFeedbackPrompt}
+          handoffDisabled={!activeTarget || !feedbackPrompt || !onUsePrompt}
+          onCopy={() => void copyFeedbackPrompt()}
+          copyDisabled={!activeTarget || !feedbackPrompt}
+          copied={copiedFeedback}
+        />
       </div>
 
       {activeTarget ? (
@@ -596,6 +601,82 @@ function BrowserTab({
       ) : null}
     </section>
   );
+}
+
+function EvidenceLoopStrip(props: {
+  title: string;
+  steps: EvidenceLoopStep[];
+  summary: string;
+  onHandOff: () => void;
+  handoffDisabled?: boolean;
+  onCopy: () => void;
+  copyDisabled?: boolean;
+  copied?: boolean;
+}) {
+  return (
+    <div className="evidence-loop-strip">
+      <div className="evidence-loop-head">
+        <span className="evidence-loop-icon"><Icon name="spark" size={14} /></span>
+        <div>
+          <strong>{props.title}</strong>
+          <span>{props.summary}</span>
+        </div>
+      </div>
+      <div className="evidence-loop-steps">
+        {props.steps.map((step) => (
+          <div key={step.label} className={`evidence-loop-step ${step.tone ?? ''}`}>
+            <span>{step.label}</span>
+            <strong>{step.value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="evidence-loop-actions">
+        <button
+          className="mini-action primary-mini"
+          disabled={props.handoffDisabled}
+          onClick={props.onHandOff}
+          aria-label={`Hand off ${props.title} to composer`}
+        >
+          Hand off
+        </button>
+        <button className="mini-action" disabled={props.copyDisabled} onClick={props.onCopy}>
+          {props.copied ? 'Copied' : 'Copy prompt'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function browserLoopSteps(activeTarget: BrowserTarget | undefined, feedback: string, health?: ServerHealth): EvidenceLoopStep[] {
+  const notesReady = feedback.trim().length > 0;
+  const runtimeState = health ? (health.ready ? 'ready' : health.ok ? 'starting' : 'unhealthy') : 'unknown';
+  const verify = activeTarget
+    ? activeTarget.kind === 'space'
+      ? 'HF smoke + responsive preview'
+      : 'desktop/mobile preview'
+    : 'select target';
+  return [
+    {
+      label: 'Target',
+      value: activeTarget ? `${activeTarget.title} · ${targetKindLabel(activeTarget.kind)}` : 'none',
+      tone: activeTarget ? 'ok' : 'idle'
+    },
+    {
+      label: 'Notes',
+      value: notesReady ? 'recorded' : 'empty',
+      tone: notesReady ? 'ok' : 'warn'
+    },
+    {
+      label: 'Owner',
+      value: '#worker',
+      tone: activeTarget ? 'ok' : 'idle'
+    },
+    {
+      label: 'Verify',
+      value: `${runtimeState} · ${verify}`,
+      tone: activeTarget ? 'ok' : 'idle'
+    }
+  ];
 }
 
 function browserEvidence(activeTarget: BrowserTarget | undefined, health?: ServerHealth): Array<{ label: string; value: string; state?: 'ok' | 'warn' | 'idle' }> {
@@ -1730,6 +1811,7 @@ function ArtifactsTab({
   const [copiedArtifact, setCopiedArtifact] = useState(false);
   const selected = artifacts.find((artifact) => artifact.id === selectedId) ?? artifacts[0];
   const artifactPrompt = selected ? artifactFeedbackPrompt(selected, project, feedback) : undefined;
+  const loopSteps = artifactLoopSteps(selected, feedback);
 
   async function copyArtifactPrompt() {
     if (!artifactPrompt) return;
@@ -1788,21 +1870,29 @@ function ArtifactsTab({
                 </div>
                 <div className="artifact-detail-actions">
                   <button className="small ghost" onClick={() => onFocusCard?.(selected.id)}>Focus</button>
-                  <button className="small primary" disabled={!artifactPrompt || !onUsePrompt} onClick={handOffArtifactPrompt} aria-label="Hand off artifact feedback to composer">Hand off</button>
-                  <button className="small ghost" onClick={() => void copyArtifactPrompt()}>{copiedArtifact ? 'Copied' : 'Copy prompt'}</button>
                 </div>
               </div>
               <FocusedCard card={selected} />
               <div className="artifact-feedback-card">
                 <div>
                   <strong>Follow-up feedback</strong>
-                  <span>Turn this output into the next review or fix task.</span>
+                  <span>Artifact notes become the next scoped review or fix task.</span>
                 </div>
                 <textarea
                   value={feedback}
                   onChange={(event) => onFeedbackChange(event.target.value)}
                   placeholder="Example: preserve this diff but refine the empty state copy and verify the artifact still appears here."
                   rows={3}
+                />
+                <EvidenceLoopStrip
+                  title="Artifact evidence loop"
+                  steps={loopSteps}
+                  summary={selected ? 'Selected output, excerpt, and notes are included.' : 'Select an artifact before handoff.'}
+                  onHandOff={handOffArtifactPrompt}
+                  handoffDisabled={!artifactPrompt || !onUsePrompt}
+                  onCopy={() => void copyArtifactPrompt()}
+                  copyDisabled={!artifactPrompt}
+                  copied={copiedArtifact}
                 />
               </div>
             </div>
@@ -1815,9 +1905,37 @@ function ArtifactsTab({
 
 function artifactCards(cards: TimelineCard[]): TimelineCard[] {
   return cards
-    .filter((card) => card.kind === 'fileChange' || card.kind === 'agent' || card.kind === 'plan' || (card.kind === 'command' && (card.stdout || card.stderr)))
+    .filter((card) => card.kind === 'fileChange' || card.kind === 'agent' || card.kind === 'plan' || card.kind === 'error' || (card.kind === 'command' && (card.stdout || card.stderr)))
     .slice(-12)
     .reverse();
+}
+
+function artifactLoopSteps(card: TimelineCard | undefined, feedback: string): EvidenceLoopStep[] {
+  const notesReady = feedback.trim().length > 0;
+  const owner = card?.kind === 'error' ? '#explorer' : '#worker';
+  const verify = card ? artifactVerificationLabel(card) : 'select artifact';
+  return [
+    {
+      label: 'Artifact',
+      value: card ? `${artifactKind(card)} · ${card.filePath ?? card.title}` : 'none',
+      tone: card ? 'ok' : 'idle'
+    },
+    {
+      label: 'Notes',
+      value: notesReady ? 'recorded' : 'empty',
+      tone: notesReady ? 'ok' : 'warn'
+    },
+    {
+      label: 'Owner',
+      value: owner,
+      tone: card ? 'ok' : 'idle'
+    },
+    {
+      label: 'Verify',
+      value: verify,
+      tone: card ? 'ok' : 'idle'
+    }
+  ];
 }
 
 function RawTab(props: { card?: TimelineCard; thread?: ThreadSummary; project?: Project; rawEvents: RawEventRecord[] }) {
@@ -2055,6 +2173,15 @@ function artifactSubtitle(card: TimelineCard): string {
   if (card.kind === 'fileChange') return diffStats(card.diff).label;
   if (card.kind === 'command') return card.exitCode === null || card.exitCode === undefined ? card.status ?? 'command output' : `exit ${card.exitCode}`;
   return card.status ?? card.kind;
+}
+
+function artifactVerificationLabel(card: TimelineCard): string {
+  if (card.kind === 'fileChange') return 'diff review + UI smoke';
+  if (card.kind === 'command') return card.exitCode === 0 ? 'rerun if touched' : 'diagnose exit';
+  if (card.kind === 'error') return 'reproduce + trace';
+  if (card.kind === 'plan') return 'acceptance check';
+  if (card.kind === 'agent') return 'source readback';
+  return 'source check';
 }
 
 function artifactFeedbackPrompt(card: TimelineCard, project: Project | undefined, feedback: string): string {

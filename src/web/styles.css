@@ -4437,6 +4437,103 @@ button.icon-only {
   line-height: 1.45;
 }
 
+.evidence-loop-strip {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.evidence-loop-head {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+}
+
+.evidence-loop-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--codex-radius-md, 8px);
+  background: var(--codex-surface, var(--panel));
+  color: var(--codex-muted, var(--muted));
+}
+
+.evidence-loop-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.evidence-loop-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.evidence-loop-head span {
+  min-width: 0;
+  color: var(--codex-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.evidence-loop-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.evidence-loop-step {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--border), transparent 24%);
+  padding-top: 7px;
+}
+
+.evidence-loop-step span {
+  color: var(--codex-muted);
+  font-size: 10px;
+}
+
+.evidence-loop-step strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--codex-text);
+  font-size: 11px;
+  font-weight: 560;
+}
+
+.evidence-loop-step.ok strong {
+  color: var(--codex-green);
+}
+
+.evidence-loop-step.warn strong {
+  color: var(--codex-yellow);
+}
+
+.evidence-loop-step.idle strong {
+  color: var(--codex-muted);
+}
+
+.evidence-loop-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
 .browser-url-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -4580,9 +4677,14 @@ button.icon-only {
 
   .browser-head-actions,
   .feedback-actions,
-  .artifact-detail-actions {
+  .artifact-detail-actions,
+  .evidence-loop-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .evidence-loop-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
