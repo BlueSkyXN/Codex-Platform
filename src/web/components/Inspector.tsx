@@ -1063,13 +1063,19 @@ function GitTab(props: {
               {shipInfo.pushCommand ? (
                 <div className="git-push-command">
                   <code>{shipInfo.pushCommand}</code>
-                  <button className="mini-action" onClick={() => void copyPushCommand(shipInfo.pushCommand)}>{copiedPush ? 'Copied' : 'Copy'}</button>
+                  <button className={`git-review-action ${copiedPush ? 'copied' : ''}`} onClick={() => void copyPushCommand(shipInfo.pushCommand)} aria-label={copiedPush ? 'Copied push command' : 'Copy push command'} title={copiedPush ? 'Copied push command' : 'Copy push command'}>
+                    <Icon name={copiedPush ? 'check' : 'copy'} size={13} />
+                    <span>{copiedPush ? 'Copied' : 'Copy'}</span>
+                  </button>
                 </div>
               ) : null}
               {shipInfo.prCommand ? (
                 <div className="git-push-command">
                   <code>{shipInfo.prCommand}</code>
-                  <button className="mini-action" onClick={() => void copyPrCommand(shipInfo.prCommand)}>{copiedPr ? 'Copied' : 'Copy PR'}</button>
+                  <button className={`git-review-action ${copiedPr ? 'copied' : ''}`} onClick={() => void copyPrCommand(shipInfo.prCommand)} aria-label={copiedPr ? 'Copied PR command' : 'Copy PR command'} title={copiedPr ? 'Copied PR command' : 'Copy PR command'}>
+                    <Icon name={copiedPr ? 'check' : 'copy'} size={13} />
+                    <span>{copiedPr ? 'Copied' : 'Copy PR'}</span>
+                  </button>
                 </div>
               ) : null}
               <div className="git-pr-note">{shipInfo.prNote}</div>
@@ -1105,10 +1111,22 @@ function GitTab(props: {
                 <span>Stage intentionally, draft the commit, then copy a PR handoff when ready.</span>
               </div>
               <div className="git-review-actions">
-                <button className="mini-action primary-mini" disabled={!reviewBrief || !props.onUsePrompt} onClick={handOffReviewPackage} aria-label="Hand off Git review package to composer">Hand off</button>
-                <button className="mini-action" disabled={!reviewBrief} onClick={() => void copyReviewBrief()}>{copiedReviewBrief ? 'Copied' : 'Copy brief'}</button>
-                <button className="mini-action" disabled={!prBody} onClick={() => void copyPrBody()}>{copiedPrBody ? 'Copied' : 'Copy PR body'}</button>
-                <button className="mini-action" disabled={reviewFindings.length === 0 || !reviewPrompt} onClick={() => void copyReviewPrompt()}>{copiedReviewPrompt ? 'Copied' : 'Copy follow-up'}</button>
+                <button className="git-review-action is-primary" disabled={!reviewBrief || !props.onUsePrompt} onClick={handOffReviewPackage} aria-label="Hand off Git review package to composer" title="Hand off Git review package">
+                  <Icon name="send" size={13} />
+                  <span>Hand off</span>
+                </button>
+                <button className={`git-review-action ${copiedReviewBrief ? 'copied' : ''}`} disabled={!reviewBrief} onClick={() => void copyReviewBrief()} aria-label={copiedReviewBrief ? 'Copied review brief' : 'Copy review brief'} title={copiedReviewBrief ? 'Copied review brief' : 'Copy review brief'}>
+                  <Icon name={copiedReviewBrief ? 'check' : 'copy'} size={13} />
+                  <span>{copiedReviewBrief ? 'Copied' : 'Copy brief'}</span>
+                </button>
+                <button className={`git-review-action ${copiedPrBody ? 'copied' : ''}`} disabled={!prBody} onClick={() => void copyPrBody()} aria-label={copiedPrBody ? 'Copied PR body' : 'Copy PR body'} title={copiedPrBody ? 'Copied PR body' : 'Copy PR body'}>
+                  <Icon name={copiedPrBody ? 'check' : 'copy'} size={13} />
+                  <span>{copiedPrBody ? 'Copied' : 'Copy PR body'}</span>
+                </button>
+                <button className={`git-review-action ${copiedReviewPrompt ? 'copied' : ''}`} disabled={reviewFindings.length === 0 || !reviewPrompt} onClick={() => void copyReviewPrompt()} aria-label={copiedReviewPrompt ? 'Copied review follow-up' : 'Copy review follow-up'} title={copiedReviewPrompt ? 'Copied review follow-up' : 'Copy review follow-up'}>
+                  <Icon name={copiedReviewPrompt ? 'check' : 'copy'} size={13} />
+                  <span>{copiedReviewPrompt ? 'Copied' : 'Copy follow-up'}</span>
+                </button>
               </div>
             </div>
             {closureSteps.length > 0 ? (
@@ -1373,12 +1391,28 @@ function GitReviewQueueCard(props: {
         <strong>{props.item.state}</strong>
       </div>
       <div className="git-review-next-actions">
-        <button className="mini-action" disabled={props.openDisabled} onClick={props.onOpen}>{props.item.openLabel}</button>
-        <button className="mini-action primary-mini" disabled={props.handoffDisabled} onClick={props.onHandoff} aria-label="Hand off next Git review queue item to composer">Hand off next</button>
-        <button className="mini-action" onClick={props.onCopy}>{props.copied ? 'Copied' : 'Copy prompt'}</button>
+        <button className="git-review-action" disabled={props.openDisabled} onClick={props.onOpen} aria-label={props.item.openLabel} title={props.item.openLabel}>
+          <Icon name={gitReviewOpenIcon(props.item.openTarget?.kind)} size={13} />
+          <span>{props.item.openLabel}</span>
+        </button>
+        <button className="git-review-action is-primary" disabled={props.handoffDisabled} onClick={props.onHandoff} aria-label="Hand off next Git review queue item to composer" title="Hand off next Git review item">
+          <Icon name="send" size={13} />
+          <span>Hand off next</span>
+        </button>
+        <button className={`git-review-action ${props.copied ? 'copied' : ''}`} onClick={props.onCopy} aria-label={props.copied ? 'Copied next review prompt' : 'Copy next review prompt'} title={props.copied ? 'Copied next review prompt' : 'Copy next review prompt'}>
+          <Icon name={props.copied ? 'check' : 'copy'} size={13} />
+          <span>{props.copied ? 'Copied' : 'Copy prompt'}</span>
+        </button>
       </div>
     </div>
   );
+}
+
+function gitReviewOpenIcon(kind: NonNullable<GitReviewQueueItem['openTarget']>['kind'] | undefined): IconName {
+  if (kind === 'file') return 'file';
+  if (kind === 'draft') return 'chat';
+  if (kind === 'url') return 'branch';
+  return 'panel';
 }
 
 function gitClosureSteps(input: {

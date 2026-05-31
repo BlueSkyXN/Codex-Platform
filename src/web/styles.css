@@ -786,6 +786,42 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   gap: 6px;
   flex-wrap: wrap;
 }
+.git-review-head > .git-review-actions {
+  display: flex;
+}
+.git-review-action {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 10%);
+  border-radius: var(--codex-radius-md);
+  background: color-mix(in srgb, var(--codex-surface), transparent 8%);
+  color: var(--codex-muted);
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 620;
+  white-space: nowrap;
+}
+.git-review-action:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--codex-hover);
+  color: var(--codex-text);
+}
+.git-review-action.is-primary {
+  background: color-mix(in srgb, var(--codex-surface), transparent 8%);
+  border-color: color-mix(in srgb, var(--accent), var(--border) 62%);
+  color: var(--accent);
+}
+.git-review-action.copied {
+  border-color: color-mix(in srgb, var(--codex-green, var(--ok)), var(--border) 58%);
+  color: var(--codex-green, var(--ok));
+}
+.git-review-action:disabled {
+  cursor: default;
+  opacity: .48;
+}
 .git-review-queues {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4824,6 +4860,15 @@ button.icon-only {
 }
 
 @media (max-width: 430px) {
+  .git-review-action {
+    width: 32px;
+    padding: 0;
+  }
+
+  .git-review-action span {
+    display: none;
+  }
+
   .evidence-loop-action {
     width: 32px;
     padding: 0;
