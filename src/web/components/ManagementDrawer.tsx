@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AccountSummary, AgentSummary, AdminStatus, ApprovalRecord, ApprovalRequest, CodexWebConfig, GitHubActionsSummary, GitOperationRecord, GitStatusSummary, InspectorTab, ManagementTab, ServerHealth, SkillSummary, ThreadSummary, TimelineCard } from '../../shared/types.js';
-import { Icon } from './Icon.js';
+import { Icon, type IconName } from './Icon.js';
 
 const managementTabs: ManagementTab[] = ['skills', 'agents', 'admin', 'automations', 'triage', 'settings'];
 
@@ -8,6 +8,14 @@ type ReleaseEvidenceSummary = {
   state: 'ready' | 'waiting' | 'attention';
   label: 'verified' | 'partial' | 'attention';
   detail: string;
+};
+
+type WorkQueueState = 'ready' | 'waiting' | 'attention' | 'running' | 'warn';
+
+type QueuePrimerStep = {
+  label: string;
+  value: string;
+  tone?: 'ok' | 'warn';
 };
 
 type PromptHandoff = {
@@ -334,7 +342,7 @@ function AutomationsPanel(props: {
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
   const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const automationAttention = props.approvals.length > 0 || failedGit > 0 || release.state === 'attention';
-  const rows = [
+  const rows: Array<{ id: string; icon: IconName; title: string; detail: string; state: WorkQueueState; prompt: string; agentName: string; action: () => void }> = [
     {
       id: 'release',
       icon: 'branch' as const,
@@ -376,6 +384,7 @@ function AutomationsPanel(props: {
       action: () => props.onOpenInspectorTab?.('git')
     }
   ];
+  const automationQueueItem = nextQueueItem(rows);
 
   return (
     <section className="management-panel automation-panel">
@@ -396,6 +405,23 @@ function AutomationsPanel(props: {
           { label: 'Actions', value: props.githubActions ? githubActionsValue(props.githubActions) : 'loading', tone: props.githubActions?.state === 'failure' ? 'warn' : props.githubActions?.state === 'success' ? 'ok' : undefined },
           { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' }
         ]}
+      />
+      <QueuePrimer
+        title="Automation queue"
+        subtitle="Next supervised lane"
+        item={automationQueueItem}
+        owner={`#${automationQueueItem.agentName}`}
+        steps={[
+          { label: 'Active', value: String(activeThreads), tone: activeThreads ? 'warn' : undefined },
+          { label: 'Approvals', value: String(props.approvals.length), tone: props.approvals.length ? 'warn' : undefined },
+          { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' }
+        ]}
+        onOpen={automationQueueItem.action}
+        openDisabled={!props.onOpenInspectorTab}
+        onHandoff={() => {
+          props.onUsePrompt?.({ prompt: automationQueueItem.prompt, agentName: automationQueueItem.agentName });
+        }}
+        handoffDisabled={!props.onUsePrompt}
       />
       <div className="automation-lanes">
         {rows.map((row) => (
@@ -446,7 +472,7 @@ function TriagePanel(props: {
   const release = releaseEvidenceSummary(props.gitStatus, props.health, props.githubActions);
   const releasePrompt = releaseVerificationPrompt(props.gitStatus, props.health, props.githubActions, release);
   const changedFiles = props.gitStatus?.isRepo ? props.gitStatus.files.length : 0;
-  const items: Array<{ id: string; icon: 'branch' | 'chat' | 'check' | 'file' | 'inbox' | 'terminal'; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; prompt: string; agentName?: string; tab?: InspectorTab; threadId?: string }> = [];
+  const items: Array<{ id: string; icon: IconName; title: string; detail: string; tone: 'attention' | 'warn' | 'ready'; prompt: string; agentName?: string; tab?: InspectorTab; threadId?: string }> = [];
 
   for (const approval of props.approvals.slice(0, 4)) {
     items.push({
@@ -537,6 +563,8 @@ function TriagePanel(props: {
   }
 
   const visibleItems = items.slice(0, 12);
+  const nextTriageItem = visibleItems.find((item) => item.tone !== 'ready') ?? visibleItems[0];
+  const attentionItems = visibleItems.filter((item) => item.tone !== 'ready').length;
 
   return (
     <section className="management-panel triage-panel">
@@ -557,6 +585,33 @@ function TriagePanel(props: {
           { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' },
           { label: 'Decisions', value: String(props.approvalHistory.length) }
         ]}
+      />
+      <QueuePrimer
+        title="Triage queue"
+        subtitle={nextTriageItem ? 'Next item' : 'Queue clear'}
+        item={nextTriageItem ? queueItemFromTriage(nextTriageItem) : {
+          icon: 'check',
+          title: 'No waiting items',
+          detail: 'No approvals, failed runs, review items, or release risks are waiting.',
+          state: 'ready'
+        }}
+        owner={nextTriageItem?.agentName ? `#${nextTriageItem.agentName}` : 'standby'}
+        steps={[
+          { label: 'Waiting', value: String(visibleItems.length), tone: visibleItems.length ? 'warn' : 'ok' },
+          { label: 'Attention', value: String(attentionItems), tone: attentionItems ? 'warn' : 'ok' },
+          { label: 'Release', value: release.label, tone: release.state === 'ready' ? 'ok' : 'warn' }
+        ]}
+        onOpen={() => {
+          if (!nextTriageItem) return;
+          if (nextTriageItem.threadId) void props.onSelectThread?.(nextTriageItem.threadId);
+          if (nextTriageItem.tab) props.onOpenInspectorTab?.(nextTriageItem.tab);
+        }}
+        openDisabled={!nextTriageItem || (!props.onOpenInspectorTab && !props.onSelectThread)}
+        onHandoff={() => {
+          if (!nextTriageItem) return;
+          props.onUsePrompt?.({ prompt: nextTriageItem.prompt, threadId: nextTriageItem.threadId, agentName: nextTriageItem.agentName });
+        }}
+        handoffDisabled={!nextTriageItem || !props.onUsePrompt}
       />
       {visibleItems.length === 0 ? <div className="empty">No triage items waiting.</div> : null}
       <div className="triage-list">
@@ -601,6 +656,73 @@ function TriagePanel(props: {
         </div>
       ) : null}
     </section>
+  );
+}
+
+type QueuePrimerItem = {
+  icon: IconName;
+  title: string;
+  detail: string;
+  state: WorkQueueState;
+};
+
+function nextQueueItem<T extends QueuePrimerItem>(items: T[]): T {
+  return items.find((item) => item.state !== 'ready') ?? items[0];
+}
+
+function queueItemFromTriage(item: { icon: IconName; title: string; detail: string; tone: 'attention' | 'warn' | 'ready' }): QueuePrimerItem {
+  return {
+    icon: item.icon,
+    title: item.title,
+    detail: item.detail,
+    state: item.tone
+  };
+}
+
+function QueuePrimer(props: {
+  title: string;
+  subtitle: string;
+  item: QueuePrimerItem;
+  owner: string;
+  steps: QueuePrimerStep[];
+  onOpen: () => void;
+  openDisabled?: boolean;
+  onHandoff: () => void;
+  handoffDisabled?: boolean;
+}) {
+  return (
+    <div className={`queue-primer ${props.item.state}`} aria-label={props.title}>
+      <div className="queue-primer-head">
+        <div>
+          <strong>{props.title}</strong>
+          <span>{props.subtitle}</span>
+        </div>
+        <span className="queue-primer-owner">{props.owner}</span>
+      </div>
+      <div className="queue-primer-main">
+        <span className="queue-primer-icon"><Icon name={props.item.icon} size={15} /></span>
+        <span className="queue-primer-copy">
+          <strong>{props.item.title}</strong>
+          <small>{props.item.detail}</small>
+        </span>
+        <span className="queue-primer-state">{props.item.state}</span>
+      </div>
+      <div className="queue-primer-steps">
+        {props.steps.map((step) => (
+          <span key={step.label} className={`queue-primer-step ${step.tone ?? ''}`}>
+            <small>{step.label}</small>
+            <strong>{step.value}</strong>
+          </span>
+        ))}
+      </div>
+      <div className="queue-primer-actions">
+        <button type="button" className="mini-action" onClick={props.onOpen} disabled={props.openDisabled}>Open</button>
+        <button type="button" className="lane-handoff" onClick={props.onHandoff} disabled={props.handoffDisabled} aria-label={`Hand off ${props.item.title} to composer`}>
+          <Icon name="send" size={13} />
+          <span>Hand off next</span>
+        </button>
+      </div>
+    </div>
   );
 }
 
