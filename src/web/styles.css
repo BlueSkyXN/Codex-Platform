@@ -818,10 +818,10 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   display: grid;
   gap: 8px;
   min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--border), transparent 16%);
-  border-radius: 10px;
-  background: var(--codex-surface);
-  padding: 9px;
+  border: 1px solid var(--codex-workbench-card-border, color-mix(in srgb, var(--border), transparent 16%));
+  border-radius: var(--codex-radius-lg);
+  background: var(--codex-workbench-card-bg, var(--codex-surface));
+  padding: var(--codex-workbench-pad, 9px);
 }
 .git-review-next.attention {
   border-color: color-mix(in srgb, var(--codex-yellow), var(--border) 48%);
@@ -834,18 +834,18 @@ body { background: var(--codex-bg); color: var(--codex-text); }
 }
 .git-review-next-head {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: var(--codex-workbench-icon-size, 26px) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: start;
 }
 .git-review-next-icon {
-  width: 24px;
-  height: 24px;
+  width: var(--codex-workbench-icon-size, 26px);
+  height: var(--codex-workbench-icon-size, 26px);
   display: inline-grid;
   place-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--codex-workbench-card-border, var(--border));
   border-radius: var(--codex-radius-md);
-  background: var(--codex-soft);
+  background: var(--codex-workbench-icon-bg, var(--codex-soft));
   color: var(--codex-muted);
 }
 .git-review-next-head > span {
@@ -867,9 +867,9 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   line-height: 1.4;
 }
 .git-review-next-head code {
-  border: 1px solid var(--border);
+  border: 1px solid var(--codex-workbench-card-border, var(--border));
   border-radius: 999px;
-  background: var(--codex-soft);
+  background: var(--codex-workbench-chip-bg, var(--codex-soft));
   color: var(--codex-muted);
   padding: 2px 6px;
   font-size: 10px;
@@ -1097,7 +1097,7 @@ body { background: var(--codex-bg); color: var(--codex-text); }
   .git-review-actions,
   .git-review-next-actions { justify-content: flex-start; }
   .git-review-queues { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .git-review-next-head { grid-template-columns: 24px minmax(0, 1fr); }
+  .git-review-next-head { grid-template-columns: var(--codex-workbench-icon-size, 26px) minmax(0, 1fr); }
   .git-review-next-head code { width: fit-content; }
   .git-review-next-meta { grid-template-columns: auto minmax(0, 1fr); }
   .git-file-row { grid-template-columns: 38px minmax(0, 1fr); }
@@ -4540,20 +4540,20 @@ button.icon-only {
 
 .evidence-loop-head {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: var(--codex-workbench-icon-size, 26px) minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   min-width: 0;
 }
 
 .evidence-loop-icon {
-  width: 24px;
-  height: 24px;
+  width: var(--codex-workbench-icon-size, 26px);
+  height: var(--codex-workbench-icon-size, 26px);
   display: inline-grid;
   place-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--codex-workbench-card-border, var(--border));
   border-radius: var(--codex-radius-md, 8px);
-  background: var(--codex-surface, var(--panel));
+  background: var(--codex-workbench-icon-bg, var(--codex-surface, var(--panel)));
   color: var(--codex-muted, var(--muted));
 }
 
@@ -4589,7 +4589,7 @@ button.icon-only {
   min-width: 0;
   display: grid;
   gap: 2px;
-  border-top: 1px solid color-mix(in srgb, var(--border), transparent 24%);
+  border-top: 1px solid var(--codex-workbench-divider, color-mix(in srgb, var(--border), transparent 24%));
   padding-top: 7px;
 }
 
@@ -5437,11 +5437,11 @@ button,
 
 .queue-primer {
   display: grid;
-  gap: 9px;
-  border: 1px solid var(--border);
+  gap: 8px;
+  border: 1px solid var(--codex-workbench-card-border, var(--border));
   border-radius: var(--codex-radius-lg);
-  background: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 34%);
-  padding: 10px;
+  background: var(--codex-workbench-card-bg, color-mix(in srgb, var(--codex-surface), var(--codex-soft) 34%));
+  padding: var(--codex-workbench-pad, 9px);
 }
 
 .queue-primer-head,
@@ -5488,9 +5488,9 @@ button,
 .queue-primer-owner,
 .queue-primer-state {
   flex: 0 0 auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--codex-workbench-card-border, var(--border));
   border-radius: 999px;
-  background: var(--codex-surface);
+  background: var(--codex-workbench-chip-bg, var(--codex-surface));
   color: var(--codex-muted);
   padding: 2px 7px;
   font-size: 10px;
@@ -5500,13 +5500,14 @@ button,
 }
 
 .queue-primer-icon {
-  width: 26px;
-  height: 26px;
+  width: var(--codex-workbench-icon-size, 26px);
+  height: var(--codex-workbench-icon-size, 26px);
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
+  border: 1px solid var(--codex-workbench-card-border, var(--border));
   border-radius: var(--codex-radius-md);
-  background: var(--codex-soft);
+  background: var(--codex-workbench-icon-bg, var(--codex-soft));
   color: var(--codex-muted);
 }
 
@@ -5535,8 +5536,9 @@ button,
   min-width: 0;
   display: grid;
   gap: 2px;
+  border: 1px solid var(--codex-workbench-divider, transparent);
   border-radius: var(--codex-radius-md);
-  background: var(--codex-surface);
+  background: var(--codex-workbench-step-bg, var(--codex-surface));
   padding: 7px 8px;
 }
 
@@ -6055,12 +6057,21 @@ body {
   --codex-main-measure: 768px;
   --codex-composer-measure: 768px;
   --codex-shadow-composer: 0 1px 2px rgb(0 0 0 / 4%), 0 8px 22px rgb(0 0 0 / 4%);
+  --codex-frame-border: #eeeeee;
+  --codex-workbench-card-bg: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 32%);
+  --codex-workbench-card-border: color-mix(in srgb, var(--border), var(--codex-text) 5%);
+  --codex-workbench-chip-bg: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 52%);
+  --codex-workbench-icon-bg: color-mix(in srgb, var(--codex-soft), var(--codex-surface) 24%);
+  --codex-workbench-step-bg: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 20%);
+  --codex-workbench-divider: color-mix(in srgb, var(--border), transparent 18%);
+  --codex-workbench-icon-size: 26px;
+  --codex-workbench-pad: 9px;
 }
 
 .app-frame-bar {
   height: 48px;
   background: var(--codex-surface);
-  border-bottom-color: #eeeeee;
+  border-bottom-color: var(--codex-frame-border);
   box-shadow: none;
 }
 
@@ -6118,7 +6129,7 @@ body {
 
 .codex-sidebar {
   padding: 10px 8px;
-  border-right-color: #e8e8e8;
+  border-right-color: var(--codex-frame-border);
 }
 
 .sidebar-head {
