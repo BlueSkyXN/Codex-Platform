@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentSummary, ApprovalRequest, GitStatusSummary, Project, ServerHealth, TimelineCard, TimelineCardKind } from '../../shared/types.js';
+import type { AgentSummary, ApprovalRequest, GitStatusSummary, InspectorTab, ManagementTab, Project, ServerHealth, TimelineCard, TimelineCardKind } from '../../shared/types.js';
 import { CommandCard, FileChangeCard } from './cards.js';
 import { Icon, type IconName } from './Icon.js';
 
@@ -16,6 +16,8 @@ export function Timeline(props: {
   health?: ServerHealth;
   connected?: boolean;
   onFocus: (cardId: string) => void;
+  onOpenInspectorTab?: (tab: InspectorTab) => void;
+  onOpenManagementTab?: (tab: ManagementTab) => void;
 }) {
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<'all' | TimelineCardKind>('all');
@@ -76,6 +78,8 @@ export function Timeline(props: {
             agentsLoading={props.agentsLoading}
             health={props.health}
             connected={props.connected}
+            onOpenInspectorTab={props.onOpenInspectorTab}
+            onOpenManagementTab={props.onOpenManagementTab}
           />
         ) : null}
         {props.cards.length > 0 && filteredCards.length === 0 ? <div className="empty-state compact">No events match the current filter.</div> : null}
@@ -123,7 +127,12 @@ type WorkbenchLane = {
   value: string;
   detail: string;
   state: 'ready' | 'waiting' | 'attention';
+  action: WorkbenchLaneAction;
 };
+
+type WorkbenchLaneAction =
+  | { kind: 'inspector'; tab: InspectorTab }
+  | { kind: 'management'; tab: ManagementTab };
 
 function WorkbenchStartPanel(props: {
   project?: Project;
@@ -133,6 +142,8 @@ function WorkbenchStartPanel(props: {
   agentsLoading?: boolean;
   health?: ServerHealth;
   connected?: boolean;
+  onOpenInspectorTab?: (tab: InspectorTab) => void;
+  onOpenManagementTab?: (tab: ManagementTab) => void;
 }) {
   const branch = branchLabel(props.gitStatus);
   const review = reviewLabel(props.gitStatus);
@@ -140,6 +151,15 @@ function WorkbenchStartPanel(props: {
   const agents = props.agentsLoading ? 'loading' : props.agents.length ? `${props.agents.length} ready` : 'built-in';
   const deploy = !props.health ? 'loading' : props.health.huggingFace?.enabled ? 'HF Space' : 'local';
   const lanes = workbenchLanes(props);
+
+  function openLane(lane: WorkbenchLane) {
+    if (lane.action.kind === 'management') props.onOpenManagementTab?.(lane.action.tab);
+    else props.onOpenInspectorTab?.(lane.action.tab);
+  }
+
+  function canOpenLane(lane: WorkbenchLane): boolean {
+    return lane.action.kind === 'management' ? Boolean(props.onOpenManagementTab) : Boolean(props.onOpenInspectorTab);
+  }
 
   return (
     <section className="empty-state codex-empty-state workbench-start" aria-label="Agent command center start">
@@ -161,14 +181,22 @@ function WorkbenchStartPanel(props: {
 
       <div className="workbench-start-lanes" aria-label="Command center lanes">
         {lanes.map((lane) => (
-          <article key={lane.id} className={`workbench-start-lane ${lane.state}`}>
+          <button
+            key={lane.id}
+            type="button"
+            className={`workbench-start-lane ${lane.state}`}
+            onClick={() => openLane(lane)}
+            disabled={!canOpenLane(lane)}
+            title={`Open ${lane.label}`}
+            aria-label={`Open ${lane.label}`}
+          >
             <span className="workbench-lane-icon"><Icon name={lane.icon} size={14} /></span>
             <span className="workbench-lane-copy">
               <strong>{lane.label}</strong>
               <small>{lane.detail}</small>
             </span>
             <span className="workbench-lane-value">{lane.value}</span>
-          </article>
+          </button>
         ))}
       </div>
     </section>
@@ -202,7 +230,8 @@ function workbenchLanes(props: {
       label: 'Agent routing',
       value: props.agentsLoading ? 'loading' : props.agents.length ? `${props.agents.length}` : 'built-in',
       detail: props.connected ? 'Thread stream live; choose #agent or attach a skill.' : 'Event stream offline; reconnect before long runs.',
-      state: props.connected ? 'ready' : 'attention'
+      state: props.connected ? 'ready' : 'attention',
+      action: { kind: 'management', tab: 'agents' }
     },
     {
       id: 'review-gate',
@@ -210,7 +239,8 @@ function workbenchLanes(props: {
       label: 'Review gate',
       value: !props.gitStatus ? 'loading' : changedFiles ? `${changedFiles} files` : props.gitStatus.isRepo ? 'clean' : 'no git',
       detail: changedFiles ? 'Diff package should be reviewed before commit.' : 'Git state is ready for the next task.',
-      state: changedFiles || props.approvals.length ? 'attention' : props.gitStatus ? 'ready' : 'waiting'
+      state: changedFiles || props.approvals.length ? 'attention' : props.gitStatus ? 'ready' : 'waiting',
+      action: { kind: 'inspector', tab: changedFiles || props.approvals.length ? 'git' : 'review' }
     },
     {
       id: 'evidence-loop',
@@ -218,7 +248,8 @@ function workbenchLanes(props: {
       label: 'Evidence loop',
       value: hasPreviewTarget ? 'preview' : 'pending',
       detail: hasPreviewTarget ? 'Browser target is available for visual readback.' : 'Attach browser or artifact evidence when work starts.',
-      state: hasPreviewTarget ? 'ready' : 'waiting'
+      state: hasPreviewTarget ? 'ready' : 'waiting',
+      action: { kind: 'inspector', tab: 'browser' }
     },
     {
       id: 'release-readback',
@@ -226,7 +257,8 @@ function workbenchLanes(props: {
       label: 'Release readback',
       value: buildSha,
       detail: props.health?.huggingFace?.enabled ? 'GitHub and HF runtime can be compared after push.' : 'Local runtime only; HF readback is unavailable.',
-      state: props.health?.build?.sha ? 'ready' : 'waiting'
+      state: props.health?.build?.sha ? 'ready' : 'waiting',
+      action: { kind: 'inspector', tab: 'git' }
     }
   ];
 }

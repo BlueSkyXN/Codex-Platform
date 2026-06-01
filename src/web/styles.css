@@ -8139,7 +8139,24 @@ body {
   border: 1px solid color-mix(in srgb, var(--border), transparent 8%);
   border-radius: 8px;
   background: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 38%);
+  color: inherit;
   padding: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workbench-start-lane:hover {
+  background: color-mix(in srgb, var(--codex-surface), var(--codex-soft) 72%);
+}
+
+.workbench-start-lane:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent), transparent 46%);
+  outline-offset: 2px;
+}
+
+.workbench-start-lane:disabled {
+  cursor: default;
+  opacity: .6;
 }
 
 .workbench-start-lane.attention {

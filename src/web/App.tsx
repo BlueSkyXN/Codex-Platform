@@ -661,6 +661,8 @@ export function App() {
             health={health}
             connected={state.connected}
             onFocus={(cardId) => focusCard(cardId)}
+            onOpenInspectorTab={(tab) => { setInspectorVisible(true); setInspectorTab(tab); }}
+            onOpenManagementTab={openManagementTab}
           />
           <Composer
             disabled={!selectedProject || busy}
