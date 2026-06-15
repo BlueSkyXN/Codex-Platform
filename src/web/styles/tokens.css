@@ -1,0 +1,176 @@
+/*
+ * Codex-Platform Design Tokens — single source of truth.
+ * Style: "Quiet Agent Panel" (see local/refactor-2026/01-UI-UX-设计系统.md).
+ *
+ * This file ADDS the design-system token names used by new/refactored CSS, and
+ * provides explicit light/dark theming via [data-theme]. It intentionally does
+ * NOT redefine the legacy variable names that styles.css already owns, so the
+ * default (auto) appearance is byte-for-byte unchanged. Legacy vars are themed
+ * here only under [data-theme="dark"] / [data-theme="light"] so the explicit
+ * theme switch behaves identically to the existing prefers-color-scheme block.
+ */
+
+:root {
+  /* —— surfaces / backgrounds —— */
+  --bg-canvas:      #ffffff;
+  --bg-app:         #f7f7f8;
+  --bg-muted:       #f4f4f5;
+  --bg-hover:       #efeff0;
+  --bg-active:      #e8e8ea;
+  --bg-inset:       #fafafa;
+  --surface:        #ffffff;
+  --surface-subtle: #fbfbfb;
+
+  /* —— text —— */
+  --text-primary:   #171717;
+  --text-secondary: #5f6065;
+  --text-tertiary:  #8b8c92;
+  --text-disabled:  #b7b8bd;
+  --text-on-solid:  #ffffff;
+
+  /* —— borders —— */
+  --border-subtle:  #ededee;
+  --border-default: #e2e2e4;
+  --border-strong-2:#d3d3d6;
+
+  /* —— accent / semantic —— */
+  --accent-2:       #0a84ff;
+  --accent-muted:   #e8f2ff;
+  --solid:          #111111;
+  --solid-press:    #090909;
+  --success-2:      #16a34a;
+  --danger-2:       #ef4444;
+  --warning-2:      #f59e0b;
+  --info-2:         #0a84ff;
+
+  /* —— radius —— */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* —— shadow (floating surfaces only) —— */
+  --shadow-soft:     0 1px 2px rgba(0,0,0,.04);
+  --shadow-popover:  0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.08);
+  --shadow-composer: 0 2px 8px rgba(0,0,0,.04), 0 18px 48px rgba(0,0,0,.08);
+
+  /* —— layout scale —— */
+  --topbar-h: 56px;
+  --sidebar-w: 264px;
+  --inspector-w: 336px;
+  --main-max-w: 760px;
+  --composer-w: 820px;
+
+  /* —— spacing (4px base) —— */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* —— typography —— */
+  --font-sans-2: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+                 Roboto, "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+  --font-mono-2: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+
+  /* —— font sizes —— */
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-15: 15px;
+  --fs-16: 16px;
+  --fs-20: 20px;
+
+  /* —— motion —— */
+  --ease: cubic-bezier(.2,.6,.2,1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 240ms;
+
+  /* —— focus —— */
+  --focus-ring: 0 0 0 2px var(--bg-canvas), 0 0 0 4px rgba(10,132,255,.45);
+}
+
+/*
+ * Dark theme. Overrides both the new design tokens and the legacy variable
+ * names owned by styles.css, mirroring the existing prefers-color-scheme block
+ * so an explicit dark choice looks the same as auto-dark today.
+ */
+:root[data-theme="dark"] {
+  /* design tokens */
+  --bg-canvas:      #0f0f10;
+  --bg-app:         #161618;
+  --bg-muted:       #1c1c1f;
+  --bg-hover:       #222225;
+  --bg-active:      #2a2a2e;
+  --bg-inset:       #131315;
+  --surface:        #1a1a1c;
+  --surface-subtle: #161618;
+  --text-primary:   #ededed;
+  --text-secondary: #a6a6ac;
+  --text-tertiary:  #76767c;
+  --text-disabled:  #54545a;
+  --text-on-solid:  #0b0b0c;
+  --border-subtle:  #242427;
+  --border-default: #2c2c2f;
+  --border-strong-2:#45454a;
+  --accent-2:       #3b9dff;
+  --accent-muted:   #11243a;
+  --solid:          #f5f5f5;
+  --solid-press:    #e2e2e2;
+  --success-2:      #4ade80;
+  --danger-2:       #f87171;
+  --warning-2:      #fbbf24;
+  --shadow-popover:  0 1px 2px rgba(0,0,0,.3), 0 18px 45px rgba(0,0,0,.45);
+  --shadow-composer: 0 2px 8px rgba(0,0,0,.3), 0 18px 48px rgba(0,0,0,.5);
+  --focus-ring: 0 0 0 2px var(--bg-canvas), 0 0 0 4px rgba(59,157,255,.5);
+
+  /* legacy vars owned by styles.css (mirror of the existing @media dark block) */
+  --bg: #0f0f10;
+  --panel: #1a1a1c;
+  --panel-2: #232325;
+  --panel-3: #2c2c2f;
+  --text: #ededed;
+  --muted: #9a9aa0;
+  --border: #2c2c2f;
+  --border-strong: #45454a;
+  --accent: #3b9dff;
+  --accent-text: #0b0b0c;
+  --warn: #fbbf24;
+  --ok: #4ade80;
+  --danger: #f87171;
+  --mono-bg: #131315;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 18px 45px rgba(0,0,0,.4);
+}
+
+/* Explicit light theme: force the daylight palette even if the OS is dark. */
+:root[data-theme="light"] {
+  --bg: #f7f7f8;
+  --panel: #ffffff;
+  --panel-2: #f4f4f5;
+  --panel-3: #e8e8ea;
+  --text: #171717;
+  --muted: #5f6065;
+  --border: #e2e2e4;
+  --border-strong: #d3d3d6;
+  --accent: #0a84ff;
+  --accent-text: #ffffff;
+  --warn: #b45309;
+  --ok: #16a34a;
+  --danger: #dc2626;
+  --mono-bg: #f6f6f7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+}

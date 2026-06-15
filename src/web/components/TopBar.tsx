@@ -1,5 +1,29 @@
+import { useState } from 'react';
 import type { GitStatusSummary, Project, ServerHealth, ThreadSummary } from '../../shared/types.js';
 import { Icon } from './Icon.js';
+import { getThemePreference, setThemePreference, type ThemePreference } from '../lib/theme.js';
+
+const THEME_ORDER: ThemePreference[] = ['auto', 'light', 'dark'];
+const THEME_LABEL: Record<ThemePreference, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<ThemePreference>(() => getThemePreference());
+  const cycle = () => {
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
+    setThemePreference(next);
+    setTheme(next);
+  };
+  return (
+    <button
+      className="ghost compact-action theme-toggle"
+      onClick={cycle}
+      title={`Theme: ${THEME_LABEL[theme]} (click to switch)`}
+      aria-label={`Theme: ${THEME_LABEL[theme]}`}
+    >
+      {THEME_LABEL[theme]}
+    </button>
+  );
+}
 
 function running(status?: string): boolean {
   const s = String(status ?? '').toLowerCase();
@@ -73,6 +97,7 @@ export function TopBar(props: {
 
       <div className="top-actions codex-actions">
         <button className="ghost compact-action command-button" onClick={props.onOpenCommandPalette} title="Command menu (⌘K)">⌘K</button>
+        <ThemeToggle />
         <button className={`ghost compact-action icon-only activity-button ${props.pendingApprovals ? 'attention' : ''}`} onClick={props.onOpenActivity} title="Open activity center" aria-label="Open activity center">
           <Icon name="clock" size={15} />
           {props.pendingApprovals ? <span className="top-badge">{props.pendingApprovals}</span> : null}

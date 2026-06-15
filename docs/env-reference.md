@@ -131,6 +131,47 @@ restart-codex
 
 All admin actions require `confirm=true`. Browser cookie sessions also require the CSRF header; CLI header-token auth skips CSRF because the header is not automatically attached by browsers.
 
+## Public API (`/v1/*`)
+
+`/v1/*` is the programmable API for third parties, CI, and scripts. It is **off by default**, has its own API-key auth (independent of the browser session and ops/admin tokens), a unified response envelope, scopes, and idempotency. When disabled, every `/v1/*` path returns `404`. It reuses all existing safety boundaries (workspace path policy, rate limits, demo/real gate) and never bypasses approvals or the sandbox. Only enable it on a Private/Protected deployment.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `CODEX_PLATFORM_PUBLIC_API_ENABLED` | `false` | Enables `/v1/*`; disabled mode returns `404`. |
+| `CODEX_PLATFORM_PUBLIC_API_KEYS` | empty | Key spec; `;`-separated entries `token\|scopes[\|projects=ids]`. Tokens are stored only as SHA-256 hashes. |
+| `CODEX_PLATFORM_PUBLIC_API_ALLOWED_ORIGINS` | empty | CSV CORS allowlist for `/v1/*`; default denies cross-origin. `*` allows any origin. |
+
+Key spec format (set as a Secret):
+
+```text
+CODEX_PLATFORM_PUBLIC_API_KEYS=cpk_live_ci|threads:read,threads:write;cpk_live_ro|read|projects=proj_a proj_b
+```
+
+Scope shorthands: `*`/`all` grant every scope, `read`/`*:read` grant every `:read` scope. Scopes: `projects:read|write`, `threads:read|write`, `approvals:write`, `git:read|write`, `review:read`, `capabilities:read`, `webhooks:manage`. Authenticate with `Authorization: Bearer <token>`. Endpoints:
+
+```text
+/v1/openapi.json                 OpenAPI 3.1 spec (no key required)
+/v1/whoami                       echo key scopes and project allowlist
+/v1/projects [GET|POST]          list / add projects
+/v1/projects/{id} [GET|DELETE]   get / remove a project
+/v1/projects/{id}/files          file tree
+/v1/projects/{id}/files/content  read a file
+/v1/projects/{id}/git[/diff]     git status / diff
+/v1/projects/{id}/git/{stage|unstage|commit}   git writes (commit is idempotent)
+/v1/projects/{id}/github/{actions|pulls}        release status
+/v1/threads [GET|POST]           list / create threads
+/v1/threads/{id}                 thread with turns
+/v1/threads/{id}/turns           start a turn (Accept: text/event-stream streams via SSE)
+/v1/threads/{id}/interrupt       interrupt the active turn
+/v1/threads/{id}/review          start a review
+/v1/threads/{id}/events          subscribe to thread events (SSE)
+/v1/approvals [GET]              list approvals
+/v1/approvals/{requestId} [POST] resolve an approval
+/v1/skills, /v1/agents           capability registries
+```
+
+Write operations accept an `Idempotency-Key` header (24h replay window). Smoke test the surface with `npm run smoke:public`.
+
 ## GitHub Actions
 
 | Key | Kind | Purpose |

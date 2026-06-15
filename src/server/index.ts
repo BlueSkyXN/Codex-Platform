@@ -18,6 +18,8 @@ import { RealCodexBridge } from './codex/RealCodexBridge.js';
 import { registerControlPlaneRoutes } from './controlPlane.js';
 import { readProjectFile, readProjectTree } from './workspace/files.js';
 import { commitGitChanges, readGitDiff, readGitStatus, stageGitPaths, unstageGitPaths } from './workspace/git.js';
+import { ApiKeyStore } from './api/v1/keys.js';
+import { createV1Router } from './api/v1/router.js';
 
 assertSafeRuntimeConfig();
 if (config.huggingFace.autoCreateWorkspace || config.demoMode) {
@@ -573,6 +575,30 @@ function gitOperationDetail(kind: GitOperationKind, status: GitOperationRecord['
   if (status === 'failed') return error ?? 'Git operation failed.';
   if (kind === 'commit') return message ? `Committed: ${message.split(/\r?\n/)[0]}` : 'Committed staged changes.';
   return `${kind === 'stage' ? 'Staged' : 'Unstaged'} ${count} file${count === 1 ? '' : 's'}.`;
+}
+
+// Public /v1 API (off by default). Mounted before the SPA catch-all so its
+// routes win, and self-contained with its own API-key auth + response envelope.
+const publicApiKeyStore = ApiKeyStore.fromEnvSpec(config.publicApi.keysSpec);
+app.use('/v1', createV1Router({
+  enabled: config.publicApi.enabled,
+  keyStore: publicApiKeyStore,
+  registry,
+  store,
+  bridge,
+  limits: {
+    maxFileTreeEntries: config.limits.maxFileTreeEntries,
+    maxFileReadBytes: config.limits.maxFileReadBytes,
+    gitCommandTimeoutMs: config.limits.gitCommandTimeoutMs,
+    githubTimeoutMs: config.github.actionsTimeoutMs
+  },
+  githubToken: config.github.token,
+  publicUrl: config.huggingFace.publicUrl,
+  allowedOrigins: config.publicApi.allowedOrigins,
+  makeGitOperation: gitOperation
+}));
+if (config.publicApi.enabled) {
+  console.log(`public-api=/v1 enabled keys=${publicApiKeyStore.size} allowedOrigins=${config.publicApi.allowedOrigins.join(',') || 'none'}`);
 }
 
 const distWebRoot = path.resolve(process.cwd(), 'dist/web');

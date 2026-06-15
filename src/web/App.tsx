@@ -3,6 +3,7 @@ import type { AccountSummary, AgentSummary, AdminStatus, ApprovalRecord, FileRea
 import { api, eventStreamUrl, getStoredToken, setStoredToken } from './lib/api.js';
 import { initialState, reduce } from './lib/reducer.js';
 import { normalizeAccount } from './lib/normalize.js';
+import { t } from './i18n/index.js';
 import { Sidebar } from './components/Sidebar.js';
 import { Timeline } from './components/Timeline.js';
 import { Inspector } from './components/Inspector.js';
@@ -78,7 +79,7 @@ export function App() {
             } catch {
               setStoredToken('');
               setAuthReady(false);
-              setAuthError('Saved Codex-Platform token was rejected. Enter the token again.');
+              setAuthError(t('login.rejected'));
             }
           } else {
             setAuthReady(false);
@@ -604,9 +605,9 @@ export function App() {
     setNotificationsEnabled(true);
   }
 
-  if (authLoading) return <BootScreen title="Loading Codex-Platform" subtitle="Reading server configuration…" />;
+  if (authLoading) return <BootScreen title={t('boot.loading.title')} subtitle={t('boot.loading.subtitle')} />;
   if (codexWebConfig?.authRequired && !authReady) return <LoginScreen error={authError} onSubmit={login} />;
-  if (authError && !codexWebConfig) return <BootScreen title="Codex-Platform unavailable" subtitle={authError} />;
+  if (authError && !codexWebConfig) return <BootScreen title={t('boot.unavailable.title')} subtitle={authError} />;
 
   return (
     <div className={`app-shell ${sidebarVisible ? '' : 'sidebar-hidden'} ${inspectorVisible ? '' : 'inspector-hidden'}`}>
@@ -867,11 +868,11 @@ function LoginScreen(props: { error?: string; onSubmit: (token: string) => Promi
     <div className="boot-screen">
       <form className="login-panel" onSubmit={(event) => void submit(event)}>
         <div className="brand-mark large">CP</div>
-        <h1>Codex-Platform</h1>
-        <p>This deployment requires a Codex-Platform token before it can control the Codex runtime.</p>
-        <input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="CODEX_PLATFORM_AUTH_TOKEN" autoFocus />
+        <h1>{t('app.name')}</h1>
+        <p>{t('login.hint')}</p>
+        <input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder={t('login.placeholder')} autoFocus />
         {props.error ? <div className="error-line">{props.error}</div> : null}
-        <button className="primary" disabled={submitting || !token.trim()}>{submitting ? 'Checking…' : 'Unlock Codex-Platform'}</button>
+        <button className="primary" disabled={submitting || !token.trim()}>{submitting ? t('login.checking') : t('login.submit')}</button>
       </form>
     </div>
   );
