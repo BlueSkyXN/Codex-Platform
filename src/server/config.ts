@@ -165,6 +165,13 @@ export const config = {
     token: firstEnv('GITHUB_TOKEN', 'GH_TOKEN'),
     actionsTimeoutMs: intAny(['CODEX_PLATFORM_GITHUB_ACTIONS_TIMEOUT_MS'], 8_000)
   },
+  publicApi: {
+    // Public /v1 API is OFF by default. Only enable it on a Private/Protected
+    // deployment. See local/refactor-2026/03-API-对外与内部.md §2.8.
+    enabled: boolAny(['CODEX_PLATFORM_PUBLIC_API_ENABLED'], false),
+    keysSpec: firstEnv('CODEX_PLATFORM_PUBLIC_API_KEYS') ?? '',
+    allowedOrigins: csvAny(['CODEX_PLATFORM_PUBLIC_API_ALLOWED_ORIGINS'], [])
+  },
   persistence: {
     projectsFile: path.join(dataDir, 'projects.json'),
     snapshotFile: path.join(dataDir, 'snapshot.json'),

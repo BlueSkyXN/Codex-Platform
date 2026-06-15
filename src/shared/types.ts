@@ -324,6 +324,8 @@ export type StartTurnRequest = {
     path?: string;
   };
   context?: TurnContextAttachment[];
+  /** Public API only: stream turn events as SSE instead of returning a single response. */
+  stream?: boolean;
 };
 
 export type ServerHealth = {

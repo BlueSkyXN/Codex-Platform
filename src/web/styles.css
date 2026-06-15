@@ -1,3 +1,5 @@
+@import "./styles/tokens.css";
+
 :root {
   color-scheme: light dark;
   --bg: #f7f7f8;
@@ -19,7 +21,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #0f0f10;
     --panel: #1a1a1c;
     --panel-2: #232325;
