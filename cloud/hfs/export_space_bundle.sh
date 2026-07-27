@@ -6,7 +6,7 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 hfs_dir="${repo_root}/cloud/hfs"
 manifest_file="${HFS_MANIFEST:-${hfs_dir}/hfs-dev.toml}"
 requested_commit="${CODEX_PLATFORM_COMMIT:-HEAD}"
-ref="${CODEX_PLATFORM_REF:-main}"
+ref="${CODEX_PLATFORM_REF:-${requested_commit}}"
 
 case "${manifest_file}" in
   /*) ;;
