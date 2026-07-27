@@ -9,6 +9,13 @@ SMOKE_ADMIN_ENABLED="${SMOKE_ADMIN_ENABLED:-${CODEX_PLATFORM_ADMIN_ENABLED:-fals
 SMOKE_ADMIN_ACTIONS="${SMOKE_ADMIN_ACTIONS:-false}"
 SMOKE_RETRIES="${SMOKE_RETRIES:-30}"
 SMOKE_DELAY="${SMOKE_DELAY:-5}"
+EXPECTED_SOURCE_SHA="${EXPECTED_SOURCE_SHA:-}"
+export EXPECTED_SOURCE_SHA
+
+if [[ -n "${EXPECTED_SOURCE_SHA}" && ! "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+  printf 'FAIL configuration: EXPECTED_SOURCE_SHA must be a full lowercase Git SHA\n' >&2
+  exit 2
+fi
 
 tmp_body=$(mktemp)
 tmp_cookie=$(mktemp)
@@ -292,7 +299,7 @@ check_admin_action() {
   exit 1
 }
 
-check_json "healthz" "/healthz" "value && value.ok === true && typeof value.uptimeSeconds === 'number'"
+check_json "healthz" "/healthz" "value && value.ok === true && typeof value.uptimeSeconds === 'number' && (!process.env.EXPECTED_SOURCE_SHA || (value.build && value.build.sha === process.env.EXPECTED_SOURCE_SHA))"
 check_json "readyz" "/readyz" "value && typeof value.ready === 'boolean'"
 check_json "api-config" "/api/config" "value && typeof value.authRequired === 'boolean' && typeof value.demoMode === 'boolean'"
 check_status "web-root" "/" "200"

@@ -1,10 +1,23 @@
 name: Deploy Hugging Face Space
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      target:
+        description: Explicit deployment profile
+        required: true
+        type: choice
+        options:
+          - candidate
+          - production
+      expected_source_sha:
+        description: Full reviewed Git commit SHA to deploy and verify
+        required: true
+        type: string
+      confirm_upload:
+        description: Type PUBLISH_WRAPPER to authorize the Space write
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,18 +28,45 @@ concurrency:
 
 jobs:
   deploy:
+    if: inputs.confirm_upload == 'PUBLISH_WRAPPER'
     runs-on: ubuntu-latest
     env:
-      HF_SPACE_ID: ${{ vars.HF_SPACE_ID || 'BlueSkyXN/Codex-Platform-HFS' }}
-      HF_PUBLIC_URL: ${{ vars.HF_PUBLIC_URL || 'https://blueskyxn-codex-platform-hfs.hf.space' }}
+      HFS_MANIFEST: ${{ inputs.target == 'candidate' && 'cloud/hfs/hfs-dev.candidate.toml' || 'cloud/hfs/hfs-dev.toml' }}
+      HFS_TARGET: ${{ inputs.target }}
+      EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Verify exact reviewed source
+        run: |
+          set -euo pipefail
+          test "${GITHUB_SHA}" = "${EXPECTED_SOURCE_SHA}"
+          [[ "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Load target from selected manifest
+        run: |
+          python3 - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          manifest = tomllib.loads(Path(os.environ["HFS_MANIFEST"]).read_text(encoding="utf-8"))
+          space_id = manifest.get("space", "")
+          if not isinstance(space_id, str) or space_id.count("/") != 1:
+              raise SystemExit(f"invalid Space id in {os.environ['HFS_MANIFEST']}: {space_id!r}")
+          public_url = "https://" + space_id.lower().replace("/", "-") + ".hf.space"
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write(f"HF_SPACE_ID={space_id}\n")
+              env_file.write(f"HF_PUBLIC_URL={public_url}\n")
+          PY
+
       - name: Export pinned Space bundle
-        run: bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space
+        run: |
+          CODEX_PLATFORM_COMMIT="${EXPECTED_SOURCE_SHA}" \
+            bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -51,13 +91,23 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          from huggingface_hub import HfApi, create_repo, upload_folder
+          from huggingface_hub import HfApi, create_repo, hf_hub_download, upload_folder
+          from pathlib import Path
+          import hashlib
 
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["HF_SPACE_ID"]
           folder = "/tmp/codex-platform-hfs-space"
           commit = os.environ["GITHUB_SHA"]
-          create_repo(repo_id=repo_id, repo_type="space", space_sdk="docker", exist_ok=True, token=token)
+          is_candidate = os.environ["HFS_TARGET"] == "candidate"
+          create_repo(
+              repo_id=repo_id,
+              repo_type="space",
+              space_sdk="docker",
+              private=is_candidate,
+              exist_ok=True,
+              token=token,
+          )
           upload_folder(
               repo_id=repo_id,
               repo_type="space",
@@ -67,10 +117,26 @@ jobs:
               commit_message=f"deploy: Codex-Platform {commit[:12]}",
           )
           api = HfApi(token=token)
-          try:
-              api.restart_space(repo_id=repo_id, factory_reboot=True)
-          except Exception as exc:
-              print(f"restart_space skipped: {exc}")
+          expected = {path.name for path in Path(folder).iterdir() if path.is_file()}
+          remote = set(api.list_repo_files(repo_id=repo_id, repo_type="space"))
+          unexpected = remote - expected - {".gitattributes"}
+          missing = expected - remote
+          if unexpected or missing:
+              raise SystemExit(
+                  f"Space tree mismatch; missing={sorted(missing)}, unexpected={sorted(unexpected)}"
+              )
+          for name in sorted(expected):
+              downloaded = Path(hf_hub_download(
+                  repo_id=repo_id,
+                  repo_type="space",
+                  filename=name,
+                  token=token,
+              ))
+              local_digest = hashlib.sha256((Path(folder) / name).read_bytes()).hexdigest()
+              remote_digest = hashlib.sha256(downloaded.read_bytes()).hexdigest()
+              if local_digest != remote_digest:
+                  raise SystemExit(f"Space readback mismatch for {name}")
+          api.restart_space(repo_id=repo_id, factory_reboot=True)
           PY
 
       - name: Live smoke
@@ -78,5 +144,6 @@ jobs:
           CODEX_PLATFORM_AUTH_TOKEN: ${{ secrets.CODEX_PLATFORM_AUTH_TOKEN }}
           SMOKE_RETRIES: "45"
           SMOKE_DELAY: "20"
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
         run: |
           scripts/hf-space-smoke.sh "$HF_PUBLIC_URL"

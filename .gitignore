@@ -4,6 +4,7 @@ dist/
 .env.*
 !.env.example
 !.env.hf.example
+config.toml
 .codex-web/
 .codex-platform/
 .DS_Store

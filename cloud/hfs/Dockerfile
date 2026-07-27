@@ -18,7 +18,7 @@ WORKDIR /opt
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
-    && git clone --filter=blob:none --branch "${CODEX_PLATFORM_REF}" "${CODEX_PLATFORM_REPO}" /opt/source \
+    && git clone --filter=blob:none "${CODEX_PLATFORM_REPO}" /opt/source \
     && cd /opt/source \
     && if [ "${CODEX_PLATFORM_COMMIT}" != "HEAD" ]; then \
          git fetch --depth=1 origin "${CODEX_PLATFORM_COMMIT}" && git checkout --detach "${CODEX_PLATFORM_COMMIT}"; \

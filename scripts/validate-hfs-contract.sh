@@ -64,6 +64,8 @@ require_file cloud/hfs/Dockerfile
 require_file cloud/hfs/.dockerignore
 require_file cloud/hfs/export_space_bundle.sh
 require_file cloud/hfs/hfs-dev.toml
+require_file cloud/hfs/hfs-dev.candidate.toml
+require_file scripts/hf_space_sync.py
 require_file cloud/hfs/AGENTS.md
 require_file docs/HUGGINGFACE_SPACES.md
 require_file docs/hfs-alignment.md
@@ -71,85 +73,79 @@ require_file docs/hfs-alignment.md
 python3 - "$repo_root" <<'PY'
 from __future__ import annotations
 
+import re
 import sys
 import tomllib
 from pathlib import Path
 
 root = Path(sys.argv[1])
-manifest = tomllib.loads((root / "cloud/hfs/hfs-dev.toml").read_text(encoding="utf-8"))
+manifest_path = root / "cloud/hfs/hfs-dev.toml"
+raw = manifest_path.read_text(encoding="utf-8")
+
+try:
+    manifest = tomllib.loads(raw)
+except tomllib.TOMLDecodeError as exc:
+    print(f"FAIL hfs-contract: {manifest_path} is not valid TOML: {exc}", file=sys.stderr)
+    raise SystemExit(1)
 
 expected = {
-    "schema_version": 2,
-    "standard": "hfs-dev",
-    "pattern": "B",
-    "runtime_mode": "source-fetch",
-    "space_root_mode": "flat-remap",
-    "hfs_dir": "cloud/hfs",
-    "export_command": "bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space",
-    "public_port": 7860,
-    "canonical_health_endpoint": "/healthz",
-    "release_pin_required": True,
+    "standard": "2.0",
+    "project": "codex-platform",
+    "space": "BlueSkyXN/Codex-Platform-HFS",
+    "sovereignty": "sovereign",
+    "lane": "source",
+    "version_source": "commit",
 }
+allowed_fields = set(expected) | {"local_only", "secrets", "variables"}
+control_credentials = {"HF_TOKEN", "GH_TOKEN"}
+env_name = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+secret_literal = re.compile(
+    r"(?:hf_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|"
+    r"github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,})"
+)
 
 failures: list[str] = []
 for key, value in expected.items():
     if manifest.get(key) != value:
-        failures.append(f"cloud/hfs/hfs-dev.toml {key} must be {value!r}, got {manifest.get(key)!r}")
+        failures.append(
+            f"cloud/hfs/hfs-dev.toml {key} must be {value!r}, got {manifest.get(key)!r}"
+        )
 
-if "release_pin_surfaces" in manifest:
-    failures.append("cloud/hfs/hfs-dev.toml v2 must use structured [[release_pins]], not release_pin_surfaces")
+unexpected = sorted(set(manifest) - allowed_fields)
+if unexpected:
+    failures.append(
+        "cloud/hfs/hfs-dev.toml must use only HFS v2 fields; unexpected: "
+        + ", ".join(unexpected)
+    )
 
-required_files = manifest.get("required_files")
-if not isinstance(required_files, list) or not required_files:
-    failures.append("cloud/hfs/hfs-dev.toml required_files must be a non-empty list")
-else:
-    for rel_path in required_files:
-        if not isinstance(rel_path, str) or not (root / "cloud/hfs" / rel_path).exists():
-            failures.append(f"cloud/hfs/hfs-dev.toml required file is missing from Space root: {rel_path!r}")
+if secret_literal.search(raw):
+    failures.append("cloud/hfs/hfs-dev.toml must register names only, not token literals")
 
-source_excludes = manifest.get("source_excludes")
-for rel_path in ("src", "scripts", "docs", "local", ".env.local", "node_modules", "dist"):
-    if not isinstance(source_excludes, list) or rel_path not in source_excludes:
-        failures.append(f"cloud/hfs/hfs-dev.toml source_excludes must include {rel_path!r}")
+lists: dict[str, list[str]] = {}
+for field in ("local_only", "secrets", "variables"):
+    values = manifest.get(field)
+    if not isinstance(values, list) or not values or not all(isinstance(value, str) and value for value in values):
+        failures.append(f"cloud/hfs/hfs-dev.toml {field} must be a non-empty string list")
+        continue
+    invalid = sorted(value for value in values if not env_name.fullmatch(value))
+    if invalid:
+        failures.append(f"cloud/hfs/hfs-dev.toml {field} has invalid env names: {invalid}")
+    duplicate = sorted({value for value in values if values.count(value) > 1})
+    if duplicate:
+        failures.append(f"cloud/hfs/hfs-dev.toml {field} has duplicate env names: {duplicate}")
+    lists[field] = values
 
-release_pins = manifest.get("release_pins")
-if not isinstance(release_pins, list) or not release_pins:
-    failures.append("cloud/hfs/hfs-dev.toml release_pins must be a non-empty structured array")
-else:
-    pins_by_name: dict[str, dict[str, object]] = {}
-    for index, pin in enumerate(release_pins, start=1):
-        if not isinstance(pin, dict):
-            failures.append(f"cloud/hfs/hfs-dev.toml release_pins[{index}] must be a table")
-            continue
-        name = pin.get("name")
-        if not isinstance(name, str) or not name:
-            failures.append(f"cloud/hfs/hfs-dev.toml release_pins[{index}] must set name")
-            continue
-        if name in pins_by_name:
-            failures.append(f"cloud/hfs/hfs-dev.toml release_pins duplicate name: {name}")
-        pins_by_name[name] = pin
+missing_controls = sorted(control_credentials - set(lists.get("local_only", [])))
+if missing_controls:
+    failures.append(
+        "cloud/hfs/hfs-dev.toml local_only must register HFS control credentials: "
+        + ", ".join(missing_controls)
+    )
 
-    expected_pin = {
-        "name": "CODEX_PLATFORM_COMMIT",
-        "type": "git_ref",
-        "source": "Dockerfile ARG",
-        "required_for_release": True,
-        "dev_mutable_default_allowed": True,
-        "release_requires_commit_sha": True,
-    }
-    pin = pins_by_name.get(expected_pin["name"])
-    if not pin:
-        failures.append("cloud/hfs/hfs-dev.toml release_pins missing CODEX_PLATFORM_COMMIT")
-    else:
-        for key, value in expected_pin.items():
-            if pin.get(key) != value:
-                failures.append(
-                    f"cloud/hfs/hfs-dev.toml release_pins CODEX_PLATFORM_COMMIT.{key} "
-                    f"must be {value!r}, got {pin.get(key)!r}"
-                )
-    unexpected_pins = sorted(set(pins_by_name) - {"CODEX_PLATFORM_COMMIT"})
-    if unexpected_pins:
-        failures.append("cloud/hfs/hfs-dev.toml release_pins unexpected: " + ", ".join(unexpected_pins))
+for left, right in (("local_only", "secrets"), ("local_only", "variables"), ("secrets", "variables")):
+    overlap = sorted(set(lists.get(left, [])) & set(lists.get(right, [])))
+    if overlap:
+        failures.append(f"cloud/hfs/hfs-dev.toml {left} and {right} overlap: {overlap}")
 
 if failures:
     for failure in failures:
@@ -179,6 +175,8 @@ require_grep '^ARG CODEX_PLATFORM_COMMIT=HEAD$' cloud/hfs/Dockerfile \
   "cloud/hfs/Dockerfile must expose mutable dev default ARG CODEX_PLATFORM_COMMIT=HEAD"
 require_grep 'git checkout --detach "\$\{CODEX_PLATFORM_COMMIT\}"' cloud/hfs/Dockerfile \
   "cloud/hfs/Dockerfile must checkout CODEX_PLATFORM_COMMIT when pinned"
+require_absent 'git clone .*--branch .*CODEX_PLATFORM_REF' cloud/hfs/Dockerfile \
+  "cloud/hfs/Dockerfile must not require CODEX_PLATFORM_REF to be a branch"
 require_grep 'git rev-parse HEAD > /opt/source/\.codex-platform-build-sha' cloud/hfs/Dockerfile \
   "cloud/hfs/Dockerfile must write build SHA for runtime verification"
 require_grep 'COPY --from=source --chown=node:node /opt/source/\.codex-platform-build-sha ./BUILD_SHA' cloud/hfs/Dockerfile \
@@ -186,10 +184,80 @@ require_grep 'COPY --from=source --chown=node:node /opt/source/\.codex-platform-
 require_grep 'CMD /home/node/app/scripts/hf-healthcheck\.sh' cloud/hfs/Dockerfile \
   "cloud/hfs/Dockerfile HEALTHCHECK must call scripts/hf-healthcheck.sh"
 
-require_grep 's\|\^ARG CODEX_PLATFORM_COMMIT=\.\*\|ARG CODEX_PLATFORM_COMMIT=\$\{escaped_commit\}\|' cloud/hfs/export_space_bundle.sh \
-  "cloud/hfs/export_space_bundle.sh must pin CODEX_PLATFORM_COMMIT in exported Dockerfile"
+require_grep 'resolve_commit "\$\{requested_commit\}"' cloud/hfs/export_space_bundle.sh \
+  "cloud/hfs/export_space_bundle.sh must resolve CODEX_PLATFORM_COMMIT to a commit SHA"
+require_grep 'resolve_commit "\$\{ref\}"' cloud/hfs/export_space_bundle.sh \
+  "cloud/hfs/export_space_bundle.sh must resolve CODEX_PLATFORM_REF to a commit SHA"
 require_grep '^source_commit=\$\{commit\}$' cloud/hfs/export_space_bundle.sh \
-  "cloud/hfs/export_space_bundle.sh must write source_commit to BUILD_SOURCE.txt"
+  "cloud/hfs/export_space_bundle.sh must write the resolved source commit to BUILD_SOURCE.txt"
+
+bundle_dir=$(mktemp -d "${TMPDIR:-/tmp}/codex-platform-hfs-contract.XXXXXX")
+trap 'rm -rf "${bundle_dir}"' EXIT
+bash cloud/hfs/export_space_bundle.sh "${bundle_dir}" >/dev/null
+
+for file in README.md Dockerfile hfs-dev.toml .dockerignore BUILD_SOURCE.txt; do
+  require_file "${bundle_dir}/${file}"
+done
+
+while IFS= read -r bundle_path; do
+  bundle_name=${bundle_path##*/}
+  if [ -d "${bundle_path}" ]; then
+    fail "exported Space bundle must be flat; found directory: ${bundle_name}"
+    continue
+  fi
+  case "${bundle_name}" in
+    README.md|Dockerfile|hfs-dev.toml|.dockerignore|BUILD_SOURCE.txt) ;;
+    *) fail "exported Space bundle contains unexpected path: ${bundle_name}" ;;
+  esac
+done < <(find "${bundle_dir}" -mindepth 1 -maxdepth 1 -print)
+
+require_grep '^ARG CODEX_PLATFORM_COMMIT=[0-9a-f]{40}$' "${bundle_dir}/Dockerfile" \
+  "exported Dockerfile must pin CODEX_PLATFORM_COMMIT to a full commit SHA"
+require_absent '^ARG CODEX_PLATFORM_COMMIT=HEAD$' "${bundle_dir}/Dockerfile" \
+  "exported Dockerfile must not retain CODEX_PLATFORM_COMMIT=HEAD"
+require_grep '^source_commit=[0-9a-f]{40}$' "${bundle_dir}/BUILD_SOURCE.txt" \
+  "exported BUILD_SOURCE.txt must record a full source commit SHA"
+require_grep '^source_ref_commit=[0-9a-f]{40}$' "${bundle_dir}/BUILD_SOURCE.txt" \
+  "exported BUILD_SOURCE.txt must record a full source ref commit SHA"
+
+bundle_commit=$(grep -E '^ARG CODEX_PLATFORM_COMMIT=[0-9a-f]{40}$' "${bundle_dir}/Dockerfile")
+bundle_commit=${bundle_commit#ARG CODEX_PLATFORM_COMMIT=}
+bundle_source_commit=$(grep -E '^source_commit=[0-9a-f]{40}$' "${bundle_dir}/BUILD_SOURCE.txt")
+bundle_source_commit=${bundle_source_commit#source_commit=}
+if [ "${bundle_commit}" != "${bundle_source_commit}" ]; then
+  fail "exported Dockerfile CODEX_PLATFORM_COMMIT must match BUILD_SOURCE.txt source_commit"
+fi
+
+require_absent '^[[:space:]]*push:' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must not run automatically on push"
+require_grep "confirm_upload == 'PUBLISH_WRAPPER'" .github/workflows/deploy-hf-space.yml \
+  "Space deployment must require explicit upload confirmation"
+require_grep 'HFS_MANIFEST:' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must select an explicit target manifest"
+require_grep 'manifest.get\("space"' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must load the Space id from the selected manifest"
+require_grep 'private=is_candidate' .github/workflows/deploy-hf-space.yml \
+  "candidate Space creation must request private visibility"
+require_grep 'Space tree mismatch' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must verify the full remote wrapper allowlist"
+require_grep 'EXPECTED_SOURCE_SHA:' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must pass the reviewed source SHA to smoke"
+
+python3 - "${repo_root}" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+root = Path(sys.argv[1])
+production = tomllib.loads((root / "cloud/hfs/hfs-dev.toml").read_text(encoding="utf-8"))
+candidate = tomllib.loads((root / "cloud/hfs/hfs-dev.candidate.toml").read_text(encoding="utf-8"))
+expected_candidate = "BlueSkyXN/Codex-Platform-HFS-v2-candidate"
+if candidate.get("space") != expected_candidate:
+    raise SystemExit(f"FAIL hfs-contract: candidate space must be {expected_candidate!r}")
+for key in sorted(set(production) | set(candidate)):
+    if key != "space" and production.get(key) != candidate.get(key):
+        raise SystemExit(f"FAIL hfs-contract: candidate profile differs from production at {key}")
+PY
 
 require_grep '^local$' cloud/hfs/.dockerignore \
   "cloud/hfs/.dockerignore must exclude local"
@@ -212,6 +280,8 @@ require_grep 'source-fetch' docs/hfs-alignment.md \
   "docs/hfs-alignment.md must declare source-fetch runtime mode"
 require_grep 'flat-remap' docs/hfs-alignment.md \
   "docs/hfs-alignment.md must declare flat-remap Space root mode"
+require_grep 'HFS v2' docs/hfs-alignment.md \
+  "docs/hfs-alignment.md must document HFS v2 semantics"
 require_grep 'cloud/hfs/' docs/hfs-alignment.md \
   "docs/hfs-alignment.md must document cloud/hfs adapter ownership"
 require_grep 'Pattern B' cloud/hfs/AGENTS.md \
@@ -241,4 +311,4 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
-printf 'PASS hfs-contract: Pattern B source-fetch contract is structurally valid\n'
+printf 'PASS hfs-contract: HFS v2 manifest and Pattern B source-fetch contract are structurally valid\n'
