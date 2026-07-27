@@ -92,6 +92,7 @@ jobs:
           python - <<'PY'
           import os
           from huggingface_hub import HfApi, create_repo, hf_hub_download, upload_folder
+          from huggingface_hub.utils import RepositoryNotFoundError
           from pathlib import Path
           import hashlib
 
@@ -100,14 +101,31 @@ jobs:
           folder = "/tmp/codex-platform-hfs-space"
           commit = os.environ["GITHUB_SHA"]
           is_candidate = os.environ["HFS_TARGET"] == "candidate"
-          create_repo(
-              repo_id=repo_id,
-              repo_type="space",
-              space_sdk="docker",
-              private=is_candidate,
-              exist_ok=True,
-              token=token,
-          )
+          api = HfApi(token=token)
+          expected = {path.name for path in Path(folder).iterdir() if path.is_file()}
+          try:
+              info = api.repo_info(repo_id=repo_id, repo_type="space")
+          except RepositoryNotFoundError:
+              if not is_candidate:
+                  raise SystemExit("production Space must already exist; workflow creation is forbidden")
+              create_repo(
+                  repo_id=repo_id,
+                  repo_type="space",
+                  space_sdk="docker",
+                  private=True,
+                  exist_ok=False,
+                  token=token,
+              )
+              info = api.repo_info(repo_id=repo_id, repo_type="space")
+          if is_candidate and not info.private:
+              raise SystemExit("candidate Space must be private before wrapper upload")
+          remote_before = set(api.list_repo_files(repo_id=repo_id, repo_type="space"))
+          unexpected_before = remote_before - expected - {".gitattributes"}
+          if unexpected_before:
+              raise SystemExit(
+                  "refusing to write a non-thin Space; separate cleanup approval is required: "
+                  + ", ".join(sorted(unexpected_before))
+              )
           upload_folder(
               repo_id=repo_id,
               repo_type="space",
@@ -116,8 +134,6 @@ jobs:
               token=token,
               commit_message=f"deploy: Codex-Platform {commit[:12]}",
           )
-          api = HfApi(token=token)
-          expected = {path.name for path in Path(folder).iterdir() if path.is_file()}
           remote = set(api.list_repo_files(repo_id=repo_id, repo_type="space"))
           unexpected = remote - expected - {".gitattributes"}
           missing = expected - remote

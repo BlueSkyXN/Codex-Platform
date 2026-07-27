@@ -236,8 +236,12 @@ require_grep 'HFS_MANIFEST:' .github/workflows/deploy-hf-space.yml \
   "Space deployment must select an explicit target manifest"
 require_grep 'manifest.get\("space"' .github/workflows/deploy-hf-space.yml \
   "Space deployment must load the Space id from the selected manifest"
-require_grep 'private=is_candidate' .github/workflows/deploy-hf-space.yml \
-  "candidate Space creation must request private visibility"
+require_grep 'production Space must already exist' .github/workflows/deploy-hf-space.yml \
+  "production deployment must not create a Space"
+require_grep 'candidate Space must be private before wrapper upload' .github/workflows/deploy-hf-space.yml \
+  "candidate deployment must verify private visibility"
+require_grep 'refusing to write a non-thin Space' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must preflight the remote wrapper boundary"
 require_grep 'Space tree mismatch' .github/workflows/deploy-hf-space.yml \
   "Space deployment must verify the full remote wrapper allowlist"
 require_grep 'EXPECTED_SOURCE_SHA:' .github/workflows/deploy-hf-space.yml \
