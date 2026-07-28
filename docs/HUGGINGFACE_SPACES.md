@@ -149,6 +149,8 @@ scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
 
 The smoke checks `/healthz`, `/readyz`, `/api/config`, `/`, `/api/state`, `/api/admin/status`, `/_ops/*`, and the default-disabled `/_admin/` posture. It retries during cold starts and accepts either public demo state access or an auth-required `401` when no token is supplied. Without `CODEX_PLATFORM_OPS_TOKEN`, `/_ops/*` must return `401` or `503`.
 
+For a private Space, set `HF_GATEWAY_TOKEN` for the Hugging Face gateway. The smoke keeps the application token in `x-codex-platform-token`, so both authentication layers are checked independently.
+
 For real-mode Spaces, pass the configured token:
 
 ```bash

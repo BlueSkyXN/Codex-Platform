@@ -16,12 +16,12 @@ function parseCookies(header: string | undefined): Record<string, string> {
 }
 
 export function tokenFromRequest(req: express.Request): string | undefined {
-  const auth = req.get('authorization');
-  if (auth?.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
   const headerToken = req.get(config.auth.headerName);
   if (headerToken) return headerToken.trim();
   const legacyHeaderToken = req.get('x-codex-web-token');
   if (legacyHeaderToken) return legacyHeaderToken.trim();
+  const auth = req.get('authorization');
+  if (auth?.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
   const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
   if (queryToken) return queryToken;
   const cookies = parseCookies(req.get('cookie'));
@@ -29,12 +29,12 @@ export function tokenFromRequest(req: express.Request): string | undefined {
 }
 
 export function tokenFromUpgrade(req: IncomingMessage, url: URL): string | undefined {
-  const auth = req.headers.authorization;
-  if (auth?.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
   const header = req.headers[config.auth.headerName.toLowerCase()];
   if (typeof header === 'string') return header;
   const legacyHeader = req.headers['x-codex-web-token'];
   if (typeof legacyHeader === 'string') return legacyHeader;
+  const auth = req.headers.authorization;
+  if (auth?.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
   const queryToken = url.searchParams.get('token') ?? undefined;
   if (queryToken) return queryToken;
   const cookies = parseCookies(req.headers.cookie);
