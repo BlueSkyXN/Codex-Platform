@@ -1,14 +1,12 @@
 standard = "2.0"
 project = "codex-platform"
-space = "BlueSkyXN/Codex-Platform-HFS"
+space = "BlueSkyXN/Codex-Platform-HFS-v2-candidate"
 sovereignty = "sovereign"
 lane = "source"
 version_source = "commit"
 
-# .env is the HFS value ledger. These control credentials are never Space settings.
 local_only = ["HF_TOKEN", "GH_TOKEN"]
 
-# Values stay in .env; this manifest registers only HFS Secret names.
 secrets = [
   "CODEX_PLATFORM_ADMIN_CSRF_KEY",
   "CODEX_PLATFORM_ADMIN_TOKEN",
@@ -20,7 +18,6 @@ secrets = [
   "OPENAI_API_KEY",
 ]
 
-# Values stay in .env; this manifest registers only HFS Variable names.
 variables = [
   "CODEX_ARGS",
   "CODEX_BIN",

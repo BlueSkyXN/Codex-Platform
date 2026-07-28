@@ -4,13 +4,16 @@ Codex-Platform deploys to Hugging Face as a Docker Space through `cloud/hfs/`.
 
 ## Pattern
 
-The repository follows the local HFS standard:
+The repository follows HFS v2 with a semantic manifest:
 
 ```text
-pattern = "B"
-runtime_mode = "source-fetch"
-space_root_mode = "flat-remap"
+standard = "2.0"
+sovereignty = "sovereign"
+lane = "source"
+version_source = "commit"
 ```
+
+The deployment remains Pattern B with `source-fetch` and a `flat-remap` Space root. Those mechanics are enforced by the Dockerfile, exporter, and validator rather than encoded as legacy manifest schema fields.
 
 The Space root contains only:
 
@@ -22,7 +25,19 @@ hfs-dev.toml
 BUILD_SOURCE.txt
 ```
 
-The Dockerfile fetches `https://github.com/BlueSkyXN/Codex-Platform.git` and checks out the commit embedded by `cloud/hfs/export_space_bundle.sh`.
+The Dockerfile clones `https://github.com/BlueSkyXN/Codex-Platform.git`, fetches and checks out the full commit SHA embedded by `cloud/hfs/export_space_bundle.sh`, and does not rely on a branch-only clone selector. The exporter resolves symbolic commit/ref inputs before exporting and fails if either cannot be resolved.
+
+`cloud/hfs/hfs-dev.toml` is an HFS v2 value-name registration: it records the Space identity and the allowed `local_only`, `secrets`, and `variables` keys without values. `.env` is the HFS value ledger. `.env.local` remains only for product-local compatibility; it is not an HFS source or upload input.
+
+Use the reference sync tool for an auditable local-first Settings workflow. Candidate operations must select the candidate manifest explicitly; production remains the default manifest:
+
+```bash
+python3 scripts/hf_space_sync.py diff --manifest cloud/hfs/hfs-dev.candidate.toml --env-file .env
+python3 scripts/hf_space_sync.py push --manifest cloud/hfs/hfs-dev.candidate.toml --env-file .env
+python3 scripts/hf_space_sync.py diff --manifest cloud/hfs/hfs-dev.candidate.toml --env-file .env
+```
+
+Secret values cannot be read back from Hugging Face, so verification compares Secret names and Variable values. Do not use `--prune --yes` until the separately approved cleanup window.
 
 ## Export
 

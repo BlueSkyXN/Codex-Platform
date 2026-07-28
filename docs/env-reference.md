@@ -1,6 +1,6 @@
 # Environment Reference
 
-This document is the public environment contract. Real values and cloud parity notes belong in the gitignored `.env.local` ledger.
+This document is the public environment contract. HFS v2 deployment values belong in the gitignored `.env` ledger; product-local compatibility notes may remain in the gitignored `.env.local` ledger.
 
 ## Configuration Priority
 
@@ -13,15 +13,11 @@ Runtime configuration is resolved in this order:
 
 Explicit Space Settings should be treated as the source of truth for cloud runtime behavior. Do not rely on local shell values to describe the deployed Space unless they have been synchronized and verified.
 
-## Local Env Ledger
+## Local Env Ledgers
 
-The only local private ledger is:
+HFS v2 uses the root `.env` file as its private value ledger. `cloud/hfs/hfs-dev.toml` registers the permitted local-only, Secret, and Variable names; the values remain only in `.env` and are never committed or exported in the Space bundle.
 
-```text
-.env.local
-```
-
-`.env.local` is ignored by Git. It is a notebook for local operations, not an env-file to upload wholesale. It may record Space ID, Space URL, key placement, whether a key is configured, verification timestamps, and private notes. Do not copy real values from `.env.local` into public docs, commits, PR text, logs, screenshots, or examples.
+`.env.local` remains an ignored product-local compatibility ledger and notebook for local operations. It may record Space ID, Space URL, key placement, whether a key is configured, verification timestamps, and private notes. Do not bulk-upload either ledger or copy real values from either file into public docs, commits, PR text, logs, screenshots, or examples.
 
 Use these fields when recording env decisions locally:
 
@@ -191,7 +187,7 @@ GitHub Actions values are deployment and verification inputs. They are separate 
 
 | Key | Required | Purpose |
 | --- | --- | --- |
-| `GITHUB_TOKEN` or `GH_TOKEN` | Optional | Server-side token for reading GitHub Actions status in the Release verification panel. Public repositories can often use unauthenticated reads; private repositories or tighter rate limits should use a token. |
+| `GITHUB_TOKEN` or `GH_TOKEN` | Optional | Server-side token for reading GitHub Actions status in the Release verification panel. Public repositories can often use unauthenticated reads; private repositories or tighter rate limits should use a token. For the HFS v2 Space registration, use the canonical `GITHUB_TOKEN` Secret; `GH_TOKEN` remains local-only control-plane credential. |
 | `CODEX_PLATFORM_GITHUB_ACTIONS_TIMEOUT_MS` | Optional | Timeout for the GitHub Actions status request; defaults to `8000`. |
 
 ## In-App Runtime Tab

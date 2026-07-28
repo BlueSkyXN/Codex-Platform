@@ -49,4 +49,10 @@ CODEX_HOME=/data/codex-home
 CODEX_ARGS=app-server
 ```
 
+## HFS v2 Registration
+
+`hfs-dev.toml` is an HFS v2 semantic registration. It identifies this sovereign source-lane Space, declares `version_source = "commit"`, and lists only the approved names for local control credentials (`HF_TOKEN` and `GH_TOKEN`), Space Secrets, and Space Variables. It contains no values, seed files, buckets, or release pins.
+
+`.env` is the private HFS value ledger. The Dockerfile, `export_space_bundle.sh`, and contract validator—not the manifest—enforce Pattern B, flat export, source fetch, and the immutable release commit pin.
+
 The source of truth is the GitHub repository: <https://github.com/BlueSkyXN/Codex-Platform>.

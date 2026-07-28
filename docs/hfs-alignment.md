@@ -62,22 +62,20 @@ space-root/
 
 The exported Space root is intentionally small. During the HF Docker build, `cloud/hfs/Dockerfile` fetches the GitHub source at the pinned commit and builds inside the Hugging Face builder.
 
-## Release Pin Contract
+## HFS v2 Registration And Release Pin Contract
 
-`cloud/hfs/hfs-dev.toml` uses structured `[[release_pins]]` with one release pin:
+`cloud/hfs/hfs-dev.toml` is an HFS v2 semantic registration, not a second deployment configuration. It declares the product and Space identity, `sovereignty = "sovereign"`, `lane = "source"`, `version_source = "commit"`, plus the names of local-only credentials, Space Secrets, and Space Variables. It contains names only—never deployment values, release pins, seed files, or buckets.
 
-```text
-CODEX_PLATFORM_COMMIT
-```
+`.env` is the HFS value ledger: it holds the local values corresponding to those registered names. `.env.local` remains a product-local compatibility file and is not an HFS value source, deployment input, or export input.
 
-Development defaults may use:
+The Docker/export/validator contract owns the release pin and Pattern B mechanics. Development adapter source may use:
 
 ```text
 ARG CODEX_PLATFORM_REF=main
 ARG CODEX_PLATFORM_COMMIT=HEAD
 ```
 
-Release exports must replace `CODEX_PLATFORM_COMMIT=HEAD` with the Git commit SHA being deployed. The deploy workflow does this through `cloud/hfs/export_space_bundle.sh`, and the Dockerfile writes the checked-out commit to `BUILD_SHA` for runtime verification.
+`cloud/hfs/export_space_bundle.sh` resolves both requested refs locally and writes a full Git commit SHA into the exported `CODEX_PLATFORM_COMMIT` and `BUILD_SOURCE.txt`. It fails when a symbolic ref cannot resolve. The Dockerfile clones the repository, fetches and checks out the pinned commit without relying on a branch-only clone selector, then writes the checked-out commit to `BUILD_SHA` for runtime verification.
 
 ## Shared Runtime Contract
 
@@ -85,13 +83,14 @@ Release exports must replace `CODEX_PLATFORM_COMMIT=HEAD` with the Git commit SH
 | --- | --- |
 | Space metadata | `cloud/hfs/README.md` frontmatter contains `sdk: docker` and `app_port: 7860` |
 | Space build entry | Exported `Dockerfile` comes from `cloud/hfs/Dockerfile` |
-| Alignment manifest | `cloud/hfs/hfs-dev.toml` declares Pattern B, `source-fetch`, and `flat-remap` |
+| HFS v2 manifest | `cloud/hfs/hfs-dev.toml` registers identity, source/commit semantics, and value names only |
 | Single public port | `cloud/hfs/README.md app_port`, Dockerfile `EXPOSE`, and runtime `PORT` are `7860` |
 | Canonical health | `/healthz` returns JSON server health |
 | Ops diagnostics | `/_ops/*` is read-only and gated by `CODEX_PLATFORM_OPS_TOKEN` |
 | Admin control | `/_admin/*` is default-off, uses a separate admin token, CSRF, confirm, and audit log |
+| Docker/export/validator contract | Enforces Pattern B, `source-fetch`, `flat-remap`, flat bundle exclusions, commit pinning, and `BUILD_SHA` |
 | Release takeover evidence | Runtime image includes `BUILD_SHA`; `/healthz` exposes the build SHA when present |
-| Secrets boundary | `.env.local` is ignored and only used as a local ledger |
+| Values boundary | `.env` is the HFS value ledger; `.env.local` remains product-local compatibility only |
 | Local reference boundary | `local/` is reference-only and not part of the Space bundle |
 | Static gate | `.github/workflows/ci.yml` calls `scripts/static-check.sh` |
 | Contract gate | `scripts/validate-hfs-contract.sh` validates the Pattern B structure |
