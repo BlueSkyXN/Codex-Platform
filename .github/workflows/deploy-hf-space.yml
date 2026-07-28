@@ -157,6 +157,7 @@ jobs:
 
       - name: Live smoke
         env:
+          HF_GATEWAY_TOKEN: ${{ secrets.HF_TOKEN }}
           CODEX_PLATFORM_AUTH_TOKEN: ${{ secrets.CODEX_PLATFORM_AUTH_TOKEN }}
           SMOKE_RETRIES: "45"
           SMOKE_DELAY: "20"

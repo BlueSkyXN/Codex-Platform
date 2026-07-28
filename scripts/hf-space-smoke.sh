@@ -10,7 +10,16 @@ SMOKE_ADMIN_ACTIONS="${SMOKE_ADMIN_ACTIONS:-false}"
 SMOKE_RETRIES="${SMOKE_RETRIES:-30}"
 SMOKE_DELAY="${SMOKE_DELAY:-5}"
 EXPECTED_SOURCE_SHA="${EXPECTED_SOURCE_SHA:-}"
+HF_GATEWAY_TOKEN="${HF_GATEWAY_TOKEN:-}"
 export EXPECTED_SOURCE_SHA
+
+curl() {
+  local gateway_args=()
+  if [[ -n "$HF_GATEWAY_TOKEN" ]]; then
+    gateway_args=(-H "Authorization: Bearer ${HF_GATEWAY_TOKEN}")
+  fi
+  command curl "${gateway_args[@]+"${gateway_args[@]}"}" "$@"
+}
 
 if [[ -n "${EXPECTED_SOURCE_SHA}" && ! "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
   printf 'FAIL configuration: EXPECTED_SOURCE_SHA must be a full lowercase Git SHA\n' >&2
