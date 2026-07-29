@@ -394,6 +394,7 @@ class FakeApi:
         post_upload_files: set[str] | None = None,
         subdomain: object = "codex-platform-private",
         current_after_upload: str | None = None,
+        initial_sha: str | None = PARENT_OID,
     ) -> None:
         self.events = events
         self.missing = missing
@@ -401,7 +402,7 @@ class FakeApi:
         self.post_upload_files = post_upload_files
         self.subdomain = subdomain
         self.current_after_upload = current_after_upload or UPLOAD_OID
-        self.sha = PARENT_OID
+        self.sha = initial_sha
         self.repo_info_calls = 0
         self.list_calls = 0
 
@@ -456,6 +457,7 @@ def run_case(
     upload_oid: object = UPLOAD_OID,
     subdomain: object = "codex-platform-private",
     current_after_upload: str | None = None,
+    initial_sha: str | None = PARENT_OID,
     events: list[tuple[str, object]] | None = None,
 ):
     events = [] if events is None else events
@@ -486,6 +488,7 @@ def run_case(
         post_upload_files=post_upload_files,
         subdomain=subdomain,
         current_after_upload=current_after_upload,
+        initial_sha=initial_sha,
     )
     result = deploy_space(
         api=api,
@@ -641,7 +644,7 @@ with tempfile.TemporaryDirectory(prefix="codex-platform-deploy-contract.") as te
     if any(name in {"upload_folder", "restart_space"} for name, _ in public_candidate_events):
         raise SystemExit("FAIL hfs-contract: public candidate was uploaded or restarted")
 
-    _, candidate_events, create_calls = run_case(target="candidate", missing=True)
+    _, candidate_events, create_calls = run_case(target="candidate", missing=True, initial_sha=None)
     expected_create = {
         "repo_id": "BlueSkyXN/Codex-Platform-HFS-v2-candidate",
         "repo_type": "space",
@@ -664,10 +667,10 @@ with tempfile.TemporaryDirectory(prefix="codex-platform-deploy-contract.") as te
     if event_names.index("restart_space") <= max(index for index, name in enumerate(event_names) if name == "download"):
         raise SystemExit("FAIL hfs-contract: restart happened before complete file readback")
     upload_call = next(payload for name, payload in candidate_events if name == "upload_folder")
-    if upload_call.get("parent_commit") != PARENT_OID:
-        raise SystemExit("FAIL hfs-contract: upload did not bind the preflighted parent revision")
+    if upload_call.get("parent_commit") is not None:
+        raise SystemExit("FAIL hfs-contract: first upload to a newly created candidate used a false parent revision")
     list_revisions = [payload for name, payload in candidate_events if name == "list_repo_files"]
-    if list_revisions != [PARENT_OID, UPLOAD_OID]:
+    if list_revisions != [None, UPLOAD_OID]:
         raise SystemExit(f"FAIL hfs-contract: tree readback revisions drifted: {list_revisions!r}")
     download_revisions = [payload[1] for name, payload in candidate_events if name == "download"]
     if set(download_revisions) != {UPLOAD_OID}:
