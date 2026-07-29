@@ -148,19 +148,27 @@ jobs:
               if info.private is not True:
                   raise SystemExit("target Space must be private before wrapper upload")
               parent_commit = info.sha
-              if parent_commit in {None, ""}:
-                  if not created:
-                      raise SystemExit("existing target Space has no pre-upload commit SHA")
+              fresh_production = False
+              if created and parent_commit in {None, ""}:
                   parent_commit = None
+              elif not created and target == "production" and parent_commit is None:
+                  fresh_production = True
               elif not isinstance(parent_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", parent_commit):
                   raise SystemExit("target Space pre-upload revision is not a full commit SHA")
 
-              remote_before = set(api.list_repo_files(
-                  repo_id=repo_id,
-                  repo_type="space",
-                  revision=parent_commit,
-                  token=token,
-              ))
+              try:
+                  remote_before = set(api.list_repo_files(
+                      repo_id=repo_id,
+                      repo_type="space",
+                      revision=parent_commit,
+                      token=token,
+                  ))
+              except Exception as exc:
+                  if fresh_production:
+                      raise SystemExit("cannot confirm fresh production Space has an empty tree") from exc
+                  raise
+              if fresh_production and remote_before:
+                  raise SystemExit("fresh production Space must have an empty tree")
               unexpected_before = remote_before - expected - {".gitattributes"}
               if unexpected_before:
                   raise SystemExit(

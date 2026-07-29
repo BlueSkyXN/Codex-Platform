@@ -395,6 +395,8 @@ class FakeApi:
         subdomain: object = "codex-platform-private",
         current_after_upload: str | None = None,
         initial_sha: str | None = PARENT_OID,
+        pre_upload_files: set[str] | None = None,
+        preflight_error: bool = False,
     ) -> None:
         self.events = events
         self.missing = missing
@@ -403,6 +405,8 @@ class FakeApi:
         self.subdomain = subdomain
         self.current_after_upload = current_after_upload or UPLOAD_OID
         self.sha = initial_sha
+        self.pre_upload_files = set() if pre_upload_files is None else pre_upload_files
+        self.preflight_error = preflight_error
         self.repo_info_calls = 0
         self.list_calls = 0
 
@@ -425,7 +429,9 @@ class FakeApi:
         self.list_calls += 1
         self.events.append(("list_repo_files", revision))
         if self.list_calls == 1:
-            return []
+            if self.preflight_error:
+                raise RuntimeError("controlled preflight tree failure")
+            return sorted(self.pre_upload_files)
         if self.post_upload_files is not None:
             return sorted(self.post_upload_files)
         return sorted(expected_files)
@@ -504,10 +510,23 @@ def run_case(
     return result, events, create_calls
 
 
-def run_main(candidate_source: str, bundle: Path):
-    events: list[tuple[str, object]] = []
+def run_main(
+    candidate_source: str,
+    bundle: Path,
+    *,
+    initial_sha: str | None = PARENT_OID,
+    pre_upload_files: set[str] | None = None,
+    preflight_error: bool = False,
+    events: list[tuple[str, object]] | None = None,
+):
+    events = [] if events is None else events
     create_calls: list[dict[str, object]] = []
-    api = FakeApi(events)
+    api = FakeApi(
+        events,
+        initial_sha=initial_sha,
+        pre_upload_files=pre_upload_files,
+        preflight_error=preflight_error,
+    )
 
     def create_repo(**kwargs):
         create_calls.append(kwargs)
@@ -526,7 +545,8 @@ def run_main(candidate_source: str, bundle: Path):
     fake_hub.create_repo = create_repo
     fake_hub.upload_folder = upload_folder
     fake_hub.hf_hub_download = download
-    github_env = bundle.parent / f"github-env-{len(candidate_source)}-{sum(map(ord, candidate_source))}"
+    run_main.counter = getattr(run_main, "counter", 0) + 1
+    github_env = bundle.parent / f"github-env-{run_main.counter}"
     controlled_env = {
         "GITHUB_ENV": str(github_env),
         "GITHUB_SHA": "0123456789abcdef0123456789abcdef01234567",
@@ -567,6 +587,68 @@ with tempfile.TemporaryDirectory(prefix="codex-platform-deploy-contract.") as te
 
     if not main_contract_passes(source, bundle):
         raise SystemExit("FAIL hfs-contract: extracted __main__ does not execute the verified deploy_space wiring")
+
+    fresh_events: list[tuple[str, object]] = []
+    fresh_result = run_main(source, bundle, initial_sha=None, pre_upload_files=set(), events=fresh_events)
+    fresh_names = [name for name, _ in fresh_events]
+    if "create_repo" in fresh_names or "upload_folder" not in fresh_names or "restart_space" not in fresh_names:
+        raise SystemExit("FAIL hfs-contract: existing empty production did not complete first upload via __main__")
+    fresh_upload = next(payload for name, payload in fresh_events if name == "upload_folder")
+    if fresh_upload.get("parent_commit") is not None:
+        raise SystemExit("FAIL hfs-contract: existing empty production invented a parent commit")
+    if fresh_result[2] != "HF_PUBLIC_URL=https://codex-platform-private.hf.space\n":
+        raise SystemExit("FAIL hfs-contract: existing empty production did not publish its smoke URL")
+
+    existing_events: list[tuple[str, object]] = []
+    run_main(
+        source,
+        bundle,
+        initial_sha=PARENT_OID,
+        pre_upload_files=expected_files,
+        events=existing_events,
+    )
+    existing_upload = next(payload for name, payload in existing_events if name == "upload_folder")
+    if existing_upload.get("parent_commit") != PARENT_OID:
+        raise SystemExit("FAIL hfs-contract: existing production upload lost its exact parent commit")
+
+    nonempty_events: list[tuple[str, object]] = []
+    try:
+        run_main(
+            source,
+            bundle,
+            initial_sha=None,
+            pre_upload_files={".gitattributes"},
+            events=nonempty_events,
+        )
+    except SystemExit as exc:
+        if "fresh production Space must have an empty tree" not in str(exc):
+            raise
+    else:
+        raise SystemExit("FAIL hfs-contract: nonempty sha-less production reached upload")
+    if any(name in {"upload_folder", "restart_space"} for name, _ in nonempty_events):
+        raise SystemExit("FAIL hfs-contract: nonempty sha-less production mutated HF state")
+
+    unknown_events: list[tuple[str, object]] = []
+    try:
+        run_main(source, bundle, initial_sha=None, preflight_error=True, events=unknown_events)
+    except SystemExit as exc:
+        if "cannot confirm fresh production Space has an empty tree" not in str(exc):
+            raise
+    else:
+        raise SystemExit("FAIL hfs-contract: unknown sha-less production tree reached upload")
+    if any(name in {"upload_folder", "restart_space"} for name, _ in unknown_events):
+        raise SystemExit("FAIL hfs-contract: unknown sha-less production tree mutated HF state")
+
+    invalid_sha_events: list[tuple[str, object]] = []
+    try:
+        run_main(source, bundle, initial_sha="not-a-full-sha", events=invalid_sha_events)
+    except SystemExit as exc:
+        if "pre-upload revision is not a full commit SHA" not in str(exc):
+            raise
+    else:
+        raise SystemExit("FAIL hfs-contract: invalid nonempty production SHA reached upload")
+    if any(name in {"upload_folder", "restart_space"} for name, _ in invalid_sha_events):
+        raise SystemExit("FAIL hfs-contract: invalid nonempty production SHA mutated HF state")
 
     entrypoint = 'if __name__ == "__main__":\n    main()'
     dead_entrypoint = source.replace(entrypoint, 'if __name__ == "__main__":\n    pass')
