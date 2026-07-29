@@ -253,6 +253,14 @@ require_grep 'Space tree mismatch' .github/workflows/deploy-hf-space.yml \
   "Space deployment must verify the full remote wrapper allowlist"
 require_grep 'EXPECTED_SOURCE_SHA:' .github/workflows/deploy-hf-space.yml \
   "Space deployment must pass the reviewed source SHA to smoke"
+require_grep 'huggingface_hub==1\.5\.0' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must pin the Hugging Face Python client"
+require_grep 'from huggingface_hub import HfApi' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must use the Hugging Face Python API"
+require_grep 'hf_hub_download\(' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must read back uploaded files through the Python API"
+require_grep 'api\.restart_space\(repo_id=repo_id, factory_reboot=True\)' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must use HfApi for the factory reboot"
 
 python3 - "${repo_root}" <<'PY'
 import sys
