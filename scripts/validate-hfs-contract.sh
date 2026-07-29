@@ -273,6 +273,12 @@ require_grep 'create_repo_fn\(' .github/workflows/deploy-hf-space.yml \
   "candidate creation must use the modeled create operation"
 require_grep 'upload_folder_fn\(' .github/workflows/deploy-hf-space.yml \
   "Space deployment must use the modeled upload operation"
+require_grep 'create_repo_fn=create_repo,' .github/workflows/deploy-hf-space.yml \
+  "workflow main must bind candidate creation to huggingface_hub.create_repo"
+require_grep 'upload_folder_fn=upload_folder,' .github/workflows/deploy-hf-space.yml \
+  "workflow main must bind upload to huggingface_hub.upload_folder"
+require_grep 'download_fn=hf_hub_download,' .github/workflows/deploy-hf-space.yml \
+  "workflow main must bind readback to huggingface_hub.hf_hub_download"
 require_grep 'api\.restart_space\(repo_id=repo_id, factory_reboot=True\)' .github/workflows/deploy-hf-space.yml \
   "Space deployment must use HfApi for the factory reboot"
 
