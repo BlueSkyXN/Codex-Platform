@@ -27,7 +27,7 @@ BUILD_SOURCE.txt
 
 The Dockerfile clones `https://github.com/BlueSkyXN/Codex-Platform.git`, fetches and checks out the full commit SHA embedded by `cloud/hfs/export_space_bundle.sh`, and does not rely on a branch-only clone selector. The exporter resolves symbolic commit/ref inputs before exporting and fails if either cannot be resolved.
 
-`cloud/hfs/hfs-dev.toml` is an HFS v2 value-name registration: it records the Space identity and the allowed `local_only`, `secrets`, and `variables` keys without values. `.env` is the HFS value ledger. `.env.local` remains only for product-local compatibility; it is not an HFS source or upload input.
+`cloud/hfs/hfs-dev.toml` is an HFS v2 value-name registration: it records the Space identity and the allowed `local_only`, required `secrets`, `optional_secrets`, and `variables` keys without values. Empty optional Secrets are neither pushed nor treated as missing, and registered optional names are preserved by prune. `.env` is the HFS value ledger. `.env.local` remains only for product-local compatibility; it is not an HFS source or upload input.
 
 Use the reference sync tool for an auditable local-first Settings workflow. Candidate operations must select the candidate manifest explicitly; production remains the default manifest:
 

@@ -64,7 +64,7 @@ The exported Space root is intentionally small. During the HF Docker build, `clo
 
 ## HFS v2 Registration And Release Pin Contract
 
-`cloud/hfs/hfs-dev.toml` is an HFS v2 semantic registration, not a second deployment configuration. It declares the product and Space identity, `sovereignty = "sovereign"`, `lane = "source"`, `version_source = "commit"`, plus the names of local-only credentials, Space Secrets, and Space Variables. It contains names only—never deployment values, release pins, seed files, or buckets.
+`cloud/hfs/hfs-dev.toml` is an HFS v2 semantic registration, not a second deployment configuration. It declares the product and Space identity, `sovereignty = "sovereign"`, `lane = "source"`, `version_source = "commit"`, plus the names of local-only credentials, required Space Secrets, optional Space Secrets, and Space Variables. It contains names only—never deployment values, release pins, seed files, or buckets. The clean demo profile requires only the application and ops tokens; admin, public API and provider credentials remain registered optional values and are not configured.
 
 `.env` is the HFS value ledger: it holds the local values corresponding to those registered names. `.env.local` remains a product-local compatibility file and is not an HFS value source, deployment input, or export input.
 
