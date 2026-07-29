@@ -245,8 +245,10 @@ require_grep 'manifest.get\("space"' .github/workflows/deploy-hf-space.yml \
   "Space deployment must load the Space id from the selected manifest"
 require_grep 'production Space must already exist' .github/workflows/deploy-hf-space.yml \
   "production deployment must not create a Space"
-require_grep 'candidate Space must be private before wrapper upload' .github/workflows/deploy-hf-space.yml \
-  "candidate deployment must verify private visibility"
+require_grep 'FORMAL_SPACE: BlueSkyXN/Codex-Platform-HFS' .github/workflows/deploy-hf-space.yml \
+  "production deployment must pin the canonical Space id"
+require_grep 'target Space must be private before wrapper upload' .github/workflows/deploy-hf-space.yml \
+  "candidate and production deployment must verify private visibility"
 require_grep 'refusing to write a non-thin Space' .github/workflows/deploy-hf-space.yml \
   "Space deployment must preflight the remote wrapper boundary"
 require_grep 'Space tree mismatch' .github/workflows/deploy-hf-space.yml \
@@ -278,12 +280,33 @@ from pathlib import Path
 root = Path(sys.argv[1])
 production = tomllib.loads((root / "cloud/hfs/hfs-dev.toml").read_text(encoding="utf-8"))
 candidate = tomllib.loads((root / "cloud/hfs/hfs-dev.candidate.toml").read_text(encoding="utf-8"))
+expected_production = "BlueSkyXN/Codex-Platform-HFS"
 expected_candidate = "BlueSkyXN/Codex-Platform-HFS-v2-candidate"
+if production.get("space") != expected_production:
+    raise SystemExit(f"FAIL hfs-contract: production space must be {expected_production!r}")
 if candidate.get("space") != expected_candidate:
     raise SystemExit(f"FAIL hfs-contract: candidate space must be {expected_candidate!r}")
 for key in sorted(set(production) | set(candidate)):
     if key != "space" and production.get(key) != candidate.get(key):
         raise SystemExit(f"FAIL hfs-contract: candidate profile differs from production at {key}")
+
+workflow = (root / ".github/workflows/deploy-hf-space.yml").read_text(encoding="utf-8")
+upload_offset = workflow.index("upload_folder(")
+required_before_upload = (
+    'if os.environ["HFS_TARGET"] == "production" and space_id != os.environ["FORMAL_SPACE"]:',
+    'if info.private is not True:',
+    '[[ "$GITHUB_REF" == "refs/heads/main" ]]',
+    'git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main',
+    '[[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]',
+    '[[ "$EXPECTED_SOURCE_SHA" == "$GITHUB_SHA" ]]',
+    '[[ "$(git rev-parse origin/main)" == "$GITHUB_SHA" ]]',
+)
+for fragment in required_before_upload:
+    offset = workflow.find(fragment)
+    if offset < 0 or offset > upload_offset:
+        raise SystemExit(f"FAIL hfs-contract: production pre-upload gate missing or late: {fragment}")
+if "if is_candidate and not info.private" in workflow:
+    raise SystemExit("FAIL hfs-contract: production Space privacy must not be skipped")
 PY
 
 require_grep '^local$' cloud/hfs/.dockerignore \
