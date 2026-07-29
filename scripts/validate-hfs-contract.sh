@@ -267,8 +267,12 @@ require_grep 'info\.subdomain' .github/workflows/deploy-hf-space.yml \
   "Space deployment must derive live smoke URL from Space metadata"
 require_absent 'space_id\.lower\(\)\.replace\("/", "-"\)' .github/workflows/deploy-hf-space.yml \
   "Space deployment must not synthesize a legacy Space hostname"
-require_grep 'hf_hub_download\(' .github/workflows/deploy-hf-space.yml \
+require_grep 'download_fn\(' .github/workflows/deploy-hf-space.yml \
   "Space deployment must read back uploaded files through the Python API"
+require_grep 'create_repo_fn\(' .github/workflows/deploy-hf-space.yml \
+  "candidate creation must use the modeled create operation"
+require_grep 'upload_folder_fn\(' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must use the modeled upload operation"
 require_grep 'api\.restart_space\(repo_id=repo_id, factory_reboot=True\)' .github/workflows/deploy-hf-space.yml \
   "Space deployment must use HfApi for the factory reboot"
 
@@ -291,7 +295,7 @@ for key in sorted(set(production) | set(candidate)):
         raise SystemExit(f"FAIL hfs-contract: candidate profile differs from production at {key}")
 
 workflow = (root / ".github/workflows/deploy-hf-space.yml").read_text(encoding="utf-8")
-upload_offset = workflow.index("upload_folder(")
+upload_offset = workflow.index("upload_folder_fn(")
 required_before_upload = (
     'if os.environ["HFS_TARGET"] == "production" and space_id != os.environ["FORMAL_SPACE"]:',
     'if info.private is not True:',
@@ -307,6 +311,240 @@ for fragment in required_before_upload:
         raise SystemExit(f"FAIL hfs-contract: production pre-upload gate missing or late: {fragment}")
 if "if is_candidate and not info.private" in workflow:
     raise SystemExit("FAIL hfs-contract: production Space privacy must not be skipped")
+PY
+
+python3 - "${repo_root}" <<'PY'
+from __future__ import annotations
+
+import sys
+import tempfile
+import textwrap
+import types
+from pathlib import Path
+from types import SimpleNamespace
+
+
+class RepositoryNotFoundError(Exception):
+    pass
+
+
+fake_hub = types.ModuleType("huggingface_hub")
+fake_hub.HfApi = object
+fake_hub.create_repo = lambda **kwargs: None
+fake_hub.hf_hub_download = lambda **kwargs: ""
+fake_hub.upload_folder = lambda **kwargs: None
+fake_utils = types.ModuleType("huggingface_hub.utils")
+fake_utils.RepositoryNotFoundError = RepositoryNotFoundError
+sys.modules["huggingface_hub"] = fake_hub
+sys.modules["huggingface_hub.utils"] = fake_utils
+
+root = Path(sys.argv[1])
+workflow = (root / ".github/workflows/deploy-hf-space.yml").read_text(encoding="utf-8")
+begin = "# HFS_DEPLOY_PYTHON_BEGIN"
+end = "# HFS_DEPLOY_PYTHON_END"
+if workflow.count(begin) != 1 or workflow.count(end) != 1:
+    raise SystemExit("FAIL hfs-contract: deploy workflow must expose one testable Python state machine")
+source = textwrap.dedent(workflow.split(begin, 1)[1].split(end, 1)[0])
+namespace = {"__name__": "hfs_deploy_contract"}
+exec(compile(source, "deploy-hf-space.inline.py", "exec"), namespace)
+deploy_space = namespace.get("deploy_space")
+if not callable(deploy_space):
+    raise SystemExit("FAIL hfs-contract: deploy workflow must define deploy_space")
+
+
+class FakeApi:
+    def __init__(
+        self,
+        events: list[tuple[str, object]],
+        *,
+        missing: bool = False,
+        private_after_create: bool = True,
+        post_upload_files: set[str] | None = None,
+    ) -> None:
+        self.events = events
+        self.missing = missing
+        self.private_after_create = private_after_create
+        self.post_upload_files = post_upload_files
+        self.repo_info_calls = 0
+        self.list_calls = 0
+
+    def repo_info(self, *, repo_id: str, repo_type: str):
+        self.repo_info_calls += 1
+        self.events.append(("repo_info", self.repo_info_calls))
+        if self.missing and self.repo_info_calls == 1:
+            raise RepositoryNotFoundError(repo_id)
+        private = self.private_after_create if self.missing else True
+        return SimpleNamespace(private=private)
+
+    def list_repo_files(self, *, repo_id: str, repo_type: str):
+        self.list_calls += 1
+        self.events.append(("list_repo_files", self.list_calls))
+        if self.list_calls == 1:
+            return []
+        if self.post_upload_files is not None:
+            return sorted(self.post_upload_files)
+        return sorted(expected_files)
+
+    def space_info(self, *, repo_id: str, expand: list[str], token: str):
+        self.events.append(("space_info", tuple(expand)))
+        return SimpleNamespace(subdomain="codex-platform-private")
+
+    def restart_space(self, *, repo_id: str, factory_reboot: bool):
+        self.events.append(("restart_space", factory_reboot))
+
+
+def run_case(
+    *,
+    target: str,
+    missing: bool = False,
+    private_after_create: bool = True,
+    post_upload_files: set[str] | None = None,
+    corrupt_download: str | None = None,
+    events: list[tuple[str, object]] | None = None,
+):
+    events = [] if events is None else events
+    create_calls: list[dict[str, object]] = []
+
+    def create_repo(**kwargs):
+        create_calls.append(kwargs)
+        events.append(("create_repo", kwargs))
+
+    def upload_folder(**kwargs):
+        events.append(("upload_folder", kwargs["repo_id"]))
+
+    def download(**kwargs):
+        name = kwargs["filename"]
+        events.append(("download", name))
+        if name == corrupt_download:
+            corrupt = bundle / f"corrupt-{name}"
+            corrupt.write_bytes(b"corrupt")
+            return str(corrupt)
+        return str(bundle / name)
+
+    api = FakeApi(
+        events,
+        missing=missing,
+        private_after_create=private_after_create,
+        post_upload_files=post_upload_files,
+    )
+    result = deploy_space(
+        api=api,
+        create_repo_fn=create_repo,
+        upload_folder_fn=upload_folder,
+        download_fn=download,
+        repo_id="BlueSkyXN/Codex-Platform-HFS-v2-candidate" if target == "candidate" else "BlueSkyXN/Codex-Platform-HFS",
+        target=target,
+        folder=bundle,
+        commit="0123456789abcdef0123456789abcdef01234567",
+        token="test-token-not-a-real-credential",
+    )
+    return result, events, create_calls
+
+
+with tempfile.TemporaryDirectory(prefix="codex-platform-deploy-contract.") as temporary_dir:
+    bundle = Path(temporary_dir)
+    expected_files = {".dockerignore", "BUILD_SOURCE.txt", "Dockerfile", "README.md", "hfs-dev.toml"}
+    for name in expected_files:
+        (bundle / name).write_bytes(f"fixture:{name}\n".encode())
+
+    try:
+        run_case(target="production", missing=True)
+    except SystemExit as exc:
+        if "production Space must already exist" not in str(exc):
+            raise
+    else:
+        raise SystemExit("FAIL hfs-contract: missing production Space did not fail closed")
+
+    production_events: list[tuple[str, object]] = []
+    production_api = FakeApi(production_events, missing=True)
+    try:
+        deploy_space(
+            api=production_api,
+            create_repo_fn=lambda **kwargs: production_events.append(("create_repo", kwargs)),
+            upload_folder_fn=lambda **kwargs: production_events.append(("upload_folder", kwargs)),
+            download_fn=lambda **kwargs: "",
+            repo_id="BlueSkyXN/Codex-Platform-HFS",
+            target="production",
+            folder=bundle,
+            commit="0123456789abcdef0123456789abcdef01234567",
+            token="test-token-not-a-real-credential",
+        )
+    except SystemExit:
+        pass
+    if any(name in {"create_repo", "upload_folder", "restart_space"} for name, _ in production_events):
+        raise SystemExit("FAIL hfs-contract: missing production Space mutated HF state")
+
+    public_candidate_events: list[tuple[str, object]] = []
+    try:
+        run_case(
+            target="candidate",
+            missing=True,
+            private_after_create=False,
+            events=public_candidate_events,
+        )
+    except SystemExit as exc:
+        if "target Space must be private" not in str(exc):
+            raise
+    else:
+        raise SystemExit("FAIL hfs-contract: public candidate readback did not fail closed")
+    if any(name in {"upload_folder", "restart_space"} for name, _ in public_candidate_events):
+        raise SystemExit("FAIL hfs-contract: public candidate was uploaded or restarted")
+
+    _, candidate_events, create_calls = run_case(target="candidate", missing=True)
+    expected_create = {
+        "repo_id": "BlueSkyXN/Codex-Platform-HFS-v2-candidate",
+        "repo_type": "space",
+        "space_sdk": "docker",
+        "private": True,
+        "exist_ok": False,
+        "token": "test-token-not-a-real-credential",
+    }
+    if create_calls != [expected_create]:
+        raise SystemExit(f"FAIL hfs-contract: candidate create_repo contract drifted: {create_calls!r}")
+    event_names = [name for name, _ in candidate_events]
+    if not (
+        event_names.index("create_repo")
+        < event_names.index("repo_info", 1)
+        < event_names.index("upload_folder")
+        < event_names.index("space_info")
+        < event_names.index("restart_space")
+    ):
+        raise SystemExit("FAIL hfs-contract: create/private-readback/upload/readback/restart order is invalid")
+    if event_names.index("restart_space") <= max(index for index, name in enumerate(event_names) if name == "download"):
+        raise SystemExit("FAIL hfs-contract: restart happened before complete file readback")
+
+    _, existing_events, existing_create_calls = run_case(target="production")
+    if existing_create_calls:
+        raise SystemExit("FAIL hfs-contract: existing production unexpectedly called create_repo")
+    existing_names = [name for name, _ in existing_events]
+    if existing_names.index("upload_folder") >= existing_names.index("restart_space"):
+        raise SystemExit("FAIL hfs-contract: production restart must follow upload and readback")
+
+    incomplete_events: list[tuple[str, object]] = []
+    try:
+        run_case(
+            target="production",
+            post_upload_files=expected_files - {"README.md"},
+            events=incomplete_events,
+        )
+    except SystemExit as exc:
+        if "Space tree mismatch" not in str(exc):
+            raise
+    else:
+        raise SystemExit("FAIL hfs-contract: incomplete post-upload tree did not fail closed")
+    if any(name == "restart_space" for name, _ in incomplete_events):
+        raise SystemExit("FAIL hfs-contract: incomplete post-upload tree was restarted")
+
+    corrupt_events: list[tuple[str, object]] = []
+    try:
+        run_case(target="production", corrupt_download="README.md", events=corrupt_events)
+    except SystemExit as exc:
+        if "Space readback mismatch" not in str(exc):
+            raise
+    else:
+        raise SystemExit("FAIL hfs-contract: byte-mismatched readback did not fail closed")
+    if any(name == "restart_space" for name, _ in corrupt_events):
+        raise SystemExit("FAIL hfs-contract: byte-mismatched readback was restarted")
 PY
 
 require_grep '^local$' cloud/hfs/.dockerignore \
