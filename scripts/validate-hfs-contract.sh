@@ -96,7 +96,7 @@ expected = {
     "lane": "source",
     "version_source": "commit",
 }
-allowed_fields = set(expected) | {"local_only", "secrets", "variables"}
+allowed_fields = set(expected) | {"local_only", "secrets", "optional_secrets", "variables"}
 control_credentials = {"HF_TOKEN", "GH_TOKEN"}
 env_name = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 secret_literal = re.compile(
@@ -122,7 +122,7 @@ if secret_literal.search(raw):
     failures.append("cloud/hfs/hfs-dev.toml must register names only, not token literals")
 
 lists: dict[str, list[str]] = {}
-for field in ("local_only", "secrets", "variables"):
+for field in ("local_only", "secrets", "optional_secrets", "variables"):
     values = manifest.get(field)
     if not isinstance(values, list) or not values or not all(isinstance(value, str) and value for value in values):
         failures.append(f"cloud/hfs/hfs-dev.toml {field} must be a non-empty string list")
@@ -142,7 +142,14 @@ if missing_controls:
         + ", ".join(missing_controls)
     )
 
-for left, right in (("local_only", "secrets"), ("local_only", "variables"), ("secrets", "variables")):
+for left, right in (
+    ("local_only", "secrets"),
+    ("local_only", "optional_secrets"),
+    ("local_only", "variables"),
+    ("secrets", "optional_secrets"),
+    ("secrets", "variables"),
+    ("optional_secrets", "variables"),
+):
     overlap = sorted(set(lists.get(left, [])) & set(lists.get(right, [])))
     if overlap:
         failures.append(f"cloud/hfs/hfs-dev.toml {left} and {right} overlap: {overlap}")
