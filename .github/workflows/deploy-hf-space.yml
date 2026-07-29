@@ -9,7 +9,7 @@ on:
         type: choice
         options:
           - candidate
-          - production
+          - primary
       expected_source_sha:
         description: Full reviewed Git commit SHA to deploy and verify
         required: true
@@ -107,7 +107,7 @@ jobs:
               info = api.repo_info(repo_id=repo_id, repo_type="space")
           except RepositoryNotFoundError:
               if not is_candidate:
-                  raise SystemExit("production Space must already exist; workflow creation is forbidden")
+                  raise SystemExit("canonical preview Space must already exist; workflow creation is forbidden")
               create_repo(
                   repo_id=repo_id,
                   repo_type="space",

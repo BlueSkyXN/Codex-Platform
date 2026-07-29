@@ -89,12 +89,16 @@ except tomllib.TOMLDecodeError as exc:
     raise SystemExit(1)
 
 expected = {
-    "standard": "2.0",
+    "standard": "2.1",
     "project": "codex-platform",
     "space": "BlueSkyXN/Codex-Platform-HFS",
     "sovereignty": "sovereign",
     "lane": "source",
     "version_source": "commit",
+    "project_class": "preview",
+    "target_role": "primary",
+    "env_file": ".env",
+    "secret_files": [],
 }
 allowed_fields = set(expected) | {"local_only", "secrets", "variables"}
 control_credentials = {"HF_TOKEN", "GH_TOKEN"}
@@ -236,8 +240,8 @@ require_grep 'HFS_MANIFEST:' .github/workflows/deploy-hf-space.yml \
   "Space deployment must select an explicit target manifest"
 require_grep 'manifest.get\("space"' .github/workflows/deploy-hf-space.yml \
   "Space deployment must load the Space id from the selected manifest"
-require_grep 'production Space must already exist' .github/workflows/deploy-hf-space.yml \
-  "production deployment must not create a Space"
+require_grep 'canonical preview Space must already exist' .github/workflows/deploy-hf-space.yml \
+  "canonical preview deployment must not create a Space"
 require_grep 'candidate Space must be private before wrapper upload' .github/workflows/deploy-hf-space.yml \
   "candidate deployment must verify private visibility"
 require_grep 'refusing to write a non-thin Space' .github/workflows/deploy-hf-space.yml \
@@ -253,14 +257,22 @@ import tomllib
 from pathlib import Path
 
 root = Path(sys.argv[1])
-production = tomllib.loads((root / "cloud/hfs/hfs-dev.toml").read_text(encoding="utf-8"))
+primary = tomllib.loads((root / "cloud/hfs/hfs-dev.toml").read_text(encoding="utf-8"))
 candidate = tomllib.loads((root / "cloud/hfs/hfs-dev.candidate.toml").read_text(encoding="utf-8"))
-expected_candidate = "BlueSkyXN/Codex-Platform-HFS-v2-candidate"
-if candidate.get("space") != expected_candidate:
-    raise SystemExit(f"FAIL hfs-contract: candidate space must be {expected_candidate!r}")
-for key in sorted(set(production) | set(candidate)):
-    if key != "space" and production.get(key) != candidate.get(key):
-        raise SystemExit(f"FAIL hfs-contract: candidate profile differs from production at {key}")
+candidate_expected = {
+    "space": "BlueSkyXN/Codex-Platform-HFS-v2-candidate",
+    "target_role": "candidate",
+    "env_file": "local/hfs-targets/candidate.env",
+}
+for key, value in candidate_expected.items():
+    if candidate.get(key) != value:
+        raise SystemExit(f"FAIL hfs-contract: candidate {key} must be {value!r}")
+for key in sorted(set(primary) | set(candidate)):
+    if (
+        key not in {"space", "target_role", "env_file"}
+        and primary.get(key) != candidate.get(key)
+    ):
+        raise SystemExit(f"FAIL hfs-contract: candidate profile differs from canonical preview at {key}")
 PY
 
 require_grep '^local$' cloud/hfs/.dockerignore \
@@ -315,4 +327,4 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
-printf 'PASS hfs-contract: HFS v2 manifest and Pattern B source-fetch contract are structurally valid\n'
+printf 'PASS hfs-contract: HFS v2.1 manifest and Pattern B source-fetch contract are structurally valid\n'

@@ -62,11 +62,11 @@ space-root/
 
 The exported Space root is intentionally small. During the HF Docker build, `cloud/hfs/Dockerfile` fetches the GitHub source at the pinned commit and builds inside the Hugging Face builder.
 
-## HFS v2 Registration And Release Pin Contract
+## HFS v2.1 Preview Registration And Release Pin Contract
 
-`cloud/hfs/hfs-dev.toml` is an HFS v2 semantic registration, not a second deployment configuration. It declares the product and Space identity, `sovereignty = "sovereign"`, `lane = "source"`, `version_source = "commit"`, plus the names of local-only credentials, Space Secrets, and Space Variables. It contains names only—never deployment values, release pins, seed files, or buckets.
+`cloud/hfs/hfs-dev.toml` is an HFS v2.1 semantic registration, not a second deployment configuration. It classifies the project as `preview`, identifies the canonical `primary` Space, declares `sovereignty = "sovereign"`, `lane = "source"`, `version_source = "commit"`, plus the names of local-only credentials, Space Secrets, and Space Variables. It contains names only—never deployment values, release pins, seed files, or buckets.
 
-`.env` is the HFS value ledger: it holds the local values corresponding to those registered names. `.env.local` remains a product-local compatibility file and is not an HFS value source, deployment input, or export input.
+`.env` is the ignored plaintext HFS value ledger: it holds the local values corresponding to those registered names and must be updated before any Secret write. The canonical preview Space may be modified directly; `hfs-dev.candidate.toml` is optional for high-risk validation and uses `local/hfs-targets/candidate.env`. `.env.local` remains a product-local compatibility file and is not an HFS value source, deployment input, or export input.
 
 The Docker/export/validator contract owns the release pin and Pattern B mechanics. Development adapter source may use:
 
