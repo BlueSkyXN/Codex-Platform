@@ -53,6 +53,8 @@ BlueSkyXN/Codex-Platform-HFS
 
 The manual workflow may still select the separate candidate profile, but both targets must already be private before upload. A production upload additionally fails closed unless the selected manifest names the canonical Space above and `GITHUB_REF`, the checked-out `HEAD`, `GITHUB_SHA`, `EXPECTED_SOURCE_SHA`, and a freshly fetched `origin/main` all identify the same commit.
 
+The uploader binds each write to the preflighted Space SHA with `parent_commit`, captures the returned `CommitInfo.oid`, and pins the complete tree and file-byte readback to that uploaded revision. It rechecks that the current repository SHA still equals the uploaded oid and that Space metadata contains a safe non-empty subdomain before allowing a factory restart.
+
 It must not contain `local/`, `.env.local`, `src/`, `docs/`, or `scripts/`; those are fetched from GitHub during build.
 
 ## Contract Check

@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORMAL_SPACE: BlueSkyXN/Codex-Platform-HFS
+      HFS_BUNDLE_DIR: /tmp/codex-platform-hfs-space
       HFS_MANIFEST: ${{ inputs.target == 'candidate' && 'cloud/hfs/hfs-dev.candidate.toml' || 'cloud/hfs/hfs-dev.toml' }}
       HFS_TARGET: ${{ inputs.target }}
       EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
@@ -67,7 +68,7 @@ jobs:
       - name: Export pinned Space bundle
         run: |
           CODEX_PLATFORM_COMMIT="${EXPECTED_SOURCE_SHA}" \
-            bash cloud/hfs/export_space_bundle.sh /tmp/codex-platform-hfs-space
+            bash cloud/hfs/export_space_bundle.sh "$HFS_BUNDLE_DIR"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -128,7 +129,7 @@ jobs:
 
               expected = {path.name for path in folder.iterdir() if path.is_file()}
               try:
-                  info = api.repo_info(repo_id=repo_id, repo_type="space")
+                  info = api.repo_info(repo_id=repo_id, repo_type="space", token=token)
               except RepositoryNotFoundError:
                   if target == "production":
                       raise SystemExit("production Space must already exist; workflow creation is forbidden")
@@ -140,12 +141,20 @@ jobs:
                       exist_ok=False,
                       token=token,
                   )
-                  info = api.repo_info(repo_id=repo_id, repo_type="space")
+                  info = api.repo_info(repo_id=repo_id, repo_type="space", token=token)
 
               if info.private is not True:
                   raise SystemExit("target Space must be private before wrapper upload")
+              parent_commit = info.sha
+              if not isinstance(parent_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", parent_commit):
+                  raise SystemExit("target Space pre-upload revision is not a full commit SHA")
 
-              remote_before = set(api.list_repo_files(repo_id=repo_id, repo_type="space"))
+              remote_before = set(api.list_repo_files(
+                  repo_id=repo_id,
+                  repo_type="space",
+                  revision=parent_commit,
+                  token=token,
+              ))
               unexpected_before = remote_before - expected - {".gitattributes"}
               if unexpected_before:
                   raise SystemExit(
@@ -153,16 +162,25 @@ jobs:
                       + ", ".join(sorted(unexpected_before))
                   )
 
-              upload_folder_fn(
+              upload_result = upload_folder_fn(
                   repo_id=repo_id,
                   repo_type="space",
                   folder_path=str(folder),
                   path_in_repo=".",
                   token=token,
                   commit_message=f"deploy: Codex-Platform {commit[:12]}",
+                  parent_commit=parent_commit,
               )
+              upload_oid = upload_result.oid
+              if not isinstance(upload_oid, str) or not re.fullmatch(r"[0-9a-f]{40}", upload_oid):
+                  raise SystemExit("upload did not return a full commit oid")
 
-              remote = set(api.list_repo_files(repo_id=repo_id, repo_type="space"))
+              remote = set(api.list_repo_files(
+                  repo_id=repo_id,
+                  repo_type="space",
+                  revision=upload_oid,
+                  token=token,
+              ))
               unexpected = remote - expected - {".gitattributes"}
               missing = expected - remote
               if unexpected or missing:
@@ -175,6 +193,7 @@ jobs:
                       repo_id=repo_id,
                       repo_type="space",
                       filename=name,
+                      revision=upload_oid,
                       token=token,
                   ))
                   local_digest = hashlib.sha256((folder / name).read_bytes()).hexdigest()
@@ -182,10 +201,19 @@ jobs:
                   if local_digest != remote_digest:
                       raise SystemExit(f"Space readback mismatch for {name}")
 
-              info = api.space_info(repo_id=repo_id, expand=["subdomain"], token=token)
-              subdomain = info.subdomain
+              info = api.space_info(
+                  repo_id=repo_id,
+                  revision=upload_oid,
+                  expand=["subdomain"],
+                  token=token,
+              )
+              subdomain = getattr(info, "subdomain", None)
               if not isinstance(subdomain, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,126}", subdomain):
                   raise SystemExit("Space metadata is missing a safe hashed subdomain")
+
+              current = api.repo_info(repo_id=repo_id, repo_type="space", token=token)
+              if current.sha != upload_oid:
+                  raise SystemExit("Space current revision changed after upload readback")
 
               api.restart_space(repo_id=repo_id, factory_reboot=True)
               return subdomain
@@ -194,6 +222,7 @@ jobs:
           def main() -> None:
               token = os.environ["HF_TOKEN"]
               repo_id = os.environ["HF_SPACE_ID"]
+              # HFS_MAIN_DEPLOY_BEGIN
               subdomain = deploy_space(
                   api=HfApi(token=token),
                   create_repo_fn=create_repo,
@@ -201,10 +230,11 @@ jobs:
                   download_fn=hf_hub_download,
                   repo_id=repo_id,
                   target=os.environ["HFS_TARGET"],
-                  folder=Path("/tmp/codex-platform-hfs-space"),
+                  folder=Path(os.environ["HFS_BUNDLE_DIR"]),
                   commit=os.environ["GITHUB_SHA"],
                   token=token,
               )
+              # HFS_MAIN_DEPLOY_END
               with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
                   env_file.write(f"HF_PUBLIC_URL=https://{subdomain}.hf.space\n")
 
