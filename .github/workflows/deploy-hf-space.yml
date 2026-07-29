@@ -57,10 +57,8 @@ jobs:
           space_id = manifest.get("space", "")
           if not isinstance(space_id, str) or space_id.count("/") != 1:
               raise SystemExit(f"invalid Space id in {os.environ['HFS_MANIFEST']}: {space_id!r}")
-          public_url = "https://" + space_id.lower().replace("/", "-") + ".hf.space"
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
               env_file.write(f"HF_SPACE_ID={space_id}\n")
-              env_file.write(f"HF_PUBLIC_URL={public_url}\n")
           PY
 
       - name: Export pinned Space bundle
@@ -74,7 +72,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install Hugging Face client
-        run: python -m pip install --disable-pip-version-check "huggingface_hub==1.5.0"
+        run: >-
+          python -m pip install --disable-pip-version-check
+          "huggingface_hub==1.5.0" "click==8.3.3"
 
       - name: Validate HF token
         env:
@@ -95,6 +95,7 @@ jobs:
           from huggingface_hub.utils import RepositoryNotFoundError
           from pathlib import Path
           import hashlib
+          import re
 
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["HF_SPACE_ID"]
@@ -152,6 +153,12 @@ jobs:
               remote_digest = hashlib.sha256(downloaded.read_bytes()).hexdigest()
               if local_digest != remote_digest:
                   raise SystemExit(f"Space readback mismatch for {name}")
+          info = api.space_info(repo_id=repo_id, expand=["subdomain"], token=token)
+          subdomain = info.subdomain
+          if not isinstance(subdomain, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,126}", subdomain):
+              raise SystemExit("Space metadata is missing a safe hashed subdomain")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write(f"HF_PUBLIC_URL=https://{subdomain}.hf.space\n")
           api.restart_space(repo_id=repo_id, factory_reboot=True)
           PY
 

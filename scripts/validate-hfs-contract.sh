@@ -255,8 +255,16 @@ require_grep 'EXPECTED_SOURCE_SHA:' .github/workflows/deploy-hf-space.yml \
   "Space deployment must pass the reviewed source SHA to smoke"
 require_grep 'huggingface_hub==1\.5\.0' .github/workflows/deploy-hf-space.yml \
   "Space deployment must pin the Hugging Face Python client"
+require_grep 'click==8\.3\.3' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must pin the audited Click runtime"
 require_grep 'from huggingface_hub import HfApi' .github/workflows/deploy-hf-space.yml \
   "Space deployment must use the Hugging Face Python API"
+require_grep 'expand=\["subdomain"\]' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must read the actual Space subdomain"
+require_grep 'info\.subdomain' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must derive live smoke URL from Space metadata"
+require_absent 'space_id\.lower\(\)\.replace\("/", "-"\)' .github/workflows/deploy-hf-space.yml \
+  "Space deployment must not synthesize a legacy Space hostname"
 require_grep 'hf_hub_download\(' .github/workflows/deploy-hf-space.yml \
   "Space deployment must read back uploaded files through the Python API"
 require_grep 'api\.restart_space\(repo_id=repo_id, factory_reboot=True\)' .github/workflows/deploy-hf-space.yml \
