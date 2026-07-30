@@ -51,7 +51,7 @@ CODEX_ARGS=app-server
 
 ## HFS v2.1 Preview Registration
 
-`hfs-dev.toml` is the HFS v2.1 canonical preview registration. It declares `project_class = "preview"`, `target_role = "primary"`, `version_source = "commit"`, and only the approved names for local control credentials (`HF_TOKEN` and `GH_TOKEN`), Space Secrets, and Space Variables. It contains no values, seed files, buckets, or release pins.
+`hfs-dev.toml` is the HFS v2.1 canonical preview registration. It declares `project_class = "preview"`, `target_role = "primary"`, `space_visibility = "protected"`, `bucket_visibility = "private"`, `version_source = "commit"`, and only the approved names for local control credentials (`HF_TOKEN` and `GH_TOKEN`), Space Secrets, and Space Variables. It contains no values, seed files, buckets, or release pins.
 
 `.env` is the ignored plaintext HFS value ledger and must be updated before any Secret write. The canonical preview Space may be changed directly and then read back; the candidate profile is optional for high-risk validation. The Dockerfile, `export_space_bundle.sh`, and contract validator—not the manifest—enforce Pattern B, flat export, source fetch, and the immutable release commit pin.
 

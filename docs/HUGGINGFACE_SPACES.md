@@ -10,6 +10,8 @@ The repository follows HFS v2.1 with a semantic manifest:
 standard = "2.1"
 project_class = "preview"
 target_role = "primary"
+space_visibility = "protected"
+bucket_visibility = "private"
 env_file = ".env"
 secret_files = []
 sovereignty = "sovereign"
@@ -31,7 +33,7 @@ BUILD_SOURCE.txt
 
 The Dockerfile clones `https://github.com/BlueSkyXN/Codex-Platform.git`, fetches and checks out the full commit SHA embedded by `cloud/hfs/export_space_bundle.sh`, and does not rely on a branch-only clone selector. The exporter resolves symbolic commit/ref inputs before exporting and fails if either cannot be resolved.
 
-`cloud/hfs/hfs-dev.toml` is an HFS v2.1 value-name registration for the canonical preview Space. It records the Space identity and the allowed `local_only`, required `secrets`, `optional_secrets`, and `variables` keys without values. `.env` is the ignored plaintext HFS value ledger and must contain every managed Secret value before an ordinary push. `.env.local` remains only for product-local compatibility; it is not an HFS source or upload input.
+`cloud/hfs/hfs-dev.toml` is an HFS v2.1 value-name registration for the canonical preview Space. It fixes Space visibility at Protected and registered Bucket visibility at Private, and records the allowed `local_only`, required `secrets`, `optional_secrets`, and `variables` keys without values. `.env` is the ignored plaintext HFS value ledger and must contain every managed Secret value before an ordinary push. `.env.local` remains only for product-local compatibility; it is not an HFS source or upload input.
 
 Preview maintenance may update the canonical Space directly. Secret values must be written to the local `.env` first because Hugging Face cannot return them later; the remote Secret is only a deployment copy. Use the reference sync tool for an auditable local-first Settings workflow:
 
