@@ -174,7 +174,7 @@ Write operations accept an `Idempotency-Key` header (24h replay window). Smoke t
 | --- | --- | --- |
 | `HF_TOKEN` | Secret | Token used by `.github/workflows/deploy-hf-space.yml` to upload the Space bundle. |
 | `HF_SPACE_ID` | Variable | Optional override; defaults to `BlueSkyXN/Codex-Platform-HFS`. |
-| `HF_PUBLIC_URL` | Variable | Optional live smoke URL override; defaults to the public Space URL. |
+| `HF_PUBLIC_URL` | Workflow-only value | Live smoke URL read from the deployed Space's actual `subdomain`; it is never reconstructed from the repository ID. |
 | `CODEX_PLATFORM_AUTH_TOKEN` | Secret | Optional smoke token for real-mode Spaces. |
 | `CODEX_PLATFORM_OPS_TOKEN` | Secret | Optional smoke token for `/_ops/*` checks. |
 | `CODEX_PLATFORM_ADMIN_TOKEN` | Secret | Optional smoke token when `SMOKE_ADMIN_ENABLED=true`. |
