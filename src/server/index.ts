@@ -195,7 +195,7 @@ function adminStatus(): AdminStatus {
       id: 'ops-token',
       label: 'Ops diagnostics',
       state: config.ops.enabled ? 'ok' : 'warn',
-      detail: config.ops.enabled ? '/_ops/* is token gated.' : 'CODEX_PLATFORM_OPS_TOKEN is not configured; /_ops/* is disabled.'
+      detail: config.ops.enabled ? '/_ops/* is token gated.' : 'OPS_TOKEN is not configured; /_ops/* is disabled.'
     },
     {
       id: 'admin-control',
@@ -205,7 +205,7 @@ function adminStatus(): AdminStatus {
         ? '/_admin/* is disabled.'
         : config.admin.token
           ? '/_admin/* is enabled with a separate admin token.'
-          : 'CODEX_PLATFORM_ADMIN_ENABLED=true but CODEX_PLATFORM_ADMIN_TOKEN is not configured.'
+          : 'CODEX_PLATFORM_ADMIN_ENABLED=true but ADMIN_PASSWORD is not configured.'
     }
   ];
 

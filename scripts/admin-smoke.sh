@@ -4,8 +4,8 @@ set -euo pipefail
 BASE_URL="${1:-${ADMIN_SMOKE_BASE_URL:-http://127.0.0.1:${PORT:-7860}}}"
 BASE_URL="${BASE_URL%/}"
 ADMIN_EXPECTED_ENABLED="${ADMIN_EXPECTED_ENABLED:-${CODEX_PLATFORM_ADMIN_ENABLED:-false}}"
-ADMIN_SMOKE_ACTIONS="${ADMIN_SMOKE_ACTIONS:-false}"
-ADMIN_TOKEN="${CODEX_PLATFORM_ADMIN_TOKEN:-${ADMIN_TOKEN:-}}"
+SMOKE_ADMIN_ACTIONS="${SMOKE_ADMIN_ACTIONS:-false}"
+ADMIN_TOKEN="${ADMIN_PASSWORD:-}"
 
 tmp_body=$(mktemp)
 tmp_cookie=$(mktemp)
@@ -66,7 +66,7 @@ if [ "$ADMIN_EXPECTED_ENABLED" != "true" ]; then
 fi
 
 if [ -z "$ADMIN_TOKEN" ]; then
-  printf 'FAIL admin-enabled: ADMIN_TOKEN or CODEX_PLATFORM_ADMIN_TOKEN is required\n' >&2
+  printf 'FAIL admin-enabled: ADMIN_PASSWORD is required\n' >&2
   exit 1
 fi
 
@@ -103,7 +103,7 @@ expect_status "admin-cookie-action-missing-confirm" "400" \
   -d '{}' \
   "$BASE_URL/_admin/api/actions/run-health-checks"
 
-if [ "$ADMIN_SMOKE_ACTIONS" = "true" ]; then
+if [ "$SMOKE_ADMIN_ACTIONS" = "true" ]; then
   expect_json "admin-run-health-checks" "value && value.ok === true && value.result" \
     -b "$tmp_cookie" \
     -H "content-type: application/json" \
@@ -111,7 +111,7 @@ if [ "$ADMIN_SMOKE_ACTIONS" = "true" ]; then
     -d '{"confirm":true}' \
     "$BASE_URL/_admin/api/actions/run-health-checks"
 else
-  printf 'SKIP admin-run-health-checks: ADMIN_SMOKE_ACTIONS is not true\n'
+  printf 'SKIP admin-run-health-checks: SMOKE_ADMIN_ACTIONS is not true\n'
 fi
 
 printf 'PASS admin smoke: %s\n' "$BASE_URL"

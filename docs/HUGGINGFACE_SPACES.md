@@ -4,10 +4,15 @@ Codex-Platform deploys to Hugging Face as a Docker Space through `cloud/hfs/`.
 
 ## Pattern
 
-The repository follows HFS v2 with a semantic manifest:
+The repository follows HFS v3.0 with a semantic manifest:
 
 ```text
-standard = "2.0"
+standard = "3.0"
+project_class = "preview"
+target_role = "primary"
+space_visibility = "protected"
+bucket_visibility = "private"
+env_file = ".env"
 sovereignty = "sovereign"
 lane = "source"
 version_source = "commit"
@@ -27,15 +32,19 @@ BUILD_SOURCE.txt
 
 The Dockerfile clones `https://github.com/BlueSkyXN/Codex-Platform.git`, fetches and checks out the full commit SHA embedded by `cloud/hfs/export_space_bundle.sh`, and does not rely on a branch-only clone selector. The exporter resolves symbolic commit/ref inputs before exporting and fails if either cannot be resolved.
 
-`cloud/hfs/hfs-dev.toml` is an HFS v2 value-name registration: it records the Space identity and the allowed `local_only`, required `secrets`, `optional_secrets`, and `variables` keys without values. Empty optional Secrets are neither pushed nor treated as missing, and registered optional names are preserved by prune. `.env` is the HFS value ledger. `.env.local` remains only for product-local compatibility; it is not an HFS source or upload input.
+`cloud/hfs/hfs-dev.toml` is an HFS v3.0 value-name registration for the canonical preview Space. It fixes Space visibility at Protected and registered Bucket visibility at Private, and records the allowed `local_only`, required `secrets`, `optional_secrets`, and `variables` keys without values. `.env` is the ignored plaintext HFS value ledger and must contain every managed Secret value before an ordinary push. `.env.local` remains only for product-local compatibility; it is not an HFS source or upload input.
 
-Use the reference sync tool for an auditable local-first Settings workflow. Candidate operations must select the candidate manifest explicitly; production remains the default manifest:
+Preview maintenance may update the canonical Space directly. Secret values must be written to the local `.env` first because Hugging Face cannot return them later; the remote Secret is only a deployment copy. Use the reference sync tool for an auditable local-first Settings workflow:
 
 ```bash
-python3 scripts/hf_space_sync.py diff --manifest cloud/hfs/hfs-dev.candidate.toml --env-file .env
-python3 scripts/hf_space_sync.py push --manifest cloud/hfs/hfs-dev.candidate.toml --env-file .env
-python3 scripts/hf_space_sync.py diff --manifest cloud/hfs/hfs-dev.candidate.toml --env-file .env
+python3 scripts/hfs_dev.py diff --manifest cloud/hfs/hfs-dev.toml --env-file .env
+python3 scripts/hfs_dev.py push --manifest cloud/hfs/hfs-dev.toml --env-file .env
+python3 scripts/hfs_dev.py diff --manifest cloud/hfs/hfs-dev.toml --env-file .env
 ```
+
+`hfs-dev.candidate.toml` remains an optional high-risk validation profile, not a
+routine preview prerequisite. It uses the separate ignored plaintext ledger
+`local/hfs-targets/candidate.env`.
 
 Secret values cannot be read back from Hugging Face, so verification compares Secret names and Variable values. Do not use `--prune --yes` until the separately approved cleanup window.
 
@@ -123,14 +132,14 @@ Codex-Platform follows the DIFY HFS split between read-only diagnostics and cont
 Recommended real-mode HF secrets:
 
 ```env
-CODEX_PLATFORM_OPS_TOKEN=<long-random-ops-token>
+OPS_TOKEN=<long-random-ops-token>
 CODEX_PLATFORM_ADMIN_ENABLED=false
 ```
 
-`/_ops/*` stays disabled until `CODEX_PLATFORM_OPS_TOKEN` is set. CLI and automation should use:
+`/_ops/*` stays disabled until `OPS_TOKEN` is set. CLI and automation should use:
 
 ```bash
-curl -H "x-codex-platform-ops-token: $CODEX_PLATFORM_OPS_TOKEN" \
+curl -H "x-codex-platform-ops-token: $OPS_TOKEN" \
   https://blueskyxn-codex-platform-hfs.hf.space/_ops/health
 ```
 
@@ -138,7 +147,7 @@ Only enable `/_admin/` in a Private or Protected Space:
 
 ```env
 CODEX_PLATFORM_ADMIN_ENABLED=true
-CODEX_PLATFORM_ADMIN_TOKEN=<long-random-admin-token>
+ADMIN_PASSWORD=<long-random-admin-token>
 ```
 
 The admin surface uses an independent token, signed HttpOnly browser session cookies, CSRF for browser write actions, `confirm=true`, a JSONL audit log, and a small action catalog. It does not expose a shell or arbitrary command execution.
@@ -151,7 +160,7 @@ After HF reports the Space as running:
 scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
 ```
 
-The smoke checks `/healthz`, `/readyz`, `/api/config`, `/`, `/api/state`, `/api/admin/status`, `/_ops/*`, and the default-disabled `/_admin/` posture. It retries during cold starts and accepts either public demo state access or an auth-required `401` when no token is supplied. Without `CODEX_PLATFORM_OPS_TOKEN`, `/_ops/*` must return `401` or `503`.
+The smoke checks `/healthz`, `/readyz`, `/api/config`, `/`, `/api/state`, `/api/admin/status`, `/_ops/*`, and the default-disabled `/_admin/` posture. It retries during cold starts and accepts either public demo state access or an auth-required `401` when no token is supplied. Without `OPS_TOKEN`, `/_ops/*` must return `401` or `503`.
 
 For a private Space, set `HF_GATEWAY_TOKEN` for the Hugging Face gateway. The smoke keeps the application token in `x-codex-platform-token`, so both authentication layers are checked independently.
 
@@ -164,11 +173,11 @@ CODEX_PLATFORM_AUTH_TOKEN=<token> scripts/hf-space-smoke.sh https://blueskyxn-co
 For ops and explicitly enabled admin checks:
 
 ```bash
-CODEX_PLATFORM_OPS_TOKEN=<ops-token> \
+OPS_TOKEN=<ops-token> \
   scripts/hf-space-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
 
 SMOKE_ADMIN_ENABLED=true \
-  CODEX_PLATFORM_ADMIN_TOKEN=<admin-token> \
+  ADMIN_PASSWORD=<admin-token> \
   scripts/admin-smoke.sh https://blueskyxn-codex-platform-hfs.hf.space
 ```
 

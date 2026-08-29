@@ -146,7 +146,7 @@ function registerAdminRoutes(app: express.Express, ctx: ControlPlaneContext): vo
 
   app.get('/_admin/', (_req, res) => {
     if (!config.admin.token) {
-      res.status(503).type('html').send(adminDisabledHtml('CODEX_PLATFORM_ADMIN_TOKEN must be set before enabling the admin control plane.'));
+      res.status(503).type('html').send(adminDisabledHtml('ADMIN_PASSWORD must be set before enabling the admin control plane.'));
       return;
     }
     res.type('html').send(adminDashboardHtml());
@@ -154,7 +154,7 @@ function registerAdminRoutes(app: express.Express, ctx: ControlPlaneContext): vo
 
   app.post('/_admin/api/login', (req, res) => {
     if (!config.admin.token) {
-      res.status(503).json({ ok: false, error: 'CODEX_PLATFORM_ADMIN_TOKEN must be set before enabling admin' });
+      res.status(503).json({ ok: false, error: 'ADMIN_PASSWORD must be set before enabling admin' });
       return;
     }
     const token = String(req.body?.token ?? '');
@@ -268,7 +268,7 @@ async function runAdminAction(actionId: string, ctx: ControlPlaneContext): Promi
 }
 
 function opsLockReason(): string {
-  if (!config.ops.token) return 'CODEX_PLATFORM_OPS_TOKEN is not set';
+  if (!config.ops.token) return 'OPS_TOKEN is not set';
   return '';
 }
 
@@ -729,10 +729,10 @@ function opsLoginHtml(input: { locked: boolean; message?: string }): string {
     <main class="panel">
       <div class="kicker">Codex-Platform</div>
       <h1>Ops</h1>
-      <p>${input.locked ? escapeHtml(input.message ?? 'Ops is disabled.') : 'Sign in with CODEX_PLATFORM_OPS_TOKEN.'}</p>
+      <p>${input.locked ? escapeHtml(input.message ?? 'Ops is disabled.') : 'Sign in with OPS_TOKEN.'}</p>
       ${input.locked ? '' : `
         <form id="loginForm" class="stack">
-          <input id="token" type="password" autocomplete="current-password" placeholder="CODEX_PLATFORM_OPS_TOKEN" />
+          <input id="token" type="password" autocomplete="current-password" placeholder="OPS_TOKEN" />
           <button type="submit">Open ops</button>
         </form>
         <p id="error" class="error"></p>
@@ -821,7 +821,7 @@ function adminDashboardHtml(): string {
       <section id="loginPanel" class="panel">
         <h2>Sign in</h2>
         <form id="loginForm" class="stack">
-          <input id="token" type="password" autocomplete="current-password" placeholder="CODEX_PLATFORM_ADMIN_TOKEN" />
+          <input id="token" type="password" autocomplete="current-password" placeholder="ADMIN_PASSWORD" />
           <button type="submit">Open admin</button>
         </form>
         <p id="loginError" class="error"></p>

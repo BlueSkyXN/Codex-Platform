@@ -97,7 +97,7 @@ Always report which checks were actually run and which were skipped because depe
 - Preserve token-gated real mode. Public/demo mode may run unauthenticated only under the existing safe conditions; real Codex mode on HF requires `CODEX_PLATFORM_AUTH_TOKEN`.
 - Keep env documentation public and sanitized. `.env.local` is a gitignored local ledger, not a source for public examples.
 - When adding or renaming env keys, update `.env.example`, `.env.hf.example`, and `docs/env-reference.md` together.
-- Keep `CODEX_PLATFORM_*` as the public prefix for new app env keys. Existing `CODEX_WEB_*` aliases are compatibility only.
+- Keep `CODEX_PLATFORM_*` as the public prefix for product-specific app env keys. HFS v3.0 control credentials are the deliberate exceptions: `OPS_TOKEN` and `ADMIN_PASSWORD`. Existing `CODEX_WEB_*` aliases are compatibility only and must not be introduced for these v3 keys.
 - Keep generated/build/runtime output out of commits: `dist/`, `node_modules/`, `coverage/`, `.codex-platform/`, `.codex-web/`, `output/`, `.playwright-cli/`, and `cloud/hfs/.bundle/`.
 
 ## HFS Pattern B boundary
@@ -115,7 +115,7 @@ Always report which checks were actually run and which were skipped because depe
 ## Security and secrets
 
 - Never commit real tokens, auth files, private URLs, customer data, `.env.local` contents, or local-only credential notes.
-- Do not paste real `CODEX_PLATFORM_AUTH_TOKEN`, `CODEX_PLATFORM_OPS_TOKEN`, `CODEX_PLATFORM_ADMIN_TOKEN`, `OPENAI_API_KEY`, `CODEX_AUTH_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or `HF_TOKEN` values into docs, examples, logs, screenshots, PR text, test snapshots, or public Space files.
+- Do not paste real `CODEX_PLATFORM_AUTH_TOKEN`, `OPS_TOKEN`, `ADMIN_PASSWORD`, `OPENAI_API_KEY`, `CODEX_AUTH_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or `HF_TOKEN` values into docs, examples, logs, screenshots, PR text, test snapshots, or public Space files.
 - Do not add token values to WebSocket URLs or browser-visible query strings. The current browser event stream uses same-origin cookies to avoid leaking tokens through URLs.
 - Do not weaken redaction in persistence or logs. Keys matching token, secret, password, authorization, API key, or cookie must remain redacted in persisted snapshots.
 - Do not broaden allowed workspace roots, path traversal behavior, or Git path handling without treating it as a security-sensitive backend change.

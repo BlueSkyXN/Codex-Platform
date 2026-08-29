@@ -49,6 +49,7 @@ bash -n \
   cloud/hfs/export_space_bundle.sh
 
 scripts/validate-hfs-contract.sh
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_hf_space_sync.py
 git diff --check
 check_changed_file_trailing_whitespace
 
