@@ -66,6 +66,8 @@ require_file cloud/hfs/export_space_bundle.sh
 require_file cloud/hfs/hfs-dev.toml
 require_file cloud/hfs/hfs-dev.candidate.toml
 require_file scripts/hf_space_sync.py
+require_file scripts/hfs_dev.py
+require_file scripts/check_hfs_alignment.py
 require_file cloud/hfs/AGENTS.md
 require_file docs/HUGGINGFACE_SPACES.md
 require_file docs/hfs-alignment.md
@@ -89,7 +91,7 @@ except tomllib.TOMLDecodeError as exc:
     raise SystemExit(1)
 
 expected = {
-    "standard": "2.1",
+    "standard": "3.0",
     "project": "codex-platform",
     "space": "BlueSkyXN/Codex-Platform-HFS",
     "sovereignty": "sovereign",
@@ -100,7 +102,6 @@ expected = {
     "space_visibility": "protected",
     "bucket_visibility": "private",
     "env_file": ".env",
-    "secret_files": [],
 }
 allowed_fields = set(expected) | {"local_only", "secrets", "optional_secrets", "variables"}
 control_credentials = {"HF_TOKEN", "GH_TOKEN"}
@@ -120,7 +121,7 @@ for key, value in expected.items():
 unexpected = sorted(set(manifest) - allowed_fields)
 if unexpected:
     failures.append(
-        "cloud/hfs/hfs-dev.toml must use only HFS v2 fields; unexpected: "
+        "cloud/hfs/hfs-dev.toml must use only HFS v3.0 fields; unexpected: "
         + ", ".join(unexpected)
     )
 
@@ -165,6 +166,9 @@ if failures:
         print(f"FAIL hfs-contract: {failure}", file=sys.stderr)
     raise SystemExit(1)
 PY
+
+python3 scripts/check_hfs_alignment.py . --manifest cloud/hfs/hfs-dev.toml || fail "canonical HFS v3.0 alignment check failed"
+python3 scripts/check_hfs_alignment.py . --manifest cloud/hfs/hfs-dev.candidate.toml || fail "candidate HFS v3.0 alignment check failed"
 
 if [ "$(head -n 1 README.md)" = "---" ]; then
   fail "root README.md must not contain Hugging Face Space frontmatter in Pattern B"
@@ -313,7 +317,7 @@ root = Path(sys.argv[1])
 production = tomllib.loads((root / "cloud/hfs/hfs-dev.toml").read_text(encoding="utf-8"))
 candidate = tomllib.loads((root / "cloud/hfs/hfs-dev.candidate.toml").read_text(encoding="utf-8"))
 expected_production = "BlueSkyXN/Codex-Platform-HFS"
-expected_candidate = "BlueSkyXN/Codex-Platform-HFS-v2-candidate"
+expected_candidate = "BlueSkyXN/Codex-Platform-HFS-v3-candidate"
 if production.get("space") != expected_production:
     raise SystemExit(f"FAIL hfs-contract: production space must be {expected_production!r}")
 if candidate.get("space") != expected_candidate:
@@ -513,7 +517,7 @@ def run_case(
         create_repo_fn=create_repo,
         upload_folder_fn=upload_folder,
         download_fn=download,
-        repo_id="BlueSkyXN/Codex-Platform-HFS-v2-candidate" if target == "candidate" else "BlueSkyXN/Codex-Platform-HFS",
+        repo_id="BlueSkyXN/Codex-Platform-HFS-v3-candidate" if target == "candidate" else "BlueSkyXN/Codex-Platform-HFS",
         target=target,
         folder=bundle,
         commit="0123456789abcdef0123456789abcdef01234567",
@@ -740,7 +744,7 @@ with tempfile.TemporaryDirectory(prefix="codex-platform-deploy-contract.") as te
 
     _, candidate_events, create_calls = run_case(target="candidate", missing=True, initial_sha=None)
     expected_create = {
-        "repo_id": "BlueSkyXN/Codex-Platform-HFS-v2-candidate",
+        "repo_id": "BlueSkyXN/Codex-Platform-HFS-v3-candidate",
         "repo_type": "space",
         "space_sdk": "docker",
         "private": True,
@@ -862,8 +866,8 @@ require_grep 'source-fetch' docs/hfs-alignment.md \
   "docs/hfs-alignment.md must declare source-fetch runtime mode"
 require_grep 'flat-remap' docs/hfs-alignment.md \
   "docs/hfs-alignment.md must declare flat-remap Space root mode"
-require_grep 'HFS v2' docs/hfs-alignment.md \
-  "docs/hfs-alignment.md must document HFS v2 semantics"
+require_grep 'HFS v3' docs/hfs-alignment.md \
+  "docs/hfs-alignment.md must document HFS v3 semantics"
 require_grep 'cloud/hfs/' docs/hfs-alignment.md \
   "docs/hfs-alignment.md must document cloud/hfs adapter ownership"
 require_grep 'Pattern B' cloud/hfs/AGENTS.md \
@@ -893,4 +897,4 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
-printf 'PASS hfs-contract: HFS v2 manifest and Pattern B source-fetch contract are structurally valid\n'
+printf 'PASS hfs-contract: HFS v3 manifest and Pattern B source-fetch contract are structurally valid\n'

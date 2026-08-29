@@ -78,9 +78,9 @@ const defaultDataDir = isHuggingFaceSpace ? path.join(hfStorageRoot, 'codex-plat
 const dataDir = path.resolve(firstEnv('CODEX_PLATFORM_DATA_DIR', 'CODEX_WEB_DATA_DIR') ?? defaultDataDir);
 const codexHome = path.resolve(firstEnv('CODEX_HOME') ?? (isHuggingFaceSpace ? path.join(hfStorageRoot, 'codex-home') : path.join(env.HOME ?? process.cwd(), '.codex')));
 const authToken = firstEnv('CODEX_PLATFORM_AUTH_TOKEN', 'CODEX_WEB_AUTH_TOKEN');
-const opsToken = firstEnv('CODEX_PLATFORM_OPS_TOKEN');
+const opsToken = firstEnv('OPS_TOKEN');
 const adminEnabled = boolAny(['CODEX_PLATFORM_ADMIN_ENABLED'], false);
-const adminToken = firstEnv('CODEX_PLATFORM_ADMIN_TOKEN');
+const adminToken = firstEnv('ADMIN_PASSWORD');
 const codeBin = firstEnv('CODEX_BIN') ?? 'codex';
 
 function resolveDemoMode(): boolean {

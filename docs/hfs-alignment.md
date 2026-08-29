@@ -62,9 +62,9 @@ space-root/
 
 The exported Space root is intentionally small. During the HF Docker build, `cloud/hfs/Dockerfile` fetches the GitHub source at the pinned commit and builds inside the Hugging Face builder.
 
-## HFS v2.1 Preview Registration And Release Pin Contract
+## HFS v3.0 Preview Registration And Release Pin Contract
 
-`cloud/hfs/hfs-dev.toml` is an HFS v2.1 semantic registration, not a second deployment configuration. It classifies the project as `preview`, identifies the canonical `primary` Space, declares `space_visibility = "protected"`, `bucket_visibility = "private"`, `sovereignty = "sovereign"`, `lane = "source"`, `version_source = "commit"`, plus the names of local-only credentials, required Space Secrets, optional Space Secrets, and Space Variables. It contains names only—never deployment values, release pins, seed files, or buckets. The clean demo profile requires only the application and ops tokens; admin, public API and provider credentials remain registered optional values and are not configured.
+`cloud/hfs/hfs-dev.toml` is an HFS v3.0 semantic registration, not a second deployment configuration. It classifies the project as `preview`, identifies the canonical `primary` Space, declares `space_visibility = "protected"`, `bucket_visibility = "private"`, `sovereignty = "sovereign"`, `lane = "source"`, `version_source = "commit"`, plus the names of local-only credentials, required Space Secrets, optional Space Secrets, and Space Variables. It contains names only—never deployment values, release pins, seed files, or buckets. The clean demo profile requires only the application and ops tokens; admin, public API and provider credentials remain registered optional values and are not configured.
 
 `.env` is the ignored plaintext HFS value ledger: it holds the local values corresponding to those registered names and must be updated before any Secret write. The canonical preview Space may be modified directly; `hfs-dev.candidate.toml` is optional for high-risk validation and uses `local/hfs-targets/candidate.env`. `.env.local` remains a product-local compatibility file and is not an HFS value source, deployment input, or export input.
 
@@ -83,10 +83,10 @@ ARG CODEX_PLATFORM_COMMIT=HEAD
 | --- | --- |
 | Space metadata | `cloud/hfs/README.md` frontmatter contains `sdk: docker` and `app_port: 7860` |
 | Space build entry | Exported `Dockerfile` comes from `cloud/hfs/Dockerfile` |
-| HFS v2 manifest | `cloud/hfs/hfs-dev.toml` registers identity, source/commit semantics, and value names only |
+| HFS v3 manifest | `cloud/hfs/hfs-dev.toml` registers identity, source/commit semantics, and value names only |
 | Single public port | `cloud/hfs/README.md app_port`, Dockerfile `EXPOSE`, and runtime `PORT` are `7860` |
 | Canonical health | `/healthz` returns JSON server health |
-| Ops diagnostics | `/_ops/*` is read-only and gated by `CODEX_PLATFORM_OPS_TOKEN` |
+| Ops diagnostics | `/_ops/*` is read-only and gated by `OPS_TOKEN` |
 | Admin control | `/_admin/*` is default-off, uses a separate admin token, CSRF, confirm, and audit log |
 | Docker/export/validator contract | Enforces Pattern B, `source-fetch`, `flat-remap`, flat bundle exclusions, commit pinning, and `BUILD_SHA` |
 | Release takeover evidence | Runtime image includes `BUILD_SHA`; `/healthz` exposes the build SHA when present |

@@ -32,11 +32,11 @@ Codex-Platform is a single-user/private-team web control plane for `codex app-se
 
 ```env
 CODEX_PLATFORM_AUTH_TOKEN=<long-random-token>
-CODEX_PLATFORM_OPS_TOKEN=<long-random-ops-token>
+OPS_TOKEN=<long-random-ops-token>
 OPENAI_API_KEY=<optional-if-api-key-auth-is-used>
 ```
 
-Keep `CODEX_PLATFORM_ADMIN_ENABLED=false` unless the Space is Private or Protected and you have a separate `CODEX_PLATFORM_ADMIN_TOKEN`.
+Keep `CODEX_PLATFORM_ADMIN_ENABLED=false` unless the Space is Private or Protected and you have a separate `ADMIN_PASSWORD`.
 
 ## Recommended Variables
 
@@ -49,9 +49,9 @@ CODEX_HOME=/data/codex-home
 CODEX_ARGS=app-server
 ```
 
-## HFS v2.1 Preview Registration
+## HFS v3.0 Preview Registration
 
-`hfs-dev.toml` is the HFS v2.1 canonical preview registration. It declares `project_class = "preview"`, `target_role = "primary"`, `space_visibility = "protected"`, `bucket_visibility = "private"`, `version_source = "commit"`, and only the approved names for local control credentials (`HF_TOKEN` and `GH_TOKEN`), Space Secrets, and Space Variables. It contains no values, seed files, buckets, or release pins.
+`hfs-dev.toml` is the HFS v3.0 canonical preview registration. It declares `project_class = "preview"`, `target_role = "primary"`, `space_visibility = "protected"`, `bucket_visibility = "private"`, `version_source = "commit"`, and only the approved names for local control credentials (`HF_TOKEN` and `GH_TOKEN`), Space Secrets, and Space Variables. It contains no values, seed files, buckets, or release pins.
 
 `.env` is the ignored plaintext HFS value ledger and must be updated before any Secret write. The canonical preview Space may be changed directly and then read back; the candidate profile is optional for high-risk validation. The Dockerfile, `export_space_bundle.sh`, and contract validator—not the manifest—enforce Pattern B, flat export, source fetch, and the immutable release commit pin.
 

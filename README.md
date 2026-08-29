@@ -80,11 +80,11 @@ Real mode on HF requires:
 
 ```env
 CODEX_PLATFORM_AUTH_TOKEN=<long-random-token>
-CODEX_PLATFORM_OPS_TOKEN=<long-random-ops-token>
+OPS_TOKEN=<long-random-ops-token>
 OPENAI_API_KEY=<optional-if-api-key-auth-is-used>
 ```
 
-`/_ops/*` is disabled until `CODEX_PLATFORM_OPS_TOKEN` is set. `/_admin/*` is disabled by default; only enable it in a controlled Private/Protected Space with `CODEX_PLATFORM_ADMIN_ENABLED=true` and a separate `CODEX_PLATFORM_ADMIN_TOKEN`.
+`/_ops/*` is disabled until `OPS_TOKEN` is set. `/_admin/*` is disabled by default; only enable it in a controlled Private/Protected Space with `CODEX_PLATFORM_ADMIN_ENABLED=true` and a separate `ADMIN_PASSWORD`.
 
 ## Validation
 
